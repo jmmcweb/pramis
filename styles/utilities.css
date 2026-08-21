@@ -1,0 +1,177 @@
+@layer utilities {
+  .alert {
+    @apply p-2 mb-3 border-l-4;
+    &.alert--info {
+      @apply border-blue-500 text-blue-500 bg-blue-100;
+    }
+    &.alert--success {
+      @apply border-green-500 text-green-500 bg-green-100;
+    }
+    &.alert--warning {
+      @apply border-yellow-500 text-yellow-500 bg-yellow-100;
+    }
+    &.alert--danger {
+      @apply border-red-500 text-red-500 bg-red-100;
+    }
+  }
+
+  .button {
+    @apply transition-all ease-in-out duration-300 hover:bg-tertiary min-w-10 min-h-10 flex items-center justify-center py-2 px-3;
+    &.button--circle {
+      @apply rounded-full px-0 py-0 flex items-center justify-center hover:bg-secondary;
+    }
+    &.button--primary {
+      background-color: var(--primary);
+      &:hover {
+        filter: brightness(0.9);
+      }
+    }
+    &.button--secondary {
+      background-color: var(--secondary);
+      &:hover {
+        filter: brightness(0.9);
+      }
+    }
+    &.button--tertiary {
+      background-color: var(--tertiary);
+      &:hover {
+        filter: brightness(0.9);
+      }
+    }
+    &.button--accent {
+      background-color: var(--accent);
+      color: white;
+      &:hover {
+        filter: brightness(0.75);
+      }
+    }
+  }
+
+  .container {
+    @apply mx-auto px-5 py-3;
+  }
+
+  .form-control {
+    label {
+      @apply block font-medium text-gray-700 dark:text-gray-300 ml-1 mb-1;
+    }
+    .error {
+      @apply italic ml-1 leading-none mt-1 mr-1 text-[14px] text-rose-500 font-semibold first-letter:uppercase;
+    }
+    .success {
+      @apply italic ml-1 leading-none mt-1 mr-1 text-[14px] text-green-500 font-semibold first-letter:uppercase;
+    }
+  }
+
+  .outlined {
+    @apply outline-1 outline-dashed outline-red-300;
+    * {
+      @apply outline-1 outline-dashed outline-red-300;
+    }
+  }
+
+  [data-loading='true'] {
+    @apply animate-pulse pointer-events-none opacity-70;
+  }
+
+  .auth-label {
+    @apply block font-inter text-[11px] font-bold uppercase tracking-[0.12em] text-slate mb-1;
+  }
+
+  .auth-box {
+    @apply flex items-center gap-2 w-full bg-white border border-slate/20 rounded-lg px-4 transition-colors duration-200 shadow-[-12px_0_30px_-12px_rgba(107,114,128,0.12),12px_0_30px_-12px_rgba(107,114,128,0.12)];
+    &:focus-within {
+      border-color: var(--color-brand);
+      box-shadow: 0 0 0 3px rgb(15 88 139 / 0.12);
+    }
+    &.has-errors,
+    &.has-errors:focus-within {
+      border-color: #e11d48;
+      box-shadow: 0 0 0 3px rgb(225 29 72 / 0.1);
+    }
+  }
+
+  .auth-input {
+    @apply w-full flex-1 min-w-0 bg-transparent outline-none border-0 text-ink placeholder:text-slate/50 py-2 text-[16px];
+  }
+
+  .field {
+    .error {
+      @apply text-rose-600 text-[13px] mt-1.5 ml-1;
+    }
+  }
+
+  .has-errors {
+    border-color: #e11d48;
+  }
+
+  .auth-back {
+    @apply font-inter text-[12px] font-bold uppercase tracking-[0.14em] text-slate hover:text-brand transition-colors;
+  }
+
+  .auth-link {
+    @apply text-brand font-semibold hover:underline;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 w-full font-inter text-[14px] font-bold tracking-[0.01em] px-5 py-2.5 rounded-lg transition-all duration-200 cursor-pointer;
+    &:focus-visible {
+      outline: 2px solid var(--color-brand);
+      outline-offset: 2px;
+    }
+    &[disabled] {
+      @apply opacity-50 pointer-events-none;
+    }
+  }
+
+  .btn--primary {
+    @apply bg-brand text-white hover:bg-brand-deep active:scale-[0.99];
+  }
+
+  .btn--ghost {
+    @apply bg-mist text-ink border border-line hover:bg-white hover:border-brand/30;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+}
+
+@keyframes heartbeat-beat {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.2;
+  }
+  12% {
+    transform: scale(1.35);
+    opacity: 0.5;
+  }
+  24% {
+    transform: scale(1);
+    opacity: 0.2;
+  }
+  36% {
+    transform: scale(1.25);
+    opacity: 0.45;
+  }
+  48% {
+    transform: scale(1);
+    opacity: 0.2;
+  }
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

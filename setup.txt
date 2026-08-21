@@ -1,0 +1,12 @@
+npm install
+
+npm run dev
+
+
+
+
+for db:
+
+npm run db:generate
+
+npm run db:studio

@@ -1,0 +1,190 @@
+@import 'tailwindcss';
+
+@import '../styles/utilities.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html[data-font-size='small'] {
+  zoom: 0.9;
+}
+
+html[data-font-size='medium'] {
+  zoom: 1;
+}
+
+html[data-font-size='large'] {
+  zoom: 1.15;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #f3f4f6;
+  --secondary: #e5e7eb;
+  --tertiary: #d1d5db;
+  --accent: #000000;
+
+  /* MediTrack brand (patient portal, from feat/user) */
+  --brand: #0f588b;
+  --brand-dark: #0b4670;
+  --brand-tint: #e8f1f8;
+  --surface: #f5f7fb;
+
+  /* Meditrack identity tokens */
+  --brand-deep: #0b4a77;
+  --ink: #0a2b44;
+  --mist: #f2f7fb;
+  --slate: #5d7488;
+
+  /* Semantic display tokens */
+  --card: #ffffff;
+  --line: #d8e3ec;
+  --body: #1e293b;
+  --muted: #94a3b8;
+  --faint: #cbd5e1;
+  --track: #e2e8f0;
+  --soft: #f1f5f9;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --primary: #1e293b;
+  --secondary: #334155;
+  --tertiary: #475569;
+  --accent: #ffffff;
+
+  /* MediTrack brand (dark) */
+  --brand: #7fb6e6;
+  --brand-dark: #9cc9ee;
+  --brand-tint: rgb(127 182 230 / 0.14);
+  --surface: #0e1728;
+
+  /* Semantic display tokens (dark) */
+  --card: #111c30;
+  --line: rgb(148 163 184 / 0.14);
+  --body: #e2e8f0;
+  --muted: #8fa3b8;
+  --faint: #64748b;
+  --track: rgb(148 163 184 / 0.25);
+  --soft: #16213a;
+  --shadow-card: 0 12px 32px -12px rgb(0 0 0 / 0.55);
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-tertiary: var(--tertiary);
+  --color-accent: var(--accent);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-bebas: var(--font-bebas-neue);
+  --font-asap: var(--font-asap-condensed);
+  --font-poppins: var(--font-poppins);
+  --font-inter: var(--font-inter);
+  --font-roboto: var(--font-roboto);
+}
+
+@theme {
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-deep: var(--brand-deep);
+  --color-ink: var(--ink);
+  --color-mist: var(--mist);
+  --color-slate: var(--slate);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-track: var(--track);
+  --color-soft: var(--soft);
+  --shadow-card: 0 12px 32px -12px rgb(15 88 139 / 0.18);
+}
+
+@keyframes ecg-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer base {
+  body {
+    font-family: var(--font-inter);
+    font-size: 16px;
+  }
+
+  body {
+    @apply min-h-dvh flex flex-col text-foreground bg-background;
+    main {
+      @apply flex-1;
+    }
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold;
+  }
+
+  form {
+    input,
+    select,
+    textarea {
+      @apply p-2 ring-0 outline-none border border-tertiary;
+    }
+    select,
+    input[type='date'] {
+      @apply appearance-none bg-white dark:bg-card dark:text-body;
+    }
+    textarea {
+      @apply field-sizing-content;
+    }
+    button {
+      @apply p-2 bg-tertiary cursor-pointer;
+    }
+  }
+
+  button {
+    @apply cursor-pointer;
+  }
+}
+
+[data-sonner-toast] {
+  gap: 16px;
+}
+
+[data-sonner-toast] [data-icon] {
+  margin-right: 8px;
+}
+
+[data-sonner-toast] [data-icon] svg {
+  width: 22px;
+  height: 22px;
+}
+
+
+
+
