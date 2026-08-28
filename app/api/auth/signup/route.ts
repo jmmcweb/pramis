@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { compare, hash } from 'bcrypt'
-import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { nextReferenceId } from '@/lib/referenceId'
+import { notifyAllStaff } from '@/lib/actions/notifications'
+import { PUROKS, FIXED_ADDRESS } from '@/src/data/patientInfo'
 
 type SignupPayload = {
   email?: string
@@ -14,6 +15,7 @@ type SignupPayload = {
   gender?: string
   mobile?: string
   street?: string
+  purok?: string
   barangay?: string
   city?: string
   province?: string
@@ -42,11 +44,12 @@ export async function POST(request: Request) {
   const gender = payload.gender?.trim()
   const mobile = payload.mobile?.trim()
   const street = payload.street?.trim()
+  const purok = payload.purok?.trim()
   const barangay = payload.barangay?.trim()
   const city = payload.city?.trim()
   const province = payload.province?.trim()
   const zip = payload.zip?.trim()
-  const country = payload.country?.trim()
+  const country = FIXED_ADDRESS.country
 
   if (
     !email ||
@@ -74,6 +77,14 @@ export async function POST(request: Request) {
   if (Number.isNaN(parsedBirthday.getTime())) {
     return NextResponse.json(
       { message: 'Please provide a valid birthday.' },
+      { status: 400 },
+    )
+  }
+
+
+  if (!purok || !PUROKS.includes(purok)) {
+    return NextResponse.json(
+      { message: 'Please select a valid purok in Barangay Sumapang Matanda.' },
       { status: 400 },
     )
   }
@@ -108,25 +119,25 @@ export async function POST(request: Request) {
       )
     }
 
-    const userId = randomUUID() as any
-    const referenceId = await nextReferenceId('USR')
+    const userId = await nextReferenceId('USR')
+    const profileId = await nextReferenceId('PRF')
     const [user] = await prisma.$transaction([
       prisma.user.create({
         data: {
           id: userId,
-          referenceId,
           email,
           password: await hash(password, 12),
         } as any,
       }),
       (prisma as any).userProfile.create({
         data: {
+          userprofileid: profileId,
           userId,
           firstName,
           lastName,
           birthdate: parsedBirthday,
           phoneNumber: mobile,
-          houseNumber: street,
+          houseNumber: `${street}, ${purok}`,
           barangay,
           city,
           province,
@@ -134,6 +145,12 @@ export async function POST(request: Request) {
         },
       }),
     ])
+
+    await notifyAllStaff({
+      category: 'Approval Request',
+      title: 'New Account Registration',
+      description: `${firstName} ${lastName} (${email}) signed up and is waiting for approval.`,
+    })
 
     return NextResponse.json(
       { success: true, requiresVerification: true, userId: user.id },

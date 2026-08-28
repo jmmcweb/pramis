@@ -10,6 +10,7 @@ type SignupState = {
   email: string
   password: string
   street: string
+  purok: string
   barangay: string
   city: string
   province: string
@@ -32,6 +33,7 @@ export const useSignup = create<SignupState>()((set) => ({
   email: '',
   password: '',
   street: '',
+  purok: '',
   barangay: '',
   city: '',
   province: '',

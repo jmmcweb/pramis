@@ -1,32 +1,27 @@
 import { getServerSession, Session } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
+import prisma from '@/lib/prisma'
 
 const ADMIN_ROLES = ['SUPERADMIN', 'ADMIN']
 
-const STAFF_ROLES = ['STAFF']
+const STAFF_ROLES = ['STAFF', 'MIDWIFE']
 
-// Result returned to the client when a guard denies access. Server actions
-// return this shape instead of throwing so the calling form can render it.
 export const unauthorized = {
   success: false as const,
   payload: null,
   message: 'You are not authorized to perform this action.',
 }
 
-// Returns the current session, or null if the caller is not signed in.
 export async function getSession(): Promise<Session | null> {
   return (await getServerSession(authOptions)) as Session | null
 }
 
-// Guards a server action for any signed-in user. Returns the session, or an
-// `unauthorized` result the caller should return as-is when null.
 export async function requireUser(): Promise<Session | null> {
   const session = await getSession()
   if (!session?.user?.id) return null
   return session
 }
 
-// Guards a server action for admins (SUPERADMIN/ADMIN).
 export async function requireAdmin(): Promise<Session | null> {
   const session = await getSession()
   if (!session?.user?.id) return null
@@ -34,7 +29,6 @@ export async function requireAdmin(): Promise<Session | null> {
   return session
 }
 
-// Guards a server action for staff (STAFF).
 export async function requireStaff(): Promise<Session | null> {
   const session = await getSession()
   if (!session?.user?.id) return null
@@ -42,9 +36,6 @@ export async function requireStaff(): Promise<Session | null> {
   return session
 }
 
-// Account approval gate for the patient dashboard. This branch's schema has
-// no approval workflow (no `status` field on User), so every signed-in user
-// is treated as already approved. Admins are reported as such.
 export async function getAccountAccess(): Promise<{
   status: string
   approved: boolean
@@ -52,12 +43,25 @@ export async function getAccountAccess(): Promise<{
 } | null> {
   const session = await getSession()
   if (!session?.user?.id) return null
-  const admin = ADMIN_ROLES.includes((session.user.role as string) ?? '')
-  return { status: 'APPROVED', approved: true, admin }
+  const role = (session.user.role as string) ?? ''
+  const admin = ADMIN_ROLES.includes(role)
+
+  if (admin || STAFF_ROLES.includes(role)) {
+    return { status: 'ACTIVE', approved: true, admin }
+  }
+
+  try {
+    const user = await (prisma as any).user.findFirst({
+      where: { id: session.user.id },
+      select: { status: true },
+    })
+    const status = (user?.status as string) ?? 'PENDING'
+    return { status, approved: status === 'ACTIVE', admin }
+  } catch {
+    return { status: 'PENDING', approved: false, admin }
+  }
 }
 
-// Strips the password hash (and any other secrets) before a user row is sent
-// to the client. Accepts a single row or an array.
 export function sanitizeUser<T extends { password?: unknown } | null>(
   user: T
 ): T {

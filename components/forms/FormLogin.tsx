@@ -23,14 +23,11 @@ function roleHome(role?: string): string {
 }
 
 export default function FormLogin({ className }: { className?: string }) {
-  // Refs
   const formRef = useRef<HTMLFormElement>(null)
 
-  // Hooks
   const router = useRouter()
   const { push: redirect } = router
 
-  // State
   const [state, setState] = useState({
     message: '',
     success: false,

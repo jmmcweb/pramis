@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
+import { createNotification } from '@/lib/actions/notifications'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -36,7 +37,7 @@ export async function GET() {
         ...users.map((account: any) => ({
           kind: 'patient',
           id: account.id,
-          referenceId: account.referenceId || account.id,
+          referenceId: account.id,
           firstName: account.profile?.firstName || 'User',
           lastName: account.profile?.lastName || '',
           email: account.email,
@@ -70,10 +71,28 @@ export async function PUT(request: Request) {
   }
 
   try {
-    await (prisma as any).user.update({
+    const updated = await (prisma as any).user.update({
       where: { id },
       data: { status: action === 'approve' ? 'ACTIVE' : 'INACTIVE' },
     })
+    if (action === 'approve') {
+      await createNotification({
+        userId: id,
+        category: 'Account',
+        title: 'Account Approved',
+        description:
+          'Your account has been approved. You can now book appointments and manage your health records.',
+      })
+    } else {
+      await createNotification({
+        userId: id,
+        category: 'Account',
+        title: 'Account Rejected',
+        description:
+          'Your account application was rejected. Please contact the health center for more information.',
+      })
+    }
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Approval update failed:', error)

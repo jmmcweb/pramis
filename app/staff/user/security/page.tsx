@@ -4,7 +4,6 @@ import { getMe } from '@/lib/actions/me'
 import FormSecurity from '@/components/forms/FormSecurity'
 
 export default async function DashboardUserSecurityPage() {
-  // Me
   const resMe = await getMe()
   const me = resMe.success ? resMe.payload : null
 

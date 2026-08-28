@@ -6,13 +6,10 @@ import { useRouter } from 'next/navigation'
 import Field from '@/components/auth/Field'
 
 export default function FormSignup({ className }: { className?: string }) {
-  // Hooks
   const { push: redirect } = useRouter()
 
-  //
   const formRef = useRef<HTMLFormElement>(null)
 
-  // States
   const [state, handleSubmit, pending] = useActionState(signupUser, {})
 
   useEffect(() => {

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   const smtpConfigured =
-    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_KEY
+    process.env.SMTP_HOST && process.env.SMTP_KEY && process.env.SMTP_USER
   if (!smtpConfigured) {
     return NextResponse.json(
       {
@@ -39,8 +39,8 @@ export async function POST(request: Request) {
 
   try {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "VerificationCode" ("email", "codeHash", "expiresAt", "createdAt")
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      `INSERT INTO "VerificationCode" ("id", "email", "codeHash", "expiresAt", "createdAt")
+       VALUES (gen_random_uuid(), $1, $2, $3, CURRENT_TIMESTAMP)
        ON CONFLICT ("email") DO UPDATE SET
          "codeHash" = EXCLUDED."codeHash",
          "expiresAt" = EXCLUDED."expiresAt",

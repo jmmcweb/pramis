@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
+import { getMyNotifications } from '@/lib/actions/notifications'
 import PatientHeader from '@/components/patient/Header'
 import PatientBottomNavigation from '@/components/patient/PatientBottomNavigation'
 import PatientSidebar from '@/components/patient/PatientSidebar'
@@ -16,11 +17,12 @@ export default async function NotificationsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect('/login')
 
-  // User-only: admins/staff are sent to their own dashboards.
   const role = session.user.role as string | undefined
   if (role === 'SUPERADMIN' || role === 'ADMIN') redirect('/admin')
   if (role === 'STAFF' || role === 'NURSE') redirect('/staff')
   if (role !== 'USER') redirect('/login')
+
+  const result = await getMyNotifications()
 
   return (
     <>
@@ -30,7 +32,7 @@ export default async function NotificationsPage() {
         <PatientHeader />
 
         <div className="max-w-md mx-auto pb-32 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl lg:px-12 lg:pt-5">
-          <NotificationCenter />
+          <NotificationCenter initialNotifications={result.notifications} />
         </div>
       </section>
 

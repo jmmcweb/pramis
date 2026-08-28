@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { createUser, updateUser, softDeleteUser } from '@/lib/actions/user'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import {
   UserPlus,
@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner'
 
 type UserRow = {
-  id: number
+  id: string
   name: string
   email: string
   role: string
@@ -34,6 +34,7 @@ export default function UsersTable({
   total: number
 }) {
   const router = useRouter()
+  const pathname = usePathname()
   const { data: session } = useSession()
   const [isPending, startTransition] = useTransition()
   const [modal, setModal] = useState<'add' | 'edit' | null>(null)
@@ -45,7 +46,7 @@ export default function UsersTable({
   const [formMessage, setFormMessage] = useState<string | null>(null)
 
   function goToPage(p: number) {
-    router.push(`/dashboard/users?page=${p}`)
+    router.push(`${pathname}?page=${p}`)
   }
 
   function openAdd() {
@@ -231,14 +232,8 @@ export default function UsersTable({
       {/* Add User Modal */}
       {modal === 'add' && (
         <Modal title="Add User" onClose={closeModal}>
+          {/* Names are managed through each account's profile page. */}
           <form action={handleAdd} className="flex flex-col gap-4">
-            <div className="form-control">
-              <label>Name</label>
-              <input type="text" name="name" className="w-full" />
-              {formErrors?.name && (
-                <div className="error">{formErrors.name}</div>
-              )}
-            </div>
             <div className="form-control">
               <label>Email</label>
               <input type="email" name="email" className="w-full" />
@@ -277,20 +272,9 @@ export default function UsersTable({
       {/* Edit User Modal */}
       {modal === 'edit' && selectedUser && (
         <Modal title="Edit User" onClose={closeModal}>
+          {/* Names are managed through each account's profile page. */}
           <form action={handleEdit} className="flex flex-col gap-4">
             <input type="hidden" name="id" value={selectedUser.id} />
-            <div className="form-control">
-              <label>Name</label>
-              <input
-                type="text"
-                name="name"
-                className="w-full"
-                defaultValue={selectedUser.name}
-              />
-              {formErrors?.name && (
-                <div className="error">{formErrors.name}</div>
-              )}
-            </div>
             <div className="form-control">
               <label>Email</label>
               <input

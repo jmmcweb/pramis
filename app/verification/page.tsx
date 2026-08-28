@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   Loader2,
   LockKeyhole,
@@ -17,22 +16,6 @@ import AuthShell from '@/components/auth/AuthShell'
 import { useSignup } from '@/store/useSignup'
 
 type FieldError = Record<string, string>
-
-const MobilePreview = ({ ...props }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.6}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <rect x="6.5" y="2" width="11" height="20" rx="2.5" />
-    <path d="M9.5 4.5h5" />
-    <path d="M10.5 19h3" />
-  </svg>
-)
 
 const CodeInput = ({
   length = 6,
@@ -150,13 +133,11 @@ const MaskedField = ({ label, value }: { label: string; value: string }) => {
 }
 
 const SendCodeButton = ({
-  variant,
   target,
   onSend,
   sent,
   retryIn,
 }: {
-  variant: 'mobile' | 'email'
   target: string
   onSend: () => void
   sent: boolean
@@ -164,12 +145,8 @@ const SendCodeButton = ({
 }) => (
   <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-2.5">
     <div className="flex items-center gap-2.5 min-w-0">
-      {variant === 'mobile' ? (
-        <MobilePreview className="w-5 h-5 shrink-0 text-slate" />
-      ) : (
-        <MailCheck className="w-5 h-5 shrink-0 text-slate" />
-      )}
-      <span className="text-[13px] text-ink truncate min-w-0">{target}</span>
+      <MailCheck className="w-5 h-5 shrink-0 text-slate" />
+                  <span className="text-[13px] text-ink truncate min-w-0">{target}</span>
     </div>
     {!sent ? (
       <button
@@ -207,6 +184,7 @@ const VerificationPage = () => {
     email,
     password,
     street,
+    purok,
     barangay,
     city,
     province,
@@ -215,13 +193,9 @@ const VerificationPage = () => {
   } = useSignup()
   const { push } = useRouter()
 
-  const [method, setMethod] = useState<'email' | 'mobile' | null>(null)
-
   const [emailCode, setEmailCode] = useState('')
-  const [mobileCode, setMobileCode] = useState('')
 
   const [emailSent, setEmailSent] = useState(false)
-  const [mobileSent, setMobileSent] = useState(false)
   const [retryIn, setRetryIn] = useState(0)
 
   const [errors, setErrors] = useState<FieldError>({})
@@ -230,12 +204,6 @@ const VerificationPage = () => {
   const resendInterval = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [isVerifying, setIsVerifying] = useState(false)
-
-  const handleMethodSelect = (value: 'email' | 'mobile') => {
-    setMethod(value)
-    setErrors({})
-    setMismatchError('')
-  }
 
   const beginResendCountdown = () => {
     setRetryIn(30)
@@ -251,14 +219,8 @@ const VerificationPage = () => {
     }, 1000)
   }
 
-  const handleSendCode = async (target: 'email' | 'mobile') => {
-    if (target === 'mobile') {
-      setMismatchError(
-        'SMS verification is not configured. Choose email verification.',
-      )
-      return
-    }
-
+  const handleSendCode = async () => {
+    if (!email) return
     setMismatchError('')
     try {
       const response = await fetch('/api/auth/verification', {
@@ -286,16 +248,15 @@ const VerificationPage = () => {
     }
   }, [])
 
-  const validateCode = (target: 'email' | 'mobile') => {
-    const value = target === 'email' ? emailCode : mobileCode
-    if (value.length !== 6) {
+  const validateCode = () => {
+    if (emailCode.length !== 6) {
       setErrors((prev) => ({
         ...prev,
-        [`${target}Code`]: 'Enter the full 6-digit code.',
+        emailCode: 'Enter the full 6-digit code.',
       }))
       return false
     }
-    setErrors((prev) => ({ ...prev, [`${target}Code`]: '' }))
+    setErrors((prev) => ({ ...prev, emailCode: '' }))
     return true
   }
 
@@ -309,6 +270,7 @@ const VerificationPage = () => {
     birthday: string
     gender: string
     street: string
+    purok: string
     barangay: string
     city: string
     province: string
@@ -371,27 +333,14 @@ const VerificationPage = () => {
 
   const handleVerify = () => {
     setMismatchError('')
-    if (!method) return
-
-    let valid = true
-    if (method === 'email') {
-      if (!emailSent) {
-        setErrors((prev) => ({
-          ...prev,
-          email: 'Send a code to your email first.',
-        }))
-        valid = false
-      } else if (!validateCode('email')) valid = false
-    } else {
-      if (!mobileSent) {
-        setErrors((prev) => ({
-          ...prev,
-          mobile: 'Send a code to your mobile first.',
-        }))
-        valid = false
-      } else if (!validateCode('mobile')) valid = false
+    if (!emailSent) {
+      setErrors((prev) => ({
+        ...prev,
+        email: 'Send a code to your email first.',
+      }))
+      return
     }
-    if (!valid) return
+    if (!validateCode()) return
 
     void verifyAccount({
       email,
@@ -403,6 +352,7 @@ const VerificationPage = () => {
       birthday,
       gender,
       street,
+      purok,
       barangay,
       city,
       province,
@@ -411,25 +361,14 @@ const VerificationPage = () => {
     })
   }
 
-  const tabLabel = (value: 'email' | 'mobile') => (
-    <span className="flex items-center justify-center gap-2">
-      {value === 'email' ? (
-        <MailCheck size={15} />
-      ) : (
-        <MobilePreview className="w-4 h-4" />
-      )}
-      {value === 'email' ? 'Email' : 'Mobile number'}
-    </span>
-  )
-
   return (
     <div className="lg:h-dvh lg:overflow-hidden">
       <AuthShell
         step={5}
         animate={false}
-        title="Verification"
+        title="Email Verification"
         cardClassName="lg:max-w-xl"
-        subtitle="Verify your account to continue."
+        subtitle="We need to verify your email address before creating your account."
         backHref="/identification"
         footer={
           <>
@@ -440,133 +379,56 @@ const VerificationPage = () => {
           </>
         }
       >
-        {!method ? (
-          <div className="flex flex-col gap-2.5">
-            <p className="text-[13.5px] text-slate">
-              Choose how you want to receive a 6-digit verification code.
+        <div className="flex flex-col gap-5">
+          <p className="text-[13px] text-slate leading-relaxed">
+            We sent a 6-digit code to{' '}
+            <span className="text-ink font-semibold">{email}</span>. Enter it
+            below to verify your email.
+          </p>
+
+          <SendCodeButton
+            target={email}
+            sent={emailSent}
+            retryIn={retryIn}
+            onSend={handleSendCode}
+          />
+
+          <CodeInput
+            length={6}
+            onChange={setEmailCode}
+            error={errors.emailCode}
+          />
+
+          {errors.email && (
+            <p className="flex items-start gap-1.5 text-[12.5px] text-rose-600 m-0">
+              <AlertTriangle size={15} className="shrink-0 mt-px" />
+              {errors.email}
             </p>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => handleMethodSelect('email')}
-                className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-line bg-white cursor-pointer hover:border-brand transition-colors"
-              >
-                <MailCheck className="w-5 h-5 text-brand shrink-0" />
-                <span className="flex-1 text-left">
-                  <span className="block text-[13.5px] font-semibold text-ink">
-                    Email
-                  </span>
-                  <span className="block text-[12px] text-slate truncate max-w-[220px] sm:max-w-none">
-                    {email || 'you@email.com'}
-                  </span>
-                </span>
-                <ArrowRight size={15} className="text-slate" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleMethodSelect('mobile')}
-                className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-line bg-white cursor-pointer hover:border-brand transition-colors"
-              >
-                <MobilePreview className="w-5 h-5 text-brand shrink-0" />
-                <span className="flex-1 text-left">
-                  <span className="block text-[13.5px] font-semibold text-ink">
-                    Mobile number
-                  </span>
-                  <span className="block text-[12px] text-slate truncate max-w-[220px] sm:max-w-none">
-                    {`${countryCode} ${mobile}` || '+63 917 123 4567'}
-                  </span>
-                </span>
-                <ArrowRight size={15} className="text-slate" />
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-5">
-            <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-mist/60">
-              {(['email', 'mobile'] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleMethodSelect(value)}
-                  className={`py-2.5 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
-                    method === value
-                      ? 'bg-white text-brand shadow-sm'
-                      : 'text-slate hover:text-ink'
-                  }`}
-                >
-                  {tabLabel(value)}
-                </button>
-              ))}
-            </div>
+          )}
 
-            {method === 'email' && (
-              <div className="flex flex-col gap-2.5">
-                <p className="text-[13px] text-slate leading-relaxed">
-                  We sent a 6-digit code to{' '}
-                  <span className="text-ink font-semibold">{email}</span>. Enter
-                  it below to verify your email.
-                </p>
-                <SendCodeButton
-                  variant="email"
-                  target={email}
-                  sent={emailSent}
-                  retryIn={retryIn}
-                  onSend={() => handleSendCode('email')}
-                />
-                <CodeInput
-                  length={6}
-                  onChange={setEmailCode}
-                  error={errors.emailCode}
-                />
-              </div>
+          {mismatchError && (
+            <p className="flex items-start gap-1.5 text-[12.5px] text-rose-600 m-0">
+              <AlertTriangle size={15} className="shrink-0 mt-px" />
+              {mismatchError}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleVerify}
+            disabled={isVerifying}
+            className="btn btn--primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isVerifying ? (
+              <>
+                <Loader2 size={17} className="animate-spin" />
+                Verifying…
+              </>
+            ) : (
+              'Verify & create account'
             )}
-
-            {method === 'mobile' && (
-              <div className="flex flex-col gap-2.5">
-                <p className="text-[13px] text-slate leading-relaxed">
-                  We sent a 6-digit code to{' '}
-                  <span className="text-ink font-semibold">{`${countryCode} ${mobile}`}</span>
-                  . Enter it below to verify your mobile number.
-                </p>
-                <SendCodeButton
-                  variant="mobile"
-                  target={`${countryCode} ${mobile}`}
-                  sent={mobileSent}
-                  retryIn={retryIn}
-                  onSend={() => handleSendCode('mobile')}
-                />
-                <CodeInput
-                  length={6}
-                  onChange={setMobileCode}
-                  error={errors.mobileCode}
-                />
-              </div>
-            )}
-
-            {mismatchError && (
-              <p className="flex items-start gap-1.5 text-[12.5px] text-rose-600 m-0">
-                <AlertTriangle size={15} className="shrink-0 mt-px" />
-                {mismatchError}
-              </p>
-            )}
-
-            <button
-              type="button"
-              onClick={handleVerify}
-              disabled={isVerifying}
-              className="btn btn--primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isVerifying ? (
-                <>
-                  <Loader2 size={17} className="animate-spin" />
-                  Verifying…
-                </>
-              ) : (
-                'Verify & create account'
-              )}
-            </button>
-          </div>
-        )}
+          </button>
+        </div>
       </AuthShell>
     </div>
   )

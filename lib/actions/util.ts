@@ -7,11 +7,11 @@ import { APP_NAME, APP_BASE_URL } from '@/config/constants'
 import { isValidEmail } from '../helper'
 import { sendMail } from '@/lib/mailer'
 
-const table = 'resetPasswordToken'
-const MIN_PASSWORD_LENGTH = 8
+const table = 'resetPasswordToken' 
+const MIN_PASSWORD_LENGTH = 8 
 
 const NEUTRAL_RESET_MESSAGE =
-  'If an account exists for that email, a password reset link has been sent.'
+  'If an account exists for that email, a password reset link has been sent.' 
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex')

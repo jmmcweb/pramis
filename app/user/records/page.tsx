@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
 import { getAccountAccess } from '@/lib/actions/guard'
+import { getMyMedicalRecords } from '@/lib/actions/records'
 import PatientHeader from '@/components/patient/Header'
 import AccountStatusScreen from '@/components/patient/AccountStatusScreen'
 import PatientBottomNavigation from '@/components/patient/PatientBottomNavigation'
@@ -18,10 +19,13 @@ export default async function RecordsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect('/login')
 
-  // Account approval gate: PENDING/REJECTED users cannot access medical records.
   const access = await getAccountAccess()
   if (!access) redirect('/login')
   const allowed = access.approved
+
+  const recordsResult = allowed
+    ? await getMyMedicalRecords()
+    : null
 
   return (
     <>
@@ -35,11 +39,14 @@ export default async function RecordsPage() {
             {allowed ? (
               <>
                 <div className="bg-white dark:bg-card rounded-3xl shadow-card p-5">
-                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-widest">PTN-2610201</p>
+                  {/* The account's own reference ID (USR-####). */}
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-widest">
+                    {session.user.id}
+                  </p>
                   <h1 className="text-3xl font-bold text-brand mt-1">Your Medical Records</h1>
                 </div>
 
-                <MedicalRecordsTimeline />
+                <MedicalRecordsTimeline members={recordsResult?.members ?? []} />
               </>
             ) : (
               <AccountStatusScreen status={access.status} />

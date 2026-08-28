@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 import {
   Check,
   ChevronDown,
+  Loader2,
   MapPin,
   Phone,
   Plus,
@@ -13,8 +15,13 @@ import {
   UserRound,
   Users,
 } from 'lucide-react'
-import { initialFamily, initialPatient } from '@/src/data/patientInfo'
-import type { FamilyMember, PatientInfo } from '@/src/data/patientInfo'
+import { updateMyProfile } from '@/lib/actions/me'
+import {
+  emptyPatientInfo,
+  patientInfoFromProfile,
+  FIXED_ADDRESS,
+} from '@/src/data/patientInfo'
+import type { AddressOptions, FamilyMemberRow, MyProfileView } from '@/src/data/patientInfo'
 
 const inputClass =
   'mt-1.5 w-full bg-surface rounded-xl px-3 py-2.5 text-sm font-semibold text-body border border-transparent outline-none transition-colors focus:bg-card focus:border-brand focus:ring-2 focus:ring-brand-tint'
@@ -46,33 +53,46 @@ function SectionCard({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string
+  error?: string
+  children: React.ReactNode
+}) {
   return (
     <label className="block">
       <span className="text-xs font-bold uppercase tracking-wide text-muted">{label}</span>
       {children}
+      {error && (
+        <span className="block text-xs font-medium text-red-500 mt-1">{error}</span>
+      )}
     </label>
   )
 }
 
 function SelectField({
   label,
-  value,
+  name,
+  defaultValue,
   options,
-  onChange,
+  error,
 }: {
   label: string
-  value: string
+  name: string
+  defaultValue: string
   options: string[]
-  onChange: (value: string) => void
+  error?: string
 }) {
   return (
     <label className="block">
       <span className="text-xs font-bold uppercase tracking-wide text-muted">{label}</span>
       <div className="relative mt-1.5">
         <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          name={name}
+          defaultValue={defaultValue}
           className={`${inputClass} appearance-none pr-9 cursor-pointer`}
         >
           {options.map((option) => (
@@ -86,21 +106,66 @@ function SelectField({
           aria-hidden="true"
         />
       </div>
+      {error && (
+        <span className="block text-xs font-medium text-red-500 mt-1">{error}</span>
+      )}
     </label>
   )
 }
 
-export default function PatientInfoForm() {
-  const [form, setForm] = useState<PatientInfo>(initialPatient)
-  const [family, setFamily] = useState<FamilyMember[]>(initialFamily)
+export default function PatientInfoForm({
+  profile,
+}: {
+  profile?: MyProfileView | null
+}) {
+  const router = useRouter()
+  const [formKey, setFormKey] = useState(0)
 
-  const set = (key: keyof PatientInfo) => (value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }))
+  const initialForm = profile ? patientInfoFromProfile(profile) : emptyPatientInfo
+  const initialFamily: FamilyMemberRow[] = profile?.familyMembers ?? []
 
-  const updateMember = (id: string, key: keyof FamilyMember, value: string) =>
-    setFamily((prev) =>
-      prev.map((member) => (member.id === id ? { ...member, [key]: value } : member))
-    )
+  const [family, setFamily] = useState<FamilyMemberRow[]>(initialFamily)
+
+  const [addressOptions, setAddressOptions] = useState<AddressOptions | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/address')
+      .then((res) => res.json())
+      .then((data: AddressOptions) => {
+        if (!cancelled && data?.success) setAddressOptions(data)
+      })
+      .catch((error) => console.error('[PatientInfoForm | address fetch]:', error))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const lockedBarangay = addressOptions?.barangay ?? FIXED_ADDRESS.barangay
+  const lockedMunicipality = addressOptions?.municipality ?? FIXED_ADDRESS.municipality
+  const lockedProvince = addressOptions?.province ?? FIXED_ADDRESS.province
+  const lockedZipCode = addressOptions?.zipCode ?? FIXED_ADDRESS.zipCode
+  const purokOptions = addressOptions?.puroks ?? []
+
+  const [state, formAction, isPending] = useActionState(updateMyProfile, null)
+
+  useEffect(() => {
+    if (!state) return
+    if (state.success) {
+      toast.success(state.message ?? 'Profile updated successfully!')
+      router.refresh()
+    } else if (state.message) {
+      toast.error(state.message)
+    }
+  }, [state, router])
+
+  const errors = state && !state.success ? state.errors : undefined
+
+  const handleCancel = () => {
+    setFormKey((k) => k + 1)
+    setFamily(initialFamily)
+    toast('Changes discarded')
+  }
 
   const addMember = () =>
     setFamily((prev) => [
@@ -111,136 +176,182 @@ export default function PatientInfoForm() {
   const removeMember = (id: string) =>
     setFamily((prev) => prev.filter((member) => member.id !== id))
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault()
-    toast.success('Patient information saved successfully')
-  }
-
-  const handleCancel = () => {
-    setForm(initialPatient)
-    setFamily(initialFamily)
-    toast('Changes discarded')
-  }
-
   return (
-    <form onSubmit={handleSave} className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">
+    <form
+      key={formKey}
+      action={formAction}
+      className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6"
+    >
       <SectionCard title="Personal Information" icon={UserRound} className="lg:order-1">
         <div className="space-y-4">
-          <Field label="Full Name">
-            <input
-              className={inputClass}
-              value={form.fullName}
-              onChange={(e) => set('fullName')(e.target.value)}
-            />
-          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Date of Birth">
+            <Field label="First Name" error={errors?.firstName}>
               <input
-                type="date"
+                name="firstName"
+                defaultValue={initialForm.firstName}
                 className={inputClass}
-                value={form.dateOfBirth}
-                onChange={(e) => set('dateOfBirth')(e.target.value)}
               />
             </Field>
-            <SelectField
-              label="Sex"
-              value={form.sex}
-              options={['Female', 'Male']}
-              onChange={set('sex')}
-            />
+            <Field label="Middle Name" error={errors?.middleName}>
+              <input
+                name="middleName"
+                defaultValue={initialForm.middleName}
+                className={inputClass}
+              />
+            </Field>
           </div>
-          <SelectField
-            label="Civil Status"
-            value={form.civilStatus}
-            options={['Single', 'Married', 'Widowed', 'Separated', 'Divorced']}
-            onChange={set('civilStatus')}
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Last Name" error={errors?.lastName}>
+              <input
+                name="lastName"
+                defaultValue={initialForm.lastName}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Suffix" error={errors?.suffix}>
+              <input
+                name="suffix"
+                defaultValue={initialForm.suffix}
+                placeholder="Jr., Sr., III…"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <Field label="Date of Birth" error={errors?.birthdate}>
+            <input
+              type="date"
+              name="birthdate"
+              defaultValue={initialForm.dateOfBirth}
+              className={inputClass}
+            />
+          </Field>
         </div>
       </SectionCard>
 
-      <SectionCard title="Contact Information" icon={Phone} className="lg:order-5">
+      <SectionCard title="Contact Information" icon={Phone} className="lg:order-2">
         <div className="space-y-4">
-          <Field label="Mobile Number">
+          <Field label="Mobile Number" error={errors?.phoneNumber}>
             <input
+              name="phoneNumber"
+              defaultValue={initialForm.mobile}
               className={inputClass}
-              value={form.mobile}
-              onChange={(e) => set('mobile')(e.target.value)}
             />
           </Field>
-          <Field label="Email Address">
+          <Field label="Email Address" error={errors?.email}>
             <input
               type="email"
+              name="email"
+              defaultValue={initialForm.email}
               className={inputClass}
-              value={form.email}
-              onChange={(e) => set('email')(e.target.value)}
             />
           </Field>
         </div>
       </SectionCard>
 
-      <SectionCard title="Address" icon={MapPin} className="lg:order-2">
+      <SectionCard title="Address" icon={MapPin} className="lg:order-3">
         <div className="space-y-4">
-          <Field label="House No. / Street">
+          <Field label="House No. / Street" error={errors?.houseNumber}>
             <input
+              name="houseNumber"
+              defaultValue={initialForm.houseStreet}
               className={inputClass}
-              value={form.houseStreet}
-              onChange={(e) => set('houseStreet')(e.target.value)}
             />
+          </Field>
+          <Field label="Purok" error={errors?.purok}>
+            <div className="relative">
+              <select
+                name="purok"
+                required
+                defaultValue=""
+                className={`${inputClass} appearance-none pr-9 cursor-pointer`}
+              >
+                <option value="" disabled>
+                  Select Purok
+                </option>
+                {purokOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"
+                aria-hidden="true"
+              />
+            </div>
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Barangay">
               <input
-                className={inputClass}
-                value={form.barangay}
-                onChange={(e) => set('barangay')(e.target.value)}
+                name="barangay"
+                value={lockedBarangay}
+                readOnly
+                className={`${inputClass} cursor-not-allowed opacity-70`}
               />
             </Field>
             <Field label="Municipality / City">
               <input
-                className={inputClass}
-                value={form.municipality}
-                onChange={(e) => set('municipality')(e.target.value)}
+                name="city"
+                value={lockedMunicipality}
+                readOnly
+                className={`${inputClass} cursor-not-allowed opacity-70`}
               />
             </Field>
           </div>
-          <Field label="Province">
-            <input
-              className={inputClass}
-              value={form.province}
-              onChange={(e) => set('province')(e.target.value)}
-            />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Province">
+              <input
+                name="province"
+                value={lockedProvince}
+                readOnly
+                className={`${inputClass} cursor-not-allowed opacity-70`}
+              />
+            </Field>
+            <Field label="ZIP Code">
+              <input
+                name="zipCode"
+                value={lockedZipCode}
+                readOnly
+                className={`${inputClass} cursor-not-allowed opacity-70`}
+              />
+            </Field>
+          </div>
         </div>
       </SectionCard>
 
       <SectionCard title="PhilHealth Information" icon={ShieldCheck} className="lg:order-4">
         <div className="space-y-4">
-          <Field label="PhilHealth No.">
+          <Field label="PhilHealth No." error={errors?.philHealthNo}>
             <input
+              name="philHealthNo"
+              defaultValue={initialForm.philHealthNo}
               className={inputClass}
-              value={form.philHealthNo}
-              onChange={(e) => set('philHealthNo')(e.target.value)}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <SelectField
               label="Membership Type"
-              value={form.membershipType}
+              name="membershipType"
+              defaultValue={initialForm.membershipType}
               options={['Employed', 'Self-Employed', 'Indigent', 'OFW', 'Senior Citizen']}
-              onChange={set('membershipType')}
+              error={errors?.membershipType}
             />
             <SelectField
               label="Status"
-              value={form.philHealthStatus}
+              name="philHealthStatus"
+              defaultValue={initialForm.philHealthStatus}
               options={['Active', 'Pending', 'Inactive']}
-              onChange={set('philHealthStatus')}
+              error={errors?.philHealthStatus}
             />
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard title="Family Information" icon={Users} className="lg:order-3">
+      <SectionCard title="Family Information" icon={Users} className="lg:order-5">
         <div className="space-y-3">
+          {errors?.familyMembers && (
+            <p className="text-xs font-medium text-red-500">{errors.familyMembers}</p>
+          )}
           {family.map((member) => (
             <div key={member.id} className="relative bg-surface rounded-2xl p-3">
               <button
@@ -252,23 +363,23 @@ export default function PatientInfoForm() {
                 <Trash2 className="w-4 h-4" aria-hidden="true" />
               </button>
               <input
+                name="familyName"
                 placeholder="Full Name"
+                defaultValue={member.name}
                 className={`${rowInputClass} pr-9`}
-                value={member.name}
-                onChange={(e) => updateMember(member.id, 'name', e.target.value)}
               />
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <input
+                  name="familyRelation"
                   placeholder="Relation"
+                  defaultValue={member.relation}
                   className={rowInputClass}
-                  value={member.relation}
-                  onChange={(e) => updateMember(member.id, 'relation', e.target.value)}
                 />
                 <input
+                  name="familyPhone"
                   placeholder="Phone Number"
+                  defaultValue={member.phone}
                   className={rowInputClass}
-                  value={member.phone}
-                  onChange={(e) => updateMember(member.id, 'phone', e.target.value)}
                 />
               </div>
             </div>
@@ -289,16 +400,27 @@ export default function PatientInfoForm() {
           <button
             type="button"
             onClick={handleCancel}
-            className="flex-1 bg-card border border-line text-brand hover:bg-brand-tint py-3 rounded-xl font-medium text-sm transition-colors lg:flex-none lg:min-w-44 lg:px-10"
+            disabled={isPending}
+            className="flex-1 bg-card border border-line text-brand hover:bg-brand-tint py-3 rounded-xl font-medium text-sm transition-colors disabled:opacity-50 lg:flex-none lg:min-w-44 lg:px-10"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="flex-1 bg-brand hover:bg-brand-dark text-white py-3 rounded-xl font-semibold text-sm transition-colors inline-flex items-center justify-center gap-1.5 lg:flex-none lg:min-w-44 lg:px-10"
+            disabled={isPending}
+            className="flex-1 bg-brand hover:bg-brand-dark text-white py-3 rounded-xl font-semibold text-sm transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed lg:flex-none lg:min-w-44 lg:px-10"
           >
-            <Check className="w-4 h-4" aria-hidden="true" />
-            Save Changes
+            {isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                Saving…
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" aria-hidden="true" />
+                Save Changes
+              </>
+            )}
           </button>
         </div>
       </div>

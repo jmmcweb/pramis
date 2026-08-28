@@ -4,11 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserRound } from 'lucide-react'
 
-// All navigation items are always visible — pending-approval users still get
-// full navigation; gated pages (Appointment, Records) render an approval
-// notice for them instead of hiding the tabs.
-// Custom MediTrack PNG assets are the primary icons for Home, Appointment and
-// Records. "You" has no custom asset yet, so it keeps the existing component.
 const items = [
   { key: 'home', label: 'Home', href: '/user', icon: '/home.png' },
   {

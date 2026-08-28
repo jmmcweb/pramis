@@ -12,7 +12,6 @@ type UserRole = 'Admin' | 'Medical Staff' | 'Patient'
 
 type BaseUser = {
   databaseId?: string
-  referenceId?: string
   username: string
   email: string
   password: string
@@ -305,7 +304,6 @@ export default function UserManagementPage() {
           data.users.map((user: AnyUser & { dateJoined: string }) => ({
             ...user,
             databaseId: user.id,
-            id: user.referenceId || user.id,
             dateJoined: user.dateJoined.slice(0, 10),
           })),
         )
@@ -463,9 +461,8 @@ export default function UserManagementPage() {
       const role = addForm.role === 'ADMIN' ? 'Admin' : 'Medical Staff'
       const newAccount: StaffUser = {
         kind: 'staff',
-        id: data.referenceId,
+        id: data.userId,
         databaseId: data.userId,
-        referenceId: data.referenceId,
         firstName: addForm.firstName.trim(),
         lastName: addForm.lastName.trim(),
         username: addForm.email.trim().split('@')[0],

@@ -3,12 +3,23 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { CheckCheck, X } from 'lucide-react'
-import { initialNotifications, PatientNotification } from './notificationData'
+import type { PatientNotification } from './notificationData'
 import NotificationCard from './NotificationCard'
 
-export default function NotificationDropdown({ onClose }: { onClose: () => void }) {
-  const [notifications, setNotifications] = useState(initialNotifications)
-  const [activeCategory, setActiveCategory] = useState<'All' | PatientNotification['category']>('All')
+export default function NotificationDropdown({
+  notifications,
+  markAll,
+  markOne,
+  onClose,
+}: {
+  notifications: PatientNotification[]
+  markAll: () => void
+  markOne: (id: string) => void
+  onClose: () => void
+}) {
+  const [activeCategory, setActiveCategory] = useState<
+    'All' | PatientNotification['category']
+  >('All')
 
   const unreadCount = notifications.filter((n) => n.unread).length
   const categories = ['All', 'Appointment', 'Records', 'Account'] as const
@@ -16,9 +27,6 @@ export default function NotificationDropdown({ onClose }: { onClose: () => void 
     activeCategory === 'All'
       ? notifications
       : notifications.filter((n) => n.category === activeCategory)
-
-  const markAllAsRead = () =>
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })))
 
   return (
     <>
@@ -32,12 +40,14 @@ export default function NotificationDropdown({ onClose }: { onClose: () => void 
               aria-hidden="true"
               className="w-5 h-5 object-contain flex-shrink-0"
             />
-            <h3 className="font-poppins text-[15px] font-bold text-body m-0 truncate">Notifications</h3>
+            <h3 className="font-poppins text-[15px] font-bold text-body m-0 truncate">
+              Notifications
+            </h3>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {unreadCount > 0 && (
               <button
-                onClick={markAllAsRead}
+                onClick={markAll}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-brand bg-brand-tint hover:bg-brand/15 px-3 py-1.5 rounded-full transition-colors cursor-pointer whitespace-nowrap"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
@@ -72,7 +82,13 @@ export default function NotificationDropdown({ onClose }: { onClose: () => void 
 
         <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
           {filtered.length > 0 ? (
-            filtered.map((n) => <NotificationCard key={n.id} notification={n} />)
+            filtered.map((n) => (
+              <NotificationCard
+                key={n.id}
+                notification={n}
+                onMarkRead={markOne}
+              />
+            ))
           ) : (
             <div className="text-center py-10 text-sm text-muted">
               No notifications in this category

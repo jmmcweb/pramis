@@ -1,5 +1,6 @@
 import { APP_NAME } from '@/config/constants'
 
+// Default email template
 export function defaultEmailTemplate(content: string): string {
   return `<!doctype html>
   <html lang="en">
@@ -67,7 +68,7 @@ export function defaultEmailTemplate(content: string): string {
   
             <table border="0" cellpadding="30" cellspacing="0" width="100%" class="default">
               <tr>
-                <td align="left">
+                <td align="center">
                   ${content}
                 </td>
               </tr>

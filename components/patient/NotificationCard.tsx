@@ -1,8 +1,23 @@
+'use client'
+
 import { PatientNotification, categoryColors } from './notificationData'
 
-export default function NotificationCard({ notification }: { notification: PatientNotification }) {
+export default function NotificationCard({
+  notification,
+  onMarkRead,
+}: {
+  notification: PatientNotification
+  onMarkRead?: (id: string) => void
+}) {
   return (
-    <article className="bg-card rounded-3xl shadow-card p-4 flex gap-3.5">
+    <article
+      onClick={() => {
+        if (notification.unread) onMarkRead?.(notification.id)
+      }}
+      className={`bg-card rounded-3xl shadow-card p-4 flex gap-3.5 ${
+        onMarkRead ? 'cursor-pointer' : ''
+      }`}
+    >
       <span
         className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
         style={{ background: categoryColors[notification.category] }}
@@ -15,10 +30,16 @@ export default function NotificationCard({ notification }: { notification: Patie
           >
             {notification.category}
           </span>
-          {notification.unread && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
+          {notification.unread && (
+            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+          )}
         </div>
-        <h2 className="font-poppins text-[15px] font-bold text-body m-0">{notification.title}</h2>
-        <p className="text-[13px] text-muted leading-relaxed my-1">{notification.description}</p>
+        <h2 className="font-poppins text-[15px] font-bold text-body m-0">
+          {notification.title}
+        </h2>
+        <p className="text-[13px] text-muted leading-relaxed my-1">
+          {notification.description}
+        </p>
         <span className="text-[11px] text-faint">{notification.time}</span>
       </div>
     </article>

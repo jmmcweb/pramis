@@ -25,6 +25,7 @@ const Confirmation = () => {
     mobile,
     email,
     street,
+    purok,
     barangay,
     city,
     province,
@@ -60,6 +61,7 @@ const Confirmation = () => {
 
         <dt className="auth-label mt-4 mb-1">Residence</dt>
         <Row label="Street" value={street} />
+        <Row label="Purok" value={purok} />
         <Row label="Barangay" value={barangay} />
         <Row label="City / Municipality" value={city} />
         <Row label="Province" value={province} />

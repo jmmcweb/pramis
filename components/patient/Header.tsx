@@ -5,11 +5,18 @@ import Link from 'next/link'
 import { Settings } from 'lucide-react'
 import MediTrackBrand from '@/components/globals/MediTrackBrand'
 import NotificationDropdown from './NotificationDropdown'
-import { initialNotifications } from './notificationData'
+import { useNotifications } from './useNotifications'
 
 export default function PatientHeader() {
   const [notifOpen, setNotifOpen] = useState(false)
-  const unreadCount = initialNotifications.filter((n) => n.unread).length
+
+  const { notifications, unreadCount, refresh, markRead, markAllRead } =
+    useNotifications()
+
+  const toggleNotif = () => {
+    if (!notifOpen) refresh()
+    setNotifOpen((o) => !o)
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-white/65 dark:bg-[rgba(45,27,78,0.65)] backdrop-blur border-b border-line px-4 py-3 flex items-center justify-between lg:static lg:justify-end lg:py-5 lg:border-0 lg:pl-7 lg:pr-0">
@@ -29,12 +36,14 @@ export default function PatientHeader() {
             aria-hidden="true"
             className="w-6 h-6 object-contain"
           />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
+          )}
         </Link>
 
         <div className="relative hidden lg:block">
           <button
-            onClick={() => setNotifOpen((o) => !o)}
+            onClick={toggleNotif}
             aria-label="Notifications"
             aria-expanded={notifOpen}
             className="relative p-2 rounded-full text-brand transition-colors lg:opacity-70 lg:hover:opacity-100 lg:transition-[color,background-color,opacity] hover:bg-brand-tint"
@@ -51,7 +60,14 @@ export default function PatientHeader() {
               </span>
             )}
           </button>
-          {notifOpen && <NotificationDropdown onClose={() => setNotifOpen(false)} />}
+          {notifOpen && (
+            <NotificationDropdown
+              notifications={notifications}
+              markAll={markAllRead}
+              markOne={markRead}
+              onClose={() => setNotifOpen(false)}
+            />
+          )}
         </div>
 
         <Link

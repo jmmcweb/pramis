@@ -301,7 +301,6 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 function AccountSection({ darkMode, user }: { darkMode: boolean; user: SettingsUser }) {
   const { data: session, update } = useSession()
 
-  // Account form (name / email)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     name: user.name ?? '',
@@ -309,7 +308,6 @@ function AccountSection({ darkMode, user }: { darkMode: boolean; user: SettingsU
   })
   const [state, handleSubmit, isPending] = useActionState(updateMe, null)
 
-  // Password form
   const [showPassword, setShowPassword] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ current: '', newPass: '', confirm: '' })
   const [passwordState, passwordAction, passwordPending] = useActionState(updateMePassword, null)
@@ -332,8 +330,7 @@ function AccountSection({ darkMode, user }: { darkMode: boolean; user: SettingsU
         ? { label: 'Fair', color: 'bg-amber-500', text: 'text-amber-600', width: '66%' }
         : { label: 'Strong', color: 'bg-emerald-500', text: 'text-emerald-600', width: '100%' }
 
-  // Sync the account form after a successful server save.
-  useEffect(() => {
+    useEffect(() => {
     if (state?.success && state.payload) {
       setForm({
         name: state.payload.name ?? user.name ?? '',
@@ -345,7 +342,6 @@ function AccountSection({ darkMode, user }: { darkMode: boolean; user: SettingsU
     }
   }, [state])
 
-  // Sync the password form after a successful change.
   useEffect(() => {
     if (passwordState?.success) {
       toast.success(passwordState.message ?? 'Password changed successfully')

@@ -11,13 +11,10 @@ export default function FormResetPassword({
 }: {
   className: string
 }) {
-  // Params
   const searchParams = useSearchParams()
 
-  // Refs
   const formRef = useRef<HTMLFormElement>(null)
 
-  // State
   const [email, setEmail] = useState('')
   const [token, setToken] = useState('')
 
@@ -37,7 +34,6 @@ export default function FormResetPassword({
     }
   }, [searchParams])
 
-  //if no token and email return:
   if (!email && !token) {
     return (
       <div className="m-auto w-full max-w-lg space-y-10">

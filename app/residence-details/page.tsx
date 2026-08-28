@@ -1,20 +1,14 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 import AuthShell from '@/components/auth/AuthShell'
 import Field from '@/components/auth/Field'
 import { useSignup } from '@/store/useSignup'
-
-const countries = [
-  { name: 'Philippines', code: '+63', flag: '/ph.png' },
-  { name: 'United States', code: '+1', flag: '/us.png' },
-  { name: 'Canada', code: '+1', flag: '/ca.png' },
-  { name: 'United Kingdom', code: '+44', flag: '/gb.png' },
-  { name: 'China', code: '+86', flag: '/cn.png' },
-]
+import { FIXED_ADDRESS } from '@/src/data/patientInfo'
+import type { AddressOptions } from '@/src/data/patientInfo'
 
 type Errors = Record<string, string>
 
@@ -24,14 +18,30 @@ const ResidenceDetails = () => {
 
   const formRef = useRef<HTMLFormElement>(null)
 
-  const [selectedCountry, setSelectedCountry] = useState(countries[0])
-  const [isOpen, setIsOpen] = useState(false)
-
   const [street, setStreet] = useState('')
-  const [barangay, setBarangay] = useState('')
-  const [city, setCity] = useState('')
-  const [province, setProvince] = useState('')
-  const [zip, setZip] = useState('')
+  const [purok, setPurok] = useState('')
+
+  const [addressOptions, setAddressOptions] = useState<AddressOptions | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/address')
+      .then((res) => res.json())
+      .then((data: AddressOptions) => {
+        if (!cancelled && data?.success) setAddressOptions(data)
+      })
+      .catch((error) => console.error('[ResidenceDetails | address fetch]:', error))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const lockedBarangay = addressOptions?.barangay ?? FIXED_ADDRESS.barangay
+  const lockedCity = addressOptions?.municipality ?? FIXED_ADDRESS.municipality
+  const lockedProvince = addressOptions?.province ?? FIXED_ADDRESS.province
+  const lockedZip = addressOptions?.zipCode ?? FIXED_ADDRESS.zipCode
+  const lockedCountry = addressOptions?.country ?? FIXED_ADDRESS.country
+  const purokOptions = addressOptions?.puroks ?? []
 
   const [errors, setErrors] = useState<Errors>({})
 
@@ -40,14 +50,12 @@ const ResidenceDetails = () => {
 
     const nextErrors: Errors = {}
     if (!street.trim()) nextErrors.street = 'Enter your street address.'
-    if (!city.trim()) nextErrors.city = 'Enter your city or municipality.'
-    if (!province.trim()) nextErrors.province = 'Enter your province.'
-    if (!zip.trim()) nextErrors.zip = 'Enter your ZIP / postal code.'
+    if (!purok.trim()) nextErrors.purok = 'Select your purok.'
 
     setErrors(nextErrors)
 
     if (Object.keys(nextErrors).length > 0) {
-      const first = ['street', 'city', 'province', 'zip'].find(
+      const first = ['street', 'purok', 'city', 'province', 'zip'].find(
         (name) => nextErrors[name],
       )
       formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus()
@@ -56,11 +64,12 @@ const ResidenceDetails = () => {
 
     setResidence({
       street,
-      barangay,
-      city,
-      province,
-      zip,
-      country: selectedCountry.name,
+      purok,
+      barangay: lockedBarangay,
+      city: lockedCity,
+      province: lockedProvince,
+      zip: lockedZip,
+      country: lockedCountry,
     })
     push('/confirmation')
   }
@@ -94,92 +103,73 @@ const ResidenceDetails = () => {
           required
         />
 
+        <div className="field">
+          <span className="auth-label">
+            Purok<span className="text-brand"> *</span>
+          </span>
+          <div className={`auth-box ${errors.purok ? 'has-errors' : ''}`}>
+            <select
+              name="purok"
+              value={purok}
+              onChange={(e) => setPurok(e.target.value)}
+              required
+              className="w-full bg-transparent text-[15px] text-ink outline-none cursor-pointer appearance-none py-3"
+            >
+              <option value="" disabled>
+                Select Purok
+              </option>
+              {purokOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={15} className="text-slate pointer-events-none" />
+          </div>
+          {errors.purok && <p className="error">{errors.purok}</p>}
+        </div>
+
         <Field
           label="Barangay"
           name="barangay"
-          placeholder="Barangay San Isidro"
-          value={barangay}
-          onChange={(e) => setBarangay(e.target.value)}
-          error={errors.barangay}
-          required
+          value={lockedBarangay}
+          readOnly
+          className="opacity-70"
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field
             label="City / Municipality"
             name="city"
-            placeholder="Quezon City"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            error={errors.city}
-            autoComplete="address-level2"
-            required
+            value={lockedCity}
+            readOnly
+            className="opacity-70"
           />
           <Field
             label="Province"
             name="province"
-            placeholder="Metro Manila"
-            value={province}
-            onChange={(e) => setProvince(e.target.value)}
-            error={errors.province}
-            autoComplete="address-level1"
-            required
+            value={lockedProvince}
+            readOnly
+            className="opacity-70"
           />
         </div>
 
         <Field
           label="ZIP / Postal code"
           name="zip"
-          placeholder="1100"
           inputMode="numeric"
-          value={zip}
-          onChange={(e) => setZip(e.target.value)}
-          error={errors.zip}
-          autoComplete="postal-code"
-          required
+          value={lockedZip}
+          readOnly
+          className="opacity-70"
         />
 
-        <div className="relative">
-          <div className="field">
-            <span className="auth-label">
-              Country<span className="text-brand"> *</span>
-            </span>
-            <div className={`auth-box ${errors.country ? 'has-errors' : ''}`}>
-              <button
-                type="button"
-                onClick={() => setIsOpen((v) => !v)}
-                aria-label="Select country"
-                className="w-full flex items-center gap-2.5 bg-transparent text-ink cursor-pointer py-3"
-              >
-                <img src={selectedCountry.flag} alt="" className="w-6 h-4 object-cover" />
-                <span className="text-[15px]">{selectedCountry.name}</span>
-                <ChevronDown size={15} className="ml-auto text-slate" />
-              </button>
-            </div>
-          </div>
-
-          {isOpen && (
-            <div className="absolute left-0 top-full mt-1 w-full bg-white border border-line rounded-[3px] shadow-xl z-50 py-1">
-              {countries.map((country) => (
-                <button
-                  key={country.name}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCountry(country)
-                    setIsOpen(false)
-                  }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 bg-white hover:bg-mist transition-colors cursor-pointer"
-                >
-                  <img src={country.flag} alt="" className="w-6 h-4 object-cover" />
-                  <span className="text-[14px] text-ink">{country.name}</span>
-                  <span className="ml-auto font-asap text-[13px] font-semibold text-slate">
-                    {country.code}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Field
+          label="Country"
+          name="country"
+          value={lockedCountry}
+          readOnly
+          className="opacity-70"
+        />
 
         <button type="submit" className="btn btn--primary mt-1">
           Next

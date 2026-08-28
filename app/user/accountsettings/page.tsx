@@ -17,13 +17,12 @@ export default async function AccountSettingsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect('/login')
 
-  // User-only: admins/staff are sent to their own dashboards.
+
   const role = session.user.role as string | undefined
   if (role === 'SUPERADMIN' || role === 'ADMIN') redirect('/admin')
   if (role === 'STAFF' || role === 'NURSE') redirect('/staff')
   if (role !== 'USER') redirect('/login')
 
-  // Fetch the real user from the DB; fall back to the session claims.
   const me = await getMe()
   const user = me?.payload ?? {
     id: session.user.id,

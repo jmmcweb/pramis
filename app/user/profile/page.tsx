@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
 import { getAccountAccess } from '@/lib/actions/guard'
+import { getMyProfile } from '@/lib/actions/me'
 import PatientHeader from '@/components/patient/Header'
 import PatientBottomNavigation from '@/components/patient/PatientBottomNavigation'
 import PatientSidebar from '@/components/patient/PatientSidebar'
@@ -20,6 +21,19 @@ export default async function ProfilePage() {
   const access = await getAccountAccess()
   if (!access) redirect('/login')
 
+  const { profile } = await getMyProfile()
+
+  const displayName =
+    [profile?.firstName, profile?.middleName, profile?.lastName, profile?.suffix]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || profile?.email || 'Patient'
+
+  const initials =
+    `${profile?.firstName?.charAt(0) ?? ''}${profile?.lastName?.charAt(0) ?? ''}`
+      .toUpperCase()
+      .trim() || 'P'
+
   return (
     <>
       <section
@@ -32,14 +46,14 @@ export default async function ProfilePage() {
             <div className="bg-white dark:bg-card rounded-3xl shadow-card p-5">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 shrink-0 rounded-full bg-brand-tint text-brand flex items-center justify-center text-xl font-bold">
-                  CM
+                  {initials}
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-widest">
-                    PTN-2610201
+                    {profile?.referenceId || 'No ID yet'}
                   </p>
                   <h1 className="text-2xl font-bold text-brand leading-tight">
-                    Carla Mae Villanueva
+                    {displayName}
                   </h1>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
                     Keep your personal information up to date.
@@ -48,7 +62,7 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            <PatientInfoForm />
+            <PatientInfoForm profile={profile} />
           </main>
         </div>
       </section>

@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
 import { getAccountAccess } from '@/lib/actions/guard'
+import {
+  getBookingServices,
+  getMyAppointments,
+} from '@/lib/actions/appointment'
 import PatientHeader from '@/components/patient/Header'
 import AppointmentOverviewCard from '@/components/patient/AppointmentOverviewCard'
 import ServiceListSection from '@/components/patient/ServiceListSection'
@@ -19,10 +23,13 @@ export default async function AppointmentPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect('/login')
 
-  // Account approval gate: PENDING/REJECTED users cannot access appointments.
   const access = await getAccountAccess()
   if (!access) redirect('/login')
   const allowed = access.approved
+
+  const [servicesResult, appointmentsResult] = allowed
+    ? await Promise.all([getBookingServices(), getMyAppointments()])
+    : [null, null]
 
   return (
     <>
@@ -35,8 +42,10 @@ export default async function AppointmentPage() {
           <main className="px-4 pt-4 flex flex-col gap-5 lg:px-12 lg:pt-5">
             {allowed ? (
               <>
-                <AppointmentOverviewCard />
-                <ServiceListSection />
+                <AppointmentOverviewCard
+                  appointments={appointmentsResult?.appointments ?? []}
+                />
+                <ServiceListSection services={servicesResult?.services ?? []} />
               </>
             ) : (
               <AccountStatusScreen status={access.status} />

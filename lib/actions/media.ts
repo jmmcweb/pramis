@@ -22,7 +22,11 @@ export async function uploadMedia(image: File) {
   }
 
   if (image.size > MAX_SIZE_BYTES) {
-    return { success: false, payload: null, message: 'File is too large (max 2MB).' }
+    return {
+      success: false,
+      payload: null,
+      message: 'File is too large (max 2MB).',
+    }
   }
 
   const userId = session.user.id
@@ -60,13 +64,17 @@ export async function deleteMedia(_prevState: any, formData: any) {
   }
 
   try {
-    const me = await prisma.user.findFirst({
-      where: { id: +session.user.id, deletedAt: null },
+    const me = await (prisma as any).user.findFirst({
+      where: { id: session.user.id },
       select: { image: true },
     })
 
     if (!me || me.image !== url) {
-      return { success: false, payload: null, message: 'Not authorized to delete this file.' }
+      return {
+        success: false,
+        payload: null,
+        message: 'Not authorized to delete this file.',
+      }
     }
 
     await del(url)

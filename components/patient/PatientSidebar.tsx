@@ -7,9 +7,6 @@ import MediTrackBrand from '@/components/globals/MediTrackBrand'
 import SidebarFooter from '@/components/globals/SidebarFooter'
 import { useDarkMode } from '@/components/globals/DarkModeContext'
 
-// Permanent left navigation for desktop (1024px+). Mirrors the mobile bottom
-// navigation items, routes, and icons. Hidden below `lg` — mobile/tablet keep
-// the bottom nav untouched.
 const items = [
   { key: 'home', label: 'Home', href: '/user', icon: '/home.png' },
   {

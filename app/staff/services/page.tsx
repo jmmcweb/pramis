@@ -1,7 +1,19 @@
 'use client'
+
+import { useState, useEffect } from 'react'
+import { Loader2 } from 'lucide-react'
 import { useDarkMode } from '@/app/staff/DarkModeContext'
 
-const services = [
+type ServiceItem = {
+  id?: string
+  title: string
+  subtitle: string
+  time: string
+  icon: string
+  desc: string
+}
+
+const defaultServices: ServiceItem[] = [
   { title: 'Basic Consultation', subtitle: 'Monday to Friday', time: '8:00am - 5:00pm', icon: '👩‍⚕️', desc: 'General medical consultation for patients of all ages. Includes check-ups, diagnosis, and treatment recommendations.' },
   { title: 'Pre-natal Care', subtitle: 'Tuesday', time: '8:00am - 5:00pm', icon: '🤰', desc: 'Comprehensive care for pregnant women including check-ups, nutritional counseling, and monitoring of fetal development.' },
   { title: 'National Immunization Program (NIP)', subtitle: 'Wednesday to Friday', time: '8:00am - 5:00pm', icon: '💉', desc: 'Routine immunization for infants, children, and adults following the national vaccination schedule.' },
@@ -25,14 +37,46 @@ const majorServices = [
 
 export default function ServicesPage() {
   const { darkMode } = useDarkMode()
+  const [services, setServices] = useState<ServiceItem[]>(defaultServices)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true)
+        const res = await fetch('/api/services')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success && Array.isArray(data.services) && data.services.length > 0) {
+            setServices(data.services)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load services:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
   return (
     <div>
-      <h1 className={`text-[30px] sm:text-[38px] lg:text-[45px] my-[14px] text-left ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}>Services</h1>
+      <h1 className={`text-[30px] sm:text-[38px] lg:text-[45px] my-[14px] text-left ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}>
+        Health Services
+      </h1>
+
+      {loading && (
+        <div className={`p-6 rounded-[24px] mb-6 flex items-center justify-center gap-3 ${darkMode ? 'bg-[#2d1b4e] text-white' : 'bg-white text-gray-700'} shadow-sm`}>
+          <Loader2 className="w-5 h-5 animate-spin text-[#4E69D3]" />
+          <span className="font-semibold text-sm">Loading health services...</span>
+        </div>
+      )}
 
       <div className={`p-4 rounded-[24px] ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.08)]'} shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]`}>
         <div className="grid grid-cols-3 gap-[22px] max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
           {services.map((s, i) => (
-            <div key={i} className={`flex flex-col p-[22px] rounded-[18px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)] ${darkMode ? 'bg-[#2d1b4e] border border-[rgba(255,255,255,0.10)]' : 'bg-white border border-[rgba(15,60,95,0.10)]'}`}>
+            <div key={s.id || i} className={`flex flex-col p-[22px] rounded-[18px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)] ${darkMode ? 'bg-[#2d1b4e] border border-[rgba(255,255,255,0.10)]' : 'bg-white border border-[rgba(15,60,95,0.10)]'}`}>
               <div className="flex gap-4 items-start">
                 <div className="text-2xl mt-1">{s.icon}</div>
                 <div className="flex-1 min-w-0">

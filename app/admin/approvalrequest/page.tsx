@@ -339,10 +339,10 @@ export default function UserManagementPage() {
               (account: StaffAccount | PatientAccount) =>
                 account.kind === 'patient',
             )
-            .map((account: PatientAccount & { referenceId?: string }) => ({
+            .map((account: PatientAccount) => ({
               ...account,
               databaseId: account.id,
-              id: account.referenceId || account.id,
+              id: account.id,
             })),
         )
       })

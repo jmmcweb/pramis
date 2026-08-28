@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import { getMe } from '@/lib/actions/me'
 
 export default async function DashboardUserProfilePage() {
-  // Me
   const resMe = await getMe()
   const me = resMe.success ? resMe.payload : null
 

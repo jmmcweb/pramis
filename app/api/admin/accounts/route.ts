@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { hash } from 'bcrypt'
 import prisma from '@/lib/prisma'
+import { nextReferenceId } from '@/lib/referenceId'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
-import { nextReferenceId } from '@/lib/referenceId'
 
 const roles = ['SUPERADMIN', 'ADMIN', 'STAFF', 'MIDWIFE', 'USER'] as const
 
@@ -27,7 +27,7 @@ export async function GET() {
     const [users, staff] = await Promise.all([
       (prisma as any).user.findMany({
         orderBy: { createdAt: 'desc' },
-        include: { profile: true, patient: true },
+        include: { profile: true, patients: true },
       }),
       (prisma as any).staff.findMany({ orderBy: { createdAt: 'desc' } }),
     ])
@@ -37,7 +37,7 @@ export async function GET() {
         ...staff.map((account: any) => ({
           kind: 'staff',
           id: account.staffid,
-          referenceId: account.referenceId || account.staffid,
+          referenceId: account.staffid,
           firstName: account.firstName,
           lastName: account.lastName,
           username: account.email.split('@')[0],
@@ -50,14 +50,14 @@ export async function GET() {
         ...users.map((account: any) => ({
           kind: 'patient',
           id: account.id,
-          referenceId: account.referenceId || account.id,
+          referenceId: account.id,
           firstName: account.profile?.firstName || 'User',
           lastName: account.profile?.lastName || '',
           username: account.email.split('@')[0],
           email: account.email,
           password: '********',
           role: account.role === 'USER' ? 'Patient' : 'Admin',
-          hasRecord: Boolean(account.patient),
+          hasRecord: account.patients.length > 0,
           dateJoined: account.createdAt,
         })),
       ],
@@ -128,9 +128,10 @@ export async function POST(request: Request) {
     }
 
     if (role === 'ADMIN' || role === 'MIDWIFE') {
+      const staffid = await nextReferenceId(role === 'ADMIN' ? 'ADM' : 'MS')
       const staff = await (prisma as any).staff.create({
         data: {
-          referenceId: await nextReferenceId(role === 'ADMIN' ? 'ADM' : 'MS'),
+          staffid,
           firstName,
           lastName,
           email,
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
         {
           success: true,
           userId: staff.staffid,
-          referenceId: staff.referenceId,
+          referenceId: staff.staffid,
           role: staff.role,
         },
         { status: 201 },
@@ -157,9 +158,10 @@ export async function POST(request: Request) {
       )
     }
 
+    const userId = await nextReferenceId('USR')
     const user = await (prisma as any).user.create({
       data: {
-        referenceId: await nextReferenceId('USR'),
+        id: userId,
         email,
         password: await hash(password, 12),
         role,
@@ -170,7 +172,7 @@ export async function POST(request: Request) {
       {
         success: true,
         userId: user.id,
-        referenceId: user.referenceId,
+        referenceId: user.id,
         role: user.role,
       },
       { status: 201 },

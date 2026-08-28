@@ -1,40 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { CalendarCheck, ChevronLeft, ChevronRight, Plus, UserRound } from 'lucide-react'
-import type { Service } from '@/src/data/appointment'
-import { familyMembers, patient } from '@/src/data/records'
-import type { PatientMember } from '@/src/data/records'
+import { useActionState } from 'react'
+import {
+  CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  UserRound,
+} from 'lucide-react'
+import { bookAppointment, getDayAvailability } from '@/lib/actions/appointment'
+import type {
+  FamilyMemberOption,
+  ServiceView,
+  SlotAvailability,
+} from '@/config/appointment'
 
-type DayStatus = 'available' | 'booked' | 'unavailable'
+type DayStatus = 'available' | 'unavailable'
 
 type CalendarDay = {
   day: number
   status: DayStatus
   label: string
-  iso: string
-}
-
-type TimeSlot = {
-  time: string
-  availability: string
-  status: 'available' | 'limited' | 'unavailable'
+  iso: string // YYYY-MM-DD
 }
 
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const BOOKED_DAYS = [4, 8, 15, 19, 23, 28]
-
-const timeSlots: TimeSlot[] = [
-  { time: '8:00 AM - 9:00 AM', availability: 'Available Slots: 9', status: 'available' },
-  { time: '9:00 AM - 10:00 AM', availability: 'Available Slots: 4', status: 'available' },
-  { time: '10:00 AM - 11:00 AM', availability: 'Available Slots: 2', status: 'limited' },
-  { time: '1:00 PM - 2:00 PM', availability: 'Available Slots: 6', status: 'available' },
-  { time: '2:00 PM - 3:00 PM', availability: 'Available Slots: 1', status: 'limited' },
-  { time: '3:00 PM - 4:00 PM', availability: 'No slots left', status: 'unavailable' },
-  { time: '4:00 PM - 5:00 PM', availability: 'Available Slots: 8', status: 'available' },
-]
 
 function buildMonthCells(year: number, month: number): (CalendarDay | null)[] {
   const first = new Date(year, month, 1)
@@ -51,7 +44,7 @@ function buildMonthCells(year: number, month: number): (CalendarDay | null)[] {
     const isPast = date < today
     const isWeekend = date.getDay() === 0 || date.getDay() === 6
     const status: DayStatus =
-      isPast || isWeekend ? 'unavailable' : BOOKED_DAYS.includes(d) ? 'booked' : 'available'
+      isPast || isWeekend ? 'unavailable' : 'available'
     cells.push({
       day: d,
       status,
@@ -61,7 +54,7 @@ function buildMonthCells(year: number, month: number): (CalendarDay | null)[] {
         day: 'numeric',
         year: 'numeric',
       }),
-      iso: `${year}-${month}-${d}`,
+      iso: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
     })
   }
   return cells
@@ -76,16 +69,27 @@ function Legend({ color, label }: { color: string; label: string }) {
   )
 }
 
-export default function BookingForm({ service }: { service: Service }) {
+export default function BookingForm({
+  service,
+  patientName,
+  familyMembers = [],
+}: {
+  service: ServiceView
+  patientName: string
+  familyMembers?: FamilyMemberOption[]
+}) {
   const router = useRouter()
   const now = new Date()
   const [viewYear, setViewYear] = useState(now.getFullYear())
   const [viewMonth, setViewMonth] = useState(now.getMonth())
   const [selectedDate, setSelectedDate] = useState<CalendarDay | null>(null)
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
-  const [selectedMember, setSelectedMember] = useState<PatientMember>(patient)
+  const [slots, setSlots] = useState<SlotAvailability[]>([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
 
-  const people: PatientMember[] = [patient, ...familyMembers]
+  const [selectedForMemberId, setSelectedForMemberId] = useState('')
+
+  const [state, formAction, isPending] = useActionState(bookAppointment, null)
 
   const goMonth = (delta: number) => {
     const next = new Date(viewYear, viewMonth + delta, 1)
@@ -99,23 +103,52 @@ export default function BookingForm({ service }: { service: Service }) {
     year: 'numeric',
   })
 
-  const confirm = () => {
-    if (!selectedDate || !selectedSlot) return
-    toast.success(
-      <div className="flex flex-col gap-0.5">
-        <span className="font-bold">
-          Appointment for {selectedDate.label} at {selectedSlot.time}
-        </span>
-        <span className="text-sm text-white/80">
-          {selectedMember.name} · {selectedMember.relation}
-        </span>
-        <span className="text-sm text-white/80">{service.name}</span>
-      </div>
-    )
-  }
+
+  useEffect(() => {
+    if (!selectedDate) {
+      setSlots([])
+      setSelectedSlotId(null)
+      return
+    }
+    let active = true
+    setSlotsLoading(true)
+    setSelectedSlotId(null)
+    getDayAvailability(selectedDate.iso)
+      .then((result) => {
+        if (!active) return
+        if (!result.success) toast.error(result.message)
+        setSlots(result.slots)
+      })
+      .catch(() => {
+        if (active) toast.error('Failed to load time slots.')
+      })
+      .finally(() => {
+        if (active) setSlotsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [selectedDate])
+
+  useEffect(() => {
+    if (!state) return
+    if (state.success) {
+      toast.success(state.message)
+      router.push('/user/appointment')
+    } else if (state.message) {
+      toast.error(state.message)
+    }
+  }, [state, router])
+
+  const selectedSlot = slots.find((s) => s.id === selectedSlotId) ?? null
 
   return (
-    <div className="flex flex-col gap-5">
+    <form action={formAction} className="flex flex-col gap-5">
+      <input type="hidden" name="serviceId" value={service.id} />
+      <input type="hidden" name="date" value={selectedDate?.iso ?? ''} />
+      <input type="hidden" name="slotId" value={selectedSlotId ?? ''} />
+      <input type="hidden" name="familyMemberId" value={selectedForMemberId} />
+
       <div className="bg-card rounded-3xl shadow-card p-5">
         <div className="flex items-center gap-3 mb-4">
           <span className="w-11 h-11 shrink-0 rounded-2xl bg-brand-tint text-brand flex items-center justify-center">
@@ -124,60 +157,58 @@ export default function BookingForm({ service }: { service: Service }) {
           <h2 className="text-2xl font-bold text-brand">Appointment For</h2>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {people.map((person) => {
-            const isActive = person.id === selectedMember.id
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedForMemberId('')}
+            aria-pressed={selectedForMemberId === ''}
+            className={`w-full bg-surface rounded-2xl p-4 flex items-center gap-3 border-2 transition-colors ${
+              selectedForMemberId === ''
+                ? 'border-brand'
+                : 'border-transparent hover:border-line'
+            }`}
+          >
+            <span className="w-9 h-9 shrink-0 rounded-full bg-brand-tint text-brand text-xs font-bold flex items-center justify-center">
+              {patientName.slice(0, 2).toUpperCase()}
+            </span>
+            <span className="min-w-0 text-left">
+              <span className="block text-sm text-body truncate">
+                <span className="font-bold">Booking For:</span> {patientName}{' '}
+                <span className="text-muted">(You)</span>
+              </span>
+              <span className="block text-xs text-muted mt-0.5">
+                Booked under your account · {service.name}
+              </span>
+            </span>
+          </button>
+
+          {familyMembers.map((member) => {
+            const isSelected = selectedForMemberId === member.id
             return (
               <button
-                key={person.id}
+                key={member.id}
                 type="button"
-                onClick={() => setSelectedMember(person)}
-                aria-pressed={isActive}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl whitespace-nowrap transition-colors ${
-                  isActive
-                    ? 'bg-brand text-white shadow-md'
-                    : 'bg-surface text-muted hover:bg-brand-tint'
+                onClick={() => setSelectedForMemberId(member.id)}
+                aria-pressed={isSelected}
+                className={`w-full bg-surface rounded-2xl p-4 flex items-center gap-3 border-2 transition-colors ${
+                  isSelected ? 'border-brand' : 'border-transparent hover:border-line'
                 }`}
               >
-                <span
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-brand-tint text-brand'
-                  }`}
-                >
-                  {person.initials}
+                <span className="w-9 h-9 shrink-0 rounded-full bg-brand-tint text-brand text-xs font-bold flex items-center justify-center">
+                  {member.name.slice(0, 2).toUpperCase()}
                 </span>
-                <span className="text-sm font-semibold">
-                  {person.id === 'me' ? 'Me' : person.name.split(' ')[0]}
+                <span className="min-w-0 text-left">
+                  <span className="block text-sm text-body truncate">
+                    <span className="font-bold">Booking For:</span> {member.name}{' '}
+                    <span className="text-muted">({member.relation})</span>
+                  </span>
+                  <span className="block text-xs text-muted mt-0.5">
+                    Family member · gets their own patient ID
+                  </span>
                 </span>
               </button>
             )
           })}
-        </div>
-
-        {familyMembers.length === 0 && (
-          <button
-            type="button"
-            onClick={() => router.push('/user/records')}
-            className="w-full border-2 border-dashed border-line rounded-xl py-2.5 mt-3 text-sm font-medium text-brand hover:bg-brand-tint transition-colors inline-flex items-center justify-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" aria-hidden="true" />
-            Add Family Member
-          </button>
-        )}
-
-        <div className="bg-surface rounded-2xl p-4 mt-3 flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <span className="w-9 h-9 shrink-0 rounded-full bg-brand-tint text-brand text-xs font-bold flex items-center justify-center">
-              {selectedMember.initials}
-            </span>
-            <p className="text-sm text-body">
-              <span className="font-bold">Booking For:</span> {selectedMember.name}
-            </p>
-          </div>
-          <p className="text-sm text-muted">
-            <span className="font-bold text-body">Relationship:</span>{' '}
-            {selectedMember.relation}
-          </p>
         </div>
       </div>
 
@@ -226,9 +257,7 @@ export default function BookingForm({ service }: { service: Service }) {
               ? 'bg-brand text-white shadow-md'
               : cell.status === 'available'
                 ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                : cell.status === 'booked'
-                  ? 'bg-red-500 text-white'
-                  : 'bg-track text-muted cursor-not-allowed'
+                : 'bg-track text-muted cursor-not-allowed'
             return (
               <button
                 key={cell.iso}
@@ -245,8 +274,7 @@ export default function BookingForm({ service }: { service: Service }) {
         </div>
 
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-4">
-          <Legend color="bg-emerald-500" label="Available" />
-          <Legend color="bg-red-500" label="Fully Booked" />
+          <Legend color="bg-emerald-500" label="Open" />
           <Legend color="bg-faint" label="Unavailable" />
           <Legend color="bg-brand" label="Selected" />
         </div>
@@ -262,54 +290,73 @@ export default function BookingForm({ service }: { service: Service }) {
 
       <div className="bg-card rounded-3xl shadow-card p-5">
         <h2 className="text-2xl font-bold text-brand mb-1">Available Time Slots</h2>
+        <p className="text-sm text-muted mb-4">
+          {selectedDate
+            ? 'Live availability for the selected date.'
+            : 'Select a date above to see open slots.'}
+        </p>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-4">
           <Legend color="bg-emerald-500" label="Available" />
           <Legend color="bg-amber-500" label="Limited" />
-          <Legend color="bg-red-500" label="Unavailable" />
+          <Legend color="bg-red-500" label="Full" />
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-          {timeSlots.map((slot) => {
-            const isSelected = selectedSlot?.time === slot.time
-            const className = isSelected
-              ? 'bg-brand border-brand text-white'
-              : slot.status === 'available'
-                ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300'
-                : slot.status === 'limited'
-                  ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300'
-                  : 'bg-red-50 dark:bg-red-500/10 border-red-500/50 text-red-400 cursor-not-allowed'
-            return (
-              <button
-                key={slot.time}
-                type="button"
-                disabled={slot.status === 'unavailable'}
-                onClick={() => setSelectedSlot(slot)}
-                className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-colors ${className}`}
-              >
-                <span className="text-sm font-bold leading-tight">{slot.time}</span>
-                <span
-                  className={`inline-flex items-center gap-1 text-[11px] font-semibold leading-tight ${
-                    isSelected ? 'text-white/80' : 'opacity-80'
-                  }`}
+        {!selectedDate ? (
+          <p className="text-sm text-muted bg-surface rounded-xl p-4">
+            No date selected yet.
+          </p>
+        ) : slotsLoading ? (
+          <p className="text-sm text-muted bg-surface rounded-xl p-4 inline-flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            Loading slots…
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+            {slots.map((slot) => {
+              const isSelected = selectedSlotId === slot.id
+              const className = isSelected
+                ? 'bg-brand border-brand text-white'
+                : slot.status === 'available'
+                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300'
+                  : slot.status === 'limited'
+                    ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300'
+                    : 'bg-red-50 dark:bg-red-500/10 border-red-500/50 text-red-400 cursor-not-allowed'
+              return (
+                <button
+                  key={slot.id}
+                  type="button"
+                  disabled={slot.status === 'unavailable'}
+                  onClick={() => setSelectedSlotId(slot.id)}
+                  aria-pressed={isSelected}
+                  className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-colors ${className}`}
                 >
+                  <span className="text-sm font-bold leading-tight">{slot.label}</span>
                   <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isSelected
-                        ? 'bg-white'
-                        : slot.status === 'available'
-                          ? 'bg-emerald-500'
-                          : slot.status === 'limited'
-                            ? 'bg-amber-500'
-                            : 'bg-red-400'
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold leading-tight ${
+                      isSelected ? 'text-white/80' : 'opacity-80'
                     }`}
-                    aria-hidden="true"
-                  />
-                  {slot.availability}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isSelected
+                          ? 'bg-white'
+                          : slot.status === 'available'
+                            ? 'bg-emerald-500'
+                            : slot.status === 'limited'
+                              ? 'bg-amber-500'
+                              : 'bg-red-400'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {slot.remaining > 0
+                      ? `Available Slots: ${slot.remaining}`
+                      : 'No slots left'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {selectedDate && selectedSlot && (
@@ -318,7 +365,12 @@ export default function BookingForm({ service }: { service: Service }) {
           <dl className="divide-y divide-line">
             <div className="flex items-center justify-between gap-3 py-2.5">
               <dt className="text-sm text-muted">Appointment For</dt>
-              <dd className="text-sm font-semibold text-body">{selectedMember.name}</dd>
+              <dd className="text-sm font-semibold text-body">
+                {selectedForMemberId
+                  ? familyMembers.find((m) => m.id === selectedForMemberId)?.name ??
+                    patientName
+                  : patientName}
+              </dd>
             </div>
             <div className="flex items-center justify-between gap-3 py-2.5">
               <dt className="text-sm text-muted">Service</dt>
@@ -330,21 +382,29 @@ export default function BookingForm({ service }: { service: Service }) {
             </div>
             <div className="flex items-center justify-between gap-3 py-2.5">
               <dt className="text-sm text-muted">Time</dt>
-              <dd className="text-sm font-semibold text-body">{selectedSlot.time}</dd>
+              <dd className="text-sm font-semibold text-body">{selectedSlot.label}</dd>
             </div>
           </dl>
         </div>
       )}
 
       <button
-        type="button"
-        disabled={!selectedDate || !selectedSlot}
-        onClick={confirm}
+        type="submit"
+        disabled={!selectedDate || !selectedSlotId || isPending}
         className="w-full bg-brand hover:bg-brand-dark text-white py-4 rounded-2xl font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
       >
-        <CalendarCheck className="w-5 h-5" aria-hidden="true" />
-        Confirm Appointment
+        {isPending ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+            Booking…
+          </>
+        ) : (
+          <>
+            <CalendarCheck className="w-5 h-5" aria-hidden="true" />
+            Confirm Appointment
+          </>
+        )}
       </button>
-    </div>
+    </form>
   )
 }

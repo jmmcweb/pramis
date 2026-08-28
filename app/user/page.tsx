@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
 import { getAccountAccess } from '@/lib/actions/guard'
+import {
+  getMyAppointments,
+  getMyDisplayName,
+} from '@/lib/actions/appointment'
+import { getStaffDirectory } from '@/lib/actions/staff'
 import PatientHeader from '@/components/patient/Header'
 import AppointmentCard from '@/components/patient/AppointmentCard'
 import EventCard from '@/components/patient/EventCard'
@@ -22,12 +27,19 @@ export default async function Dashboard() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect('/login')
 
-  // Account approval gate: PENDING users see their status + allowed features;
-  // REJECTED users see the verification-failed screen.
   const access = await getAccountAccess()
   if (!access) redirect('/login')
 
   const isRejected = access.status === 'REJECTED'
+
+  const [displayName, appointmentsResult, staffResult] = isRejected
+    ? ['', null, null]
+    : await Promise.all([getMyDisplayName(), getMyAppointments(), getStaffDirectory()])
+
+  const upcoming = (appointmentsResult?.appointments ?? [])
+    .filter((a) => a.status === 'PENDING' || a.status === 'APPROVED')
+    .sort((a, b) => a.appointmentAtISO.localeCompare(b.appointmentAtISO))
+  const nextAppointment = upcoming[0] ?? null
 
   return (
     <>
@@ -43,13 +55,15 @@ export default async function Dashboard() {
             ) : (
               <>
                 <h1 className="text-[40px] sm:text-[52px] lg:text-[68px] text-[#1d4662] dark:text-[#F9FAFB] my-[14px] text-left">
-                  Hello, {session.user.name ?? 'there'}!
+                  Hello, {displayName || 'there'}!
                 </h1>
                 <div className="flex flex-col gap-5 md:grid md:grid-cols-2 md:items-start">
                   <div className="flex flex-col gap-5 min-w-0">
                     {!access.approved && <ApprovalBanner />}
-                    {access.approved && <AppointmentCard />}
-                    <StaffList />
+                    {access.approved && (
+                      <AppointmentCard appointment={nextAppointment} />
+                    )}
+                    <StaffList staff={staffResult?.staff ?? []} />
                   </div>
                   <div className="flex flex-col gap-5 min-w-0">
                     {access.approved && <ServicesSection />}

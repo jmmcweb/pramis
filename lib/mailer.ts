@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer'
 import { SMTP_FROM_EMAIL, SMTP_FROM_NAME } from '@/config/constants'
 import { defaultEmailTemplate } from './email-templates/defaultEmailTemplate'
 
+// Create a transporter instance
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: 587,
@@ -13,8 +14,7 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-// Sends an HTML email wrapped in the default template. Returns whether the
-// message was accepted by the relay; never throws to the caller.
+// Send an email using the configured SMTP transporter
 export async function sendMail({
   to,
   subject,
