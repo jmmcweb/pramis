@@ -1,3 +1,5 @@
+// This file contains functions to compute population data based on patient and user profile information. It retrieves data from the database, processes it to calculate various statistics such as total population, household count, age group distribution, and gender distribution
+
 import prisma from '@/lib/prisma'
 import { FIXED_ADDRESS, PUROKS } from '@/src/data/patientInfo'
 import type { PopulationData } from '@/src/data/population'
@@ -31,7 +33,8 @@ function extractPurok(houseNumber?: string | null) {
   return PUROKS.find((p) => haystack.includes(p.toLowerCase())) ?? null
 }
 
-// 
+// Computes population data by aggregating information from patients and user profiles. It calculates total population, household count, average household size, gender distribution
+
 export async function computePopulationData(): Promise<PopulationData> {
   const [patients, profiles] = await Promise.all([
     (prisma as any).patient.findMany({
@@ -52,7 +55,11 @@ export async function computePopulationData(): Promise<PopulationData> {
     patients.map((p: any) => p.userId).filter(Boolean),
   )
 
-  type Person = { houseNumber: string | null; sex: string | null; birthdate: Date | null }
+  type Person = {
+    houseNumber: string | null
+    sex: string | null
+    birthdate: Date | null
+  }
   const persons: Person[] = patients.map((p: any) => ({
     houseNumber: p.houseNumber,
     sex: p.sex,
@@ -68,7 +75,19 @@ export async function computePopulationData(): Promise<PopulationData> {
     }
   }
 
-  const purokCounts = new Map<string, number>(PUROKS.map((p) => [p, 0]))
+  type PurokStat = {
+    residents: number
+    households: Set<string>
+    male: number
+    female: number
+  }
+
+  const purokStatsMap = new Map<string, PurokStat>(
+    PUROKS.map((p) => [
+      p,
+      { residents: 0, households: new Set<string>(), male: 0, female: 0 },
+    ]),
+  )
   const ageCounts = AGE_GROUP_LABELS.map(() => 0)
   let male = 0
   let female = 0
@@ -78,17 +97,30 @@ export async function computePopulationData(): Promise<PopulationData> {
   const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000
 
   for (const person of persons) {
+    const sex = person.sex?.trim().toLowerCase()
+    const isMale = sex === 'male' || sex === 'm'
+    const isFemale = sex === 'female' || sex === 'f'
+
+    if (isMale) male++
+    else if (isFemale) female++
+
     const purok = extractPurok(person.houseNumber)
     if (purok) {
-      purokCounts.set(purok, (purokCounts.get(purok) ?? 0) + 1)
+      const stat = purokStatsMap.get(purok)
+      if (stat) {
+        stat.residents++
+        if (isMale) stat.male++
+        else if (isFemale) stat.female++
+
+        const houseKey = person.houseNumber?.trim().toLowerCase()
+        if (houseKey) stat.households.add(houseKey)
+      }
     }
 
-    const sex = person.sex?.trim().toLowerCase()
-    if (sex === 'male' || sex === 'm') male++
-    else if (sex === 'female' || sex === 'f') female++
-
     if (person.birthdate) {
-      const age = Math.floor((now - new Date(person.birthdate).getTime()) / YEAR_MS)
+      const age = Math.floor(
+        (now - new Date(person.birthdate).getTime()) / YEAR_MS,
+      )
       if (age >= 0) ageCounts[ageGroupIndex(age)]++
     }
 
@@ -114,9 +146,21 @@ export async function computePopulationData(): Promise<PopulationData> {
       label,
       value: ageCounts[i],
     })),
-    puroks: PUROKS.map((label) => ({
-      label,
-      value: purokCounts.get(label) ?? 0,
-    })),
+    puroks: PUROKS.map((label) => {
+      const stat = purokStatsMap.get(label) ?? {
+        residents: 0,
+        households: new Set<string>(),
+        male: 0,
+        female: 0,
+      }
+      return {
+        label,
+        value: stat.residents,
+        residents: stat.residents,
+        households: stat.households.size,
+        male: stat.male,
+        female: stat.female,
+      }
+    }),
   }
 }

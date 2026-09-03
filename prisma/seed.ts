@@ -120,7 +120,7 @@ async function main() {
       id: 'MS-1000',
       email: 'staff@domain.com',
       password: passwordHash,
-      role: 'STAFF',
+      role: 'MEDSTAFF',
     },
   })
 

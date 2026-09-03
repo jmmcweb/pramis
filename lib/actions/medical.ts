@@ -1,3 +1,4 @@
+// This file contains server-side actions related to medical record management, including saving and updating medical records. It uses Prisma for database interactions and NextAuth for session management. The functions are designed to be used in a Next.js application with server-side rendering and caching capabilities.
 'use server'
 
 import prisma from '@/lib/prisma'
@@ -8,6 +9,8 @@ import { createNotification } from '@/lib/actions/notifications'
 import { getSlotLabel } from '@/config/appointment'
 import { RECORD_STATUSES } from '@/config/medical'
 
+
+// Resolves the staff ID of the user who checked the medical record based on their session information. It first attempts to find the staff ID using the user's session ID, and if not found, it tries to find it using the user's email address. If neither method succeeds, it returns null.
 async function resolveCheckedByStaffId(session: {
   user: { id: string; email?: string | null }
 }): Promise<string | null> {
@@ -31,11 +34,12 @@ async function resolveCheckedByStaffId(session: {
   return null
 }
 
+
 function decimalInput(value: string): number {
   return Number(value)
 }
 
-
+// Saves or updates a medical record for a specific appointment based on the provided form data. It checks for user authorization (admin or staff), validates the input fields, and either creates a new medical history entry or updates an existing one. The function also updates the appointment status to "COMPLETED" if necessary and sends a notification to the user about the medical record update. It returns a success status and message indicating the result of the operation.
 export async function saveMedicalRecord(_prevState: any, formData: FormData) {
   let session = await requireAdmin()
   if (!session) session = await requireStaff()
@@ -90,6 +94,7 @@ export async function saveMedicalRecord(_prevState: any, formData: FormData) {
     return { success: false, message: 'Invalid record status.' }
   }
 
+  // Check if the appointment exists and is eligible for medical record entry. If the appointment is cancelled or marked as no-show, return an error message indicating that a medical record cannot be recorded for such appointments.
   try {
     const appointment = await (prisma as any).appointment.findUnique({
       where: { appointmentid: appointmentId },

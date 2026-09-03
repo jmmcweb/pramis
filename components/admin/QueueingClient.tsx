@@ -45,6 +45,7 @@ export default function QueueingClient({
   const [showAdd, setShowAdd] = useState(false)
   const [lane, setLane] = useState<Lane>('WALKIN')
   const [priority, setPriority] = useState<'SENIOR' | 'PWD'>('SENIOR')
+  const [isPwd, setIsPwd] = useState(false)
   const [serviceId, setServiceId] = useState('')
   const [search, setSearch] = useState('')
   const [patient, setPatient] = useState<PatientLookup | null>(null)
@@ -107,6 +108,16 @@ export default function QueueingClient({
       if (res.success && res.patient) {
         setPatient(res.patient)
         setSearchState('found')
+        // Auto-detect senior: automatically set to PRIORITY lane with SENIOR priority
+        if (res.patient.isSenior) {
+          setLane('PRIORITY')
+          setPriority('SENIOR')
+          setIsPwd(false)
+        } else {
+          // Reset to walk-in if not senior
+          setLane('WALKIN')
+          setIsPwd(false)
+        }
       } else {
         setPatient(null)
         setSearchState('notfound')
@@ -118,6 +129,7 @@ export default function QueueingClient({
     setShowAdd(false)
     setLane('WALKIN')
     setPriority('SENIOR')
+    setIsPwd(false)
     setServiceId('')
     setSearch('')
     setPatient(null)
@@ -128,8 +140,19 @@ export default function QueueingClient({
     if (!patient) return
     const fd = new FormData()
     fd.set('patientId', patient.patientId)
-    fd.set('lane', lane)
-    if (lane === 'PRIORITY') fd.set('priority', priority)
+    
+    // Determine if patient qualifies for priority queue
+    const qualifiesForPriority = patient.isSenior || isPwd
+    
+    if (qualifiesForPriority) {
+      fd.set('lane', 'PRIORITY')
+      // Senior is auto-detected, otherwise use PWD
+      fd.set('priority', patient.isSenior ? 'SENIOR' : 'PWD')
+    } else {
+      fd.set('lane', lane)
+      if (lane === 'PRIORITY') fd.set('priority', priority)
+    }
+    
     if (serviceId) fd.set('serviceId', serviceId)
     runAction(() => addToQueue(null, fd), resetAdd)
   }
@@ -147,7 +170,7 @@ export default function QueueingClient({
         </button>
       </div>
 
-      {/* Priority lane */}
+      {/* Priority lane - Only displays Senior Citizens & PWD patients */}
       <div className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.08)]'} border p-4 rounded-[24px] ${darkMode ? 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]'} mb-4`}>
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -157,19 +180,21 @@ export default function QueueingClient({
           <span className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${darkMode ? 'bg-[#0f1438] text-amber-300' : 'bg-amber-500/20 text-amber-600'}`}>{queues.priority.filter(q => q.status !== 'DONE').length} in priority queue</span>
         </div>
         <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
-          {queues.priority.length === 0 ? (
+          {queues.priority.filter(q => q.priority === 'SENIOR' || q.priority === 'PWD').length === 0 ? (
             <p className={`text-sm font-semibold text-center m-0 py-8 text-gray-400`}>No priority patients in queue</p>
           ) : (
-            queues.priority.map(q => (
-              <QueueRow
-                key={q.id}
-                darkMode={darkMode}
-                item={{ ...q, status: q.status }}
-                busy={isPending}
-                onAdvance={() => advanceQueued(q)}
-                onRemove={() => runAction(() => removeQueueEntry(q.id))}
-              />
-            ))
+            queues.priority
+              .filter(q => q.priority === 'SENIOR' || q.priority === 'PWD')
+              .map(q => (
+                <QueueRow
+                  key={q.id}
+                  darkMode={darkMode}
+                  item={{ ...q, status: q.status }}
+                  busy={isPending}
+                  onAdvance={() => advanceQueued(q)}
+                  onRemove={() => runAction(() => removeQueueEntry(q.id))}
+                />
+              ))
           )}
         </div>
       </div>
@@ -294,17 +319,38 @@ export default function QueueingClient({
               {lane === 'PRIORITY' && (
                 <div className="mb-4">
                   <p className={`m-0 mb-2 text-[13px] font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>Priority reason</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(['SENIOR', 'PWD'] as const).map(p => (
-                      <button
-                        key={p}
-                        onClick={() => setPriority(p)}
-                        className={`rounded-xl border p-3 text-left cursor-pointer transition-all ${priority === p ? 'border-amber-500 bg-amber-500/10' : darkMode ? 'border-[rgba(255,255,255,0.15)] bg-[#0f1438]' : 'border-gray-200 bg-white'}`}
-                      >
-                        <span className={`text-[15px] font-bold ${priority === p ? 'text-amber-500' : darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{p === 'SENIOR' ? 'Senior Citizen' : 'PWD'}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {patient?.isSenior ? (
+                    // Auto-detected senior - show badge
+                    <div className={`rounded-xl border p-3 border-amber-500 bg-amber-500/10`}>
+                      <span className={`text-[15px] font-bold text-amber-500`}>Senior Citizen (Auto-detected)</span>
+                      <p className={`text-[12px] mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Patient is 60 years or older</p>
+                    </div>
+                  ) : (
+                    // Not senior - show PWD selection
+                    <div>
+                      <p className={`text-[12px] mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Is this patient a Person with Disability (PWD)?</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => {
+                            setIsPwd(true)
+                            setPriority('PWD')
+                          }}
+                          className={`rounded-xl border p-3 text-left cursor-pointer transition-all ${isPwd ? 'border-amber-500 bg-amber-500/10' : darkMode ? 'border-[rgba(255,255,255,0.15)] bg-[#0f1438]' : 'border-gray-200 bg-white'}`}
+                        >
+                          <span className={`text-[15px] font-bold ${isPwd ? 'text-amber-500' : darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>Yes, PWD</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsPwd(false)
+                            setLane('WALKIN')
+                          }}
+                          className={`rounded-xl border p-3 text-left cursor-pointer transition-all ${!isPwd ? 'border-blue-500 bg-blue-500/10' : darkMode ? 'border-[rgba(255,255,255,0.15)] bg-[#0f1438]' : 'border-gray-200 bg-white'}`}
+                        >
+                          <span className={`text-[15px] font-bold ${!isPwd ? 'text-blue-500' : darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>No, Walk-in</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -359,9 +405,32 @@ function QueueRow({ darkMode, item, busy, onAdvance, onRemove }: {
     : item.status === 'DONE'
       ? 'bg-green-500/20 text-green-500'
       : darkMode ? 'bg-[#2d1b4e] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'
+  
+  // Default ID visual component
+  const DefaultIdVisual = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21 15 16 10 5 21"/>
+    </svg>
+  )
+  
   return (
     <div className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${item.status === 'DONE' ? 'opacity-60' : ''} ${item.priority ? (darkMode ? 'border-amber-500/30' : 'border-amber-200') : ''} ${darkMode ? 'bg-[#0f1438] border-[rgba(255,255,255,0.10)]' : 'bg-white border-gray-100'}`}>
-      <span className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${avatarClass}`}>{item.name.charAt(0)}</span>
+      {/* ID Image - Show uploaded ID or default visual */}
+      {item.uploadedId ? (
+        <div className={`w-12 h-9 flex-shrink-0 rounded overflow-hidden border ${darkMode ? 'border-[rgba(255,255,255,0.20)]' : 'border-gray-200'}`}>
+          <img 
+            src={item.uploadedId} 
+            alt="ID" 
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <span className={`w-12 h-9 flex items-center justify-center flex-shrink-0 rounded ${avatarClass}`}>
+          <DefaultIdVisual />
+        </span>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`text-[16px] font-poppins font-semibold truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`} title={item.name}>{item.name}</span>

@@ -1,3 +1,4 @@
+// Guarded, exported entry point: verifies the caller is a user
 'use server'
 
 import prisma from '@/lib/prisma'
@@ -17,6 +18,7 @@ export type ServiceItem = {
   updatedAt?: Date
 }
 
+// Parses a raw service object from the database and converts it into a structured ServiceItem. It extracts metadata from the service description, such as subtitle, time, and icon, and returns a ServiceItem with the relevant properties. If the description is not in JSON format, it defaults to using the raw description as the service description.
 function parseService(s: any): ServiceItem {
   let meta: { desc?: string; subtitle?: string; time?: string; icon?: string } =
     {}
@@ -116,6 +118,7 @@ const defaultSeedServices = [
   },
 ]
 
+// Fetches the list of services from the database. If no services are found, it seeds the database with default services. The function returns a success status, message, and an array of ServiceItem objects representing the available services. If an error occurs during the database query or seeding process, it logs the error and returns a failure status with an empty services array.
 export async function getServices() {
   try {
     let rawServices = await (prisma as any).service.findMany({

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { useDarkMode, DarkModeProvider } from '@/app/staff/DarkModeContext'
 import {
   ProfilePhotoProvider,
@@ -32,6 +32,7 @@ const navItems = [
     label: 'Patient Record',
     icon: '/icon-patients.png',
   },
+  { href: '/staff/queueing', label: 'Queueing', icon: '/queue.png' },
 ]
 
 export default function MediTrackShell({
@@ -48,6 +49,18 @@ export default function MediTrackShell({
   )
 }
 
+function getInitials(name?: string | null): string {
+  if (!name) return ''
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+}
+
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [notifOpen, setNotifOpen] = useState(false)
@@ -55,6 +68,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { darkMode, setDarkMode } = useDarkMode()
   const { photo } = useProfilePhoto()
+  const { data: session } = useSession()
 
   const { notifications, unreadCount, refresh, markRead, markAllRead } =
     useNotifications()
@@ -149,7 +163,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                'EA'
+                getInitials(session?.user?.name) || 'MS'
               )}
             </button>
           </div>
@@ -403,6 +417,7 @@ function NotificationDropdown({
 function ProfileDropdown({ onClose }: { onClose: () => void }) {
   const { darkMode, setDarkMode } = useDarkMode()
   const { photo } = useProfilePhoto()
+  const { data: session } = useSession()
   const router = useRouter()
   return (
     <>
@@ -433,17 +448,17 @@ function ProfileDropdown({ onClose }: { onClose: () => void }) {
           </div>
           <div className="min-w-0 leading-tight">
             <span className="text-[11px] font-bold text-[#4E69D3] uppercase tracking-[0.5px] block">
-              MS-0001
+              {session?.user?.id || ''}
             </span>
             <span
               className={`text-sm font-bold block ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
             >
-              Elaine Arceo
+              {session?.user?.name || 'Medical Staff'}
             </span>
             <span
               className={`text-xs block truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-gray-500'}`}
             >
-              elaine@meditrack.com
+              {session?.user?.email || ''}
             </span>
           </div>
         </div>

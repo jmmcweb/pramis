@@ -18,6 +18,7 @@ export type EventItem = {
   updatedAt?: Date
 }
 
+// Fetches the list of events from the database. If no events are found, it seeds the database with default events. The function returns a structured response containing the success status, message, and arrays of EventItem objects representing all events, scheduled events, and archived events.
 function parseEvent(e: any): EventItem {
   let meta: {
     time?: string
@@ -57,6 +58,7 @@ function parseEvent(e: any): EventItem {
   }
 }
 
+// Formats the event description as a JSON string containing time, type, status, and notes. This function is used to standardize the event description before storing it in the database.
 function formatDescription(meta: {
   time?: string
   type?: string
@@ -71,6 +73,7 @@ function formatDescription(meta: {
   })
 }
 
+// Defines the default set of events to seed the database with if no events are found.
 const defaultSeedEvents = [
   {
     title: 'Anti-Rabies Vaccination',
@@ -214,6 +217,7 @@ const defaultSeedEvents = [
   },
 ]
 
+// Fetches the list of events from the database. If no events are found, it seeds the database with default events. The function returns a structured response containing the success status, message, and arrays of EventItem objects representing all events, scheduled events, and archived events.
 export async function getEvents() {
   try {
     let rawEvents = await (prisma as any).event.findMany({
@@ -271,6 +275,8 @@ export async function getEvents() {
     }
   }
 }
+
+// Creates a new event in the database. The function checks user authorization and validates the input data before creating the event. It returns a structured response containing the success status, message, and the created EventItem object.
 
 export async function createEvent(data: {
   title: string
@@ -330,6 +336,7 @@ export async function createEvent(data: {
   }
 }
 
+// Updates an existing event in the database. The function checks user authorization and validates the input data before updating the event. It returns a structured response containing the success status, message, and the updated EventItem object.
 export async function updateEvent(data: {
   id: string
   title?: string
@@ -389,6 +396,7 @@ export async function updateEvent(data: {
   }
 }
 
+// Deletes an event from the database based on the provided event ID. The function checks user authorization and validates the input data before performing the deletion. It returns a structured response containing the success status and message indicating the result of the operation.
 export async function deleteEvent(id: string) {
   const session = await requireUser()
   if (!session) {

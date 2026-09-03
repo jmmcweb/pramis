@@ -26,6 +26,7 @@ function statusStyle(status: string) {
   return STATUS_STYLES[status] ?? { bg: '#F1F5F9', color: '#475569' }
 }
 
+// Renders a status badge with appropriate background and text color based on the appointment status.
 export default function AppointmentsScheduleClient({
   appointments,
   todayISO,
@@ -179,6 +180,7 @@ export default function AppointmentsScheduleClient({
     }
   }
 
+  // Renders a status badge with appropriate background and text color based on the appointment status.
   return (
     <div>
       <h1

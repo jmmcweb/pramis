@@ -4,28 +4,88 @@ import { useState, useRef, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useDarkMode } from '@/app/staff/DarkModeContext'
 import { useProfilePhoto } from '@/app/staff/ProfilePhotoContext'
+import { useSession } from 'next-auth/react'
 
-const profileData = {
-  initials: 'EA',
-  name: 'Elaine Arceo',
-  id: 'MS-0001',
-  role: 'Nurse',
-  email: 'elaine@meditrack.com',
-  phone: '+63 912 345 6789',
-  address: '123 Health Street, Barangay San Isidro, Manila',
-  department: 'Nursing Services',
-  joinDate: 'January 15, 2022',
-  education: 'BS in Nursing — University of Santo Tomas',
-  license: 'RN-123456',
-  emergencyContact: 'Juan Hernandez — +63 917 654 3210',
+const profileDefaults = {
+  initials: 'A',
+  name: '',
+  id: '',
+  role: 'Medical Staff',
+  position: '',
+  email: '',
+  phone: '',
+  address: '',
+  department: '',
+  joinDate: '',
+  education: '',
+  license: '',
+  emergencyContact: '',
+}
+
+function getInitials(name?: string | null): string {
+  if (!name) return 'A'
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] || '')
+    .join('')
+    .toUpperCase()
 }
 
 export default function ProfilePage() {
   const { darkMode } = useDarkMode()
   const { photo, setPhoto } = useProfilePhoto()
+  const { data: session } = useSession()
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ ...profileData })
+  const [form, setForm] = useState({ ...profileDefaults })
   const [cropModal, setCropModal] = useState<{ src: string | null } | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const applySessionData = () => {
+    const name = session?.user?.name || ''
+    setForm((prev) => ({
+      ...prev,
+      initials: getInitials(name),
+      name: name || prev.name,
+      id: session?.user?.id || prev.id,
+      email: session?.user?.email || prev.email,
+      role: session?.user?.role
+        ? /^(ADMIN|SUPERADMIN)/i.test(session.user.role)
+          ? 'Admin'
+          : 'Medical Staff'
+        : prev.role,
+    }))
+  }
+
+  const loadProfile = async () => {
+    try {
+      const response = await fetch('/api/profile')
+      if (!response.ok) return
+      const data = await response.json()
+      const p = data.profile
+      if (!p) return
+      setForm((prev) => ({
+        ...prev,
+        phone: p.phone ?? '',
+        address: p.address ?? '',
+        department: p.department ?? '',
+        education: p.education ?? '',
+        license: p.license ?? '',
+        joinDate: p.joinDate ?? '',
+        emergencyContact: p.emergencyContact ?? '',
+        position: p.position ?? '',
+      }))
+    } catch {
+      // ignore network errors
+    }
+  }
+
+  useEffect(() => {
+    applySessionData()
+    loadProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id])
 
   const handleChange = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -47,13 +107,31 @@ export default function ProfilePage() {
     toast.success('Profile photo removed')
   }
 
-  const handleSave = () => {
-    setEditing(false)
-    toast.success('Profile updated successfully')
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.message || 'Unable to save profile')
+        return
+      }
+      setEditing(false)
+      toast.success('Profile updated successfully')
+    } catch {
+      toast.error('Unable to save profile')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleCancel = () => {
-    setForm({ ...profileData })
+    setForm({ ...profileDefaults })
+    applySessionData()
     setPhoto(null)
     setEditing(false)
   }
@@ -83,8 +161,9 @@ export default function ProfilePage() {
             <button
               className="bg-[#4E69D3] text-white px-5 py-2.5 rounded-md text-sm font-semibold border-none cursor-pointer hover:bg-[#3D56B8] transition-colors"
               onClick={handleSave}
+              disabled={saving}
             >
-              Save
+              {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
         )}
@@ -97,7 +176,7 @@ export default function ProfilePage() {
               {photo ? (
                 <img src={photo} alt="Profile" className="w-full h-full object-cover" />
               ) : (
-                form.initials
+                getInitials(form.name)
               )}
             </div>
             <button
@@ -151,6 +230,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-2 gap-x-8 gap-y-4 max-[700px]:grid-cols-1">
               {editing ? (
                 <>
+                  <EditField label="Position" value={form.position} onChange={v => handleChange('position', v)} darkMode={darkMode} />
                   <EditField label="License Number" value={form.license} onChange={v => handleChange('license', v)} darkMode={darkMode} />
                   <EditField label="Education" value={form.education} onChange={v => handleChange('education', v)} darkMode={darkMode} />
                   <EditField label="Date Joined" value={form.joinDate} onChange={v => handleChange('joinDate', v)} darkMode={darkMode} />
@@ -158,6 +238,7 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
+                  <InfoField label="Position" value={form.position} darkMode={darkMode} />
                   <InfoField label="License Number" value={form.license} darkMode={darkMode} />
                   <InfoField label="Education" value={form.education} darkMode={darkMode} />
                   <InfoField label="Date Joined" value={form.joinDate} darkMode={darkMode} />

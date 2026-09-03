@@ -1,3 +1,5 @@
+// This file contains functions to compute population data based on patient and user profile information. It retrieves data from the database, processes it to calculate various statistics such as total population, household count, age group distribution, and gender distribution.
+
 import { PrismaClient } from "@prisma/client"
 import { PrismaNeon } from "@prisma/adapter-neon"
 

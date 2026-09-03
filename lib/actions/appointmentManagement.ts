@@ -1,3 +1,4 @@
+// Appointment management functions for handling various appointment-related operations.
 'use server'
 
 import { randomInt } from 'crypto'
@@ -18,8 +19,22 @@ function generateTempPassword(): string {
   return out
 }
 
+// Calculate age from birthdate
+function calculateAge(birthdate: Date | string | null): number {
+  if (!birthdate) return 0
+  const birth = new Date(birthdate)
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--
+  }
+  return age
+}
+
 const TERMINAL_STATUSES = ['COMPLETED', 'CANCELLED', 'NO_SHOW']
 
+// Converts a database row to a ScheduleAppointmentView object
 function toScheduleView(row: any): ScheduleAppointmentView {
   const at = new Date(row.appointmentAt)
   const profile = row.user?.profile
@@ -69,6 +84,7 @@ const BOARD_INCLUDE = {
   medicalHistory: true,
 } as const
 
+// Fetches the list of scheduled appointments for the staff dashboard. It retrieves appointments from the database that are scheduled for today and have not yet reached a terminal status (COMPLETED, CANCELLED, NO_SHOW). The function returns a structured response containing the success status, message, and an array of ScheduleAppointmentView objects representing the scheduled appointments.
 export async function getArchiveAppointments(): Promise<{
   success: boolean
   message: string
@@ -108,6 +124,7 @@ export async function getArchiveAppointments(): Promise<{
   }
 }
 
+// Fetches the list of scheduled appointments for the staff dashboard. It retrieves appointments from the database that are scheduled for today and have not yet reached a terminal status (COMPLETED, CANCELLED, NO_SHOW). The function returns a structured response containing the success status, message, and an array of ScheduleAppointmentView objects representing the scheduled appointments.
 export async function notifyAppointment(
   appointmentId: string,
 ): Promise<{ success: boolean; message: string }> {
@@ -154,13 +171,17 @@ export async function notifyAppointment(
   }
 }
 
+//
 export type PatientLookup = {
   patientId: string
   name: string
   barangay: string
   hasAccount: boolean
+  birthdate: string | null
+  isSenior: boolean
 }
 
+// Searches for a patient by their ID (PTN-####). It verifies the format of the patient ID, retrieves the patient's record from the database, and returns relevant information such as name, barangay, account status, birthdate, and senior citizen status. The function returns a structured response containing the success status, message, and a PatientLookup object if the patient is found.
 export async function searchPatientById(query: string): Promise<{
   success: boolean
   message: string
@@ -201,6 +222,9 @@ export async function searchPatientById(query: string): Promise<{
         : '') ||
       row.name ||
       ''
+    const birthdate = row.birthdate || profile?.birthdate || null
+    const age = calculateAge(birthdate)
+    const isSenior = age >= 60
     return {
       success: true,
       message: 'Patient verified.',
@@ -209,6 +233,8 @@ export async function searchPatientById(query: string): Promise<{
         name,
         barangay: profile?.barangay ?? '',
         hasAccount: Boolean(row.userId),
+        birthdate: birthdate ? new Date(birthdate).toISOString().split('T')[0] : null,
+        isSenior,
       },
     }
   } catch (error) {
@@ -217,23 +243,7 @@ export async function searchPatientById(query: string): Promise<{
   }
 }
 
-/**
- * Registers a walk-in visit keyed on the PATIENT ID:
- *
- * - Existing patient (verified PTN-####): reuses their record — with or
- *   without a login account.
- * - New patient (no PTN-#### yet): collects their details (name, birthday,
- *   sex, contact, address) into a PTN-#### record. When an email is also
- *   entered, a LOGIN account (USR-#### + profile) is generated with a
- *   temporary password returned in the payload for staff to hand over.
- *
- * Either way a WALKIN appointment is created and the patient is queued on
- * the live board.
- *
- * Form fields: patientId (optional), firstName, lastName, birthdate, sex,
- * phoneNumber, houseNumber, barangay, city, province, zipCode,
- * email (optional), serviceId.
- */
+// Registers a walk-in visit for a patient. It can handle both existing patients (identified by their patient ID) and new walk-in patients (who do not have an account). The function verifies the provided information, checks for service availability, creates a new patient record if necessary, and adds the patient to the walk-in queue. It returns a structured response indicating the success status and message of the operation.
 export async function registerWalkIn(_prevState: any, formData: FormData) {
   const session = await requireAdmin()
   if (!session) {
@@ -461,12 +471,7 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
   }
 }
 
-/**
- * Loads the post-consultation record view for a queued walk-in/priority
- * entry (WIQ-####). Guarantees a WALKIN visit row exists for today — entries
- * added through "Add to Queue" have none yet — so the medical record always
- * has an appointment to attach to.
- */
+// Retrieves the display name of the signed-in user. If the user has a profile with a first and/or last name, it returns the full name; otherwise, it returns the user's email or a default label "Patient" if no information is available.
 export async function getWalkInAppointmentView(qid: string): Promise<{
   success: boolean
   message: string

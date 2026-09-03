@@ -12,7 +12,7 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/login', // Custom sign-in page URL
   },
-  providers: [
+  providers: [ // Define the authentication providers for NextAuth.js
     CredentialsProvider({
       name: 'Signin',
       credentials: {

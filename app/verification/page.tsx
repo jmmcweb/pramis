@@ -190,6 +190,8 @@ const VerificationPage = () => {
     province,
     zip,
     country,
+    idType,
+    idPhoto,
   } = useSignup()
   const { push } = useRouter()
 
@@ -276,6 +278,8 @@ const VerificationPage = () => {
     province: string
     zip: string
     country: string
+    idType: string
+    idPhoto: string
   }) => {
     setIsVerifying(true)
     setMismatchError('')
@@ -358,6 +362,8 @@ const VerificationPage = () => {
       province,
       zip,
       country,
+      idType,
+      idPhoto,
     })
   }
 

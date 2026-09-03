@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: 'Review pending patient appointments',
 }
 
-const STAFF_ROLES = ['STAFF', 'MIDWIFE']
+const STAFF_ROLES = ['MEDSTAFF']
 
 export default async function StaffAppointmentSchedulePage() {
   const session = await getServerSession(authOptions)

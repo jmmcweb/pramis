@@ -43,6 +43,8 @@ export async function GET() {
           email: account.email,
           dateApplied: account.createdAt.toISOString().slice(0, 10),
           status: statusLabel(account.status),
+          validId: account.profile?.validId || null,
+          validIdType: account.profile?.validIdType || null,
         })),
       ],
     })

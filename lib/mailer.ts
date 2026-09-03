@@ -14,6 +14,15 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+// Verify SMTP connection on startup
+transporter.verify((error) => {
+  if (error) {
+    console.error('[SMTP] Connection verification failed:', error.message)
+  } else {
+    console.log('[SMTP] Connection verified successfully')
+  }
+})
+
 // Send an email using the configured SMTP transporter
 export async function sendMail({
   to,
@@ -24,18 +33,38 @@ export async function sendMail({
   subject: string
   content: string
 }): Promise<boolean> {
-  if (!SMTP_FROM_EMAIL) {
-    console.error('[sendMail] SMTP_FROM_EMAIL is not configured')
+  const fromEmail = SMTP_FROM_EMAIL || process.env.SMTP_USER
+
+  console.log('[sendMail] Attempting to send email:', {
+    from: `${SMTP_FROM_NAME} <${fromEmail}>`,
+    to,
+    subject,
+    smtpHost: process.env.SMTP_HOST,
+    smtpUser: process.env.SMTP_USER,
+  })
+
+  if (!fromEmail) {
+    console.error('[sendMail] No sender email configured')
     return false
   }
 
   try {
     const mail = await transporter.sendMail({
-      from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+      from: `${SMTP_FROM_NAME} <${fromEmail}>`,
       to,
       subject,
       html: defaultEmailTemplate(content),
     })
+
+    console.log('[sendMail] Email send result:', {
+      to,
+      subject,
+      messageId: mail.messageId,
+      accepted: mail.accepted,
+      rejected: mail.rejected,
+      response: mail.response,
+    })
+
     return mail.accepted.length > 0
   } catch (error) {
     console.error('[sendMail] Failed to send email:', error)

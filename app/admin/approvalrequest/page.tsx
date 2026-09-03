@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
+import Image from 'next/image'
 
 type AccountStatus = 'Pending' | 'Approved' | 'Rejected'
 
@@ -26,6 +27,8 @@ type StaffAccount = BaseAccount & {
 type PatientAccount = BaseAccount & {
   kind: 'patient'
   id: string
+  validId?: string | null
+  validIdType?: string | null
 }
 
 const initialStaff: StaffAccount[] = [
@@ -1279,6 +1282,18 @@ function IdModal({
                 />
                 <DetailItem
                   darkMode={darkMode}
+                  label="Valid ID"
+                  value={
+                    isStaff
+                      ? 'Not applicable'
+                      : (account as PatientAccount).validIdType ||
+                        ((account as PatientAccount).validId
+                          ? 'Uploaded'
+                          : 'Not uploaded')
+                  }
+                />
+                <DetailItem
+                  darkMode={darkMode}
                   label="Account Type"
                   value={isStaff ? 'Medical Staff' : 'Patient / User'}
                 />
@@ -1442,136 +1457,47 @@ function DetailItem({
 
 function IdCard({ account }: { account: AnyAccount }) {
   const isStaff = account.kind === 'staff'
+  const validId = (account as PatientAccount).validId
 
   return (
     <div className="w-full max-w-[420px] mx-auto">
       <div
         className={`rounded-2xl overflow-hidden border shadow-[0_12px_32px_rgba(0,0,0,0.18)] ${isStaff ? 'border-[#7C3AED]/40' : 'border-[#4E69D3]/40'}`}
       >
-        <div
-          className={`bg-gradient-to-r px-5 py-3.5 flex items-center justify-between ${isStaff ? 'from-[#7C3AED] to-[#4E69D3]' : 'from-[#4E69D3] to-[#0EA5E9]'}`}
-        >
-          <div className="flex items-center gap-2.5">
-            <img
-              src="/meditrack-logo.png"
-              alt="MediTrack"
-              className="w-9 h-9 object-contain"
+        <div className="relative w-full">
+          {!isStaff && validId ? (
+            <Image
+              src={validId}
+              alt={`${account.firstName} ${account.lastName} valid ID`}
+              width={420}
+              height={265}
+              className="w-full h-auto object-contain"
+              priority
             />
-            <div className="leading-tight">
-              <p className="text-white font-bebas text-[22px] leading-none m-0">
-                MEDITRACK
-              </p>
-              <p className="text-white/85 text-[11px] font-semibold m-0 tracking-[0.5px]">
-                Community Health Office
-              </p>
-            </div>
-          </div>
-          <span className="text-white/90 text-[11px] font-bold uppercase tracking-[1px] border border-white/40 rounded-full px-3 py-1 ml-3">
-            Valid ID
-          </span>
-        </div>
-        <div className="bg-white p-5 flex gap-5">
-          <div className="w-[110px] h-[138px] rounded-xl bg-gradient-to-b from-[#E8EAF6] to-[#ddd6fe] border border-[#d7d9ef] flex flex-col items-center justify-center flex-shrink-0 relative overflow-hidden">
-            <svg
-              viewBox="0 0 24 24"
-              className="w-14 h-14 text-[#A5B4E8]"
-              fill="currentColor"
-            >
-              <circle cx="12" cy="8.5" r="4.5" />
-              <path d="M4.5 20.5c0-4.14 3.36-7.5 7.5-7.5s7.5 3.36 7.5 7.5v1.5h-15v-1.5z" />
-            </svg>
-            <span className="absolute bottom-1.5 text-[9px] font-bold uppercase tracking-[0.5px] text-[#7B8BD8]">
-              Sample Photo
-            </span>
-          </div>
-          <div className="flex flex-col justify-between py-0.5 min-w-0">
-            <div>
-              <span className="block text-[10px] font-bold uppercase tracking-[1px] text-gray-400 mb-0.5">
-                Name
-              </span>
-              <p
-                className="text-[17px] font-extrabold text-[#2A2E43] m-0 leading-tight truncate"
-                title={fullName(account)}
-              >
-                {fullName(account)}
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-[1px] text-gray-400 mb-0.5">
-                  Card No.
-                </span>
-                <p
-                  className={`text-[15px] font-extrabold m-0 tracking-wider ${isStaff ? 'text-[#7C3AED]' : 'text-[#4E69D3]'}`}
-                >
-                  {account.id}
-                </p>
-              </div>
-              {isStaff && (
-                <div>
-                  <span className="block text-[10px] font-bold uppercase tracking-[1px] text-gray-400 mb-0.5">
-                    Position
-                  </span>
-                  <p className="text-[13px] font-bold text-[#2A2E43] m-0 leading-snug">
-                    {(account as StaffAccount).position}
-                  </p>
-                </div>
-              )}
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-[1px] text-gray-400 mb-0.5">
-                  Account Type
-                </span>
-                <p
-                  className={`text-[12px] font-bold m-0 ${isStaff ? 'text-[#7C3AED]' : 'text-[#0EA5E9]'}`}
-                >
-                  {isStaff ? 'Medical Staff' : 'Patient / Resident'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-              <div>
-                <span className="block text-[9px] font-bold uppercase tracking-[0.5px] text-gray-400">
-                  Issued
-                </span>
-                <span className="text-[11px] font-bold text-[#2A2E43]">
-                  {fmtDate(account.dateApplied)}
-                </span>
-              </div>
+          ) : (
+            <div className="w-full aspect-[1.586/1] bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center p-6">
               <svg
-                width="12"
-                height="12"
                 viewBox="0 0 24 24"
-                fill="none"
-                stroke="#4E69D3"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                className="w-16 h-16 text-gray-400 mb-3"
+                fill="currentColor"
               >
-                <polyline points="9 18 15 12 9 6" />
+                <circle cx="12" cy="8.5" r="4.5" />
+                <path d="M4.5 20.5c0-4.14 3.36-7.5 7.5-7.5s7.5 3.36 7.5 7.5v1.5h-15v-1.5z" />
               </svg>
-              <div className="text-right">
-                <span className="block text-[9px] font-bold uppercase tracking-[0.5px] text-gray-400">
-                  Valid Until
-                </span>
-                <span className="text-[11px] font-bold text-[#2A2E43]">
-                  {addYear(account.dateApplied)}
-                </span>
-              </div>
+              <span className="text-sm font-semibold text-gray-500">
+                {isStaff ? 'Staff ID Card' : 'No ID Uploaded'}
+              </span>
+              <span className="text-xs text-gray-400 mt-1">
+                {account.firstName} {account.lastName}
+              </span>
             </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-r from-[#0f1438] to-[#2d1b4e] px-5 py-2 flex items-center justify-between">
-          <span className="text-white/70 text-[10px] font-semibold uppercase tracking-[1px]">
-            Republic of the Philippines
-          </span>
-          <span className="text-white/70 text-[10px] font-semibold uppercase tracking-[1px]">
-            Barangay Health Unit
-          </span>
+          )}
         </div>
       </div>
       <p className="text-center text-[12px] mt-3 m-0 text-gray-400 italic">
-        Sample / default ID photo &mdash; replace with the applicant&rsquo;s
-        uploaded valid ID
+        {!isStaff && validId
+          ? `Applicant's uploaded valid ID${(account as PatientAccount).validIdType ? ` — ${(account as PatientAccount).validIdType as string}` : ''}`
+          : 'Sample / default ID photo — no valid ID uploaded yet'}
       </p>
     </div>
   )

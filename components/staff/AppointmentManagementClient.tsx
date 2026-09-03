@@ -17,6 +17,13 @@ import {
   searchPatientById,
   type PatientLookup,
 } from '@/lib/actions/appointmentManagement'
+import {
+  advanceQueueEntry,
+  markQueueDone,
+  removeQueueEntry,
+  type QueueEntry,
+  type TodayQueues,
+} from '@/lib/actions/queue'
 import MedicalRecordModal from '@/components/ui/MedicalRecordModal'
 import type { ScheduleAppointmentView } from '@/config/appointment'
 
@@ -146,15 +153,87 @@ function ListCard({ patient, darkMode, onViewRecord }: { patient: ScheduleAppoin
   )
 }
 
+function QueueRow({ darkMode, item, busy, onAdvance, onRemove }: {
+  darkMode: boolean
+  item: QueueEntry
+  busy: boolean
+  onAdvance: () => void
+  onRemove: () => void
+}) {
+  const statusLabel =
+    item.status === 'DONE' ? 'Done' : item.status === 'IN_CONSULTATION' ? 'In Consultation' : 'Waiting'
+  const statusStyle = item.status === 'DONE'
+    ? (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-500/20 text-green-600')
+    : item.status === 'IN_CONSULTATION'
+      ? (darkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]')
+      : (darkMode ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-500/20 text-amber-600')
+  const priorityBadge = item.priority === 'SENIOR'
+    ? (darkMode ? 'bg-rose-500/20 text-rose-300' : 'bg-rose-500/10 text-rose-600')
+    : item.priority === 'PWD'
+      ? (darkMode ? 'bg-violet-500/20 text-violet-300' : 'bg-violet-500/10 text-violet-600')
+      : null
+  const avatarClass = item.priority
+    ? (darkMode ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-500/15 text-amber-600')
+    : item.status === 'DONE'
+      ? 'bg-green-500/20 text-green-500'
+      : darkMode ? 'bg-[#2d1b4e] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'
+  
+  // Default ID visual component
+  const DefaultIdVisual = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21 15 16 10 5 21"/>
+    </svg>
+  )
+  
+  return (
+    <div className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${item.status === 'DONE' ? 'opacity-60' : ''} ${item.priority ? (darkMode ? 'border-amber-500/30' : 'border-amber-200') : ''} ${darkMode ? 'bg-[#0f1438] border-[rgba(255,255,255,0.10)]' : 'bg-white border-gray-100'}`}>
+      {/* ID Image - Show uploaded ID or default visual */}
+      {item.uploadedId ? (
+        <div className={`w-12 h-9 flex-shrink-0 rounded overflow-hidden border ${darkMode ? 'border-[rgba(255,255,255,0.20)]' : 'border-gray-200'}`}>
+          <img 
+            src={item.uploadedId} 
+            alt="ID" 
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <span className={`w-12 h-9 flex items-center justify-center flex-shrink-0 rounded ${avatarClass}`}>
+          <DefaultIdVisual />
+        </span>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className={`text-[16px] font-poppins font-semibold truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`} title={item.name}>{item.name}</span>
+          {priorityBadge && <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${priorityBadge}`}>{item.priority === 'SENIOR' ? 'Senior' : 'PWD'}</span>}
+        </div>
+        <div className={`text-[14px] font-semibold truncate ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{item.time} &middot; {item.service}</div>
+      </div>
+      <span className={`text-[13px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${statusStyle}`}>{statusLabel}</span>
+      {item.status !== 'DONE' && (
+        <button onClick={onAdvance} disabled={busy} title={item.status === 'WAITING' ? 'Start consultation' : 'Mark as done'} className={`w-8 h-8 rounded-lg cursor-pointer border transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50 ${darkMode ? 'bg-[#2d1b4e] text-[#4E9FFF] border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+      )}
+      <button onClick={onRemove} disabled={busy} title="Remove from queue" className={`w-8 h-8 rounded-lg cursor-pointer border transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50 ${darkMode ? 'bg-[#2d1b4e] text-red-400 border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-red-500 border-red-300 hover:bg-red-50'}`}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  )
+}
+
 export default function AppointmentManagementClient({
   todays,
   upcoming,
   archive,
+  queues,
   services,
 }: {
   todays: ScheduleAppointmentView[]
   upcoming: ScheduleAppointmentView[]
   archive: ScheduleAppointmentView[]
+  queues: TodayQueues
   services: { id: string; title: string }[]
 }) {
   const { darkMode } = useDarkMode()
@@ -322,6 +401,30 @@ export default function AppointmentManagementClient({
     })
   }
 
+  // Queue actions for staff
+  const refresh = () => router.refresh()
+  const runAction = (action: () => Promise<{ success: boolean; message: string }>, onDone?: () => void) => {
+    startTransition(async () => {
+      const res = await action()
+      if (res.success) {
+        toast.success(res.message)
+        refresh()
+        onDone?.()
+      } else {
+        toast.error(res.message)
+      }
+    })
+  }
+
+  const advanceQueued = (entry: QueueEntry) => {
+    if (entry.status === 'WAITING') {
+      runAction(() => advanceQueueEntry(entry.id))
+      return
+    }
+    if (isPending || entry.status !== 'IN_CONSULTATION') return
+    runAction(() => markQueueDone(entry.id))
+  }
+
   useEffect(() => {
     document.body.style.overflow = showArchive || recordFor !== null || showList || showWalkIn ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -353,6 +456,65 @@ export default function AppointmentManagementClient({
             </svg>
             Appointments Archive
           </button>
+        </div>
+      </div>
+
+      {/* Queueing Section - Only today's appointments */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-7">
+        {/* Priority lane - Only displays Senior Citizens & PWD patients */}
+        <div className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.08)]'} border p-4 rounded-[24px] ${darkMode ? 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className={`font-poppins text-[18px] font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>Priority Queue</h2>
+              <p className={`text-[12px] font-semibold m-0 mt-0.5 text-gray-400`}>Senior Citizens & Persons with Disabilities</p>
+            </div>
+            <span className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${darkMode ? 'bg-[#0f1438] text-amber-300' : 'bg-amber-500/20 text-amber-600'}`}>{queues.priority.filter(q => q.status !== 'DONE').length} in priority queue</span>
+          </div>
+          <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
+            {queues.priority.filter(q => q.priority === 'SENIOR' || q.priority === 'PWD').length === 0 ? (
+              <p className={`text-sm font-semibold text-center m-0 py-8 text-gray-400`}>No priority patients in queue</p>
+            ) : (
+              queues.priority
+                .filter(q => q.priority === 'SENIOR' || q.priority === 'PWD')
+                .map(q => (
+                  <QueueRow
+                    key={q.id}
+                    darkMode={darkMode}
+                    item={q}
+                    busy={isPending}
+                    onAdvance={() => advanceQueued(q)}
+                    onRemove={() => runAction(() => removeQueueEntry(q.id))}
+                  />
+                ))
+            )}
+          </div>
+        </div>
+
+        {/* Walk-in lane */}
+        <div className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.08)]'} border p-4 rounded-[24px] ${darkMode ? 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className={`font-poppins text-[18px] font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>Walk-in Queue</h2>
+              <p className={`text-[12px] font-semibold m-0 mt-0.5 text-gray-400`}>General walk-in patients</p>
+            </div>
+            <span className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-blue-500/20 text-blue-600'}`}>{queues.walkins.filter(q => q.status !== 'DONE').length} in walk-in queue</span>
+          </div>
+          <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
+            {queues.walkins.length === 0 ? (
+              <p className={`text-sm font-semibold text-center m-0 py-8 text-gray-400`}>No walk-in patients in queue</p>
+            ) : (
+              queues.walkins.map(q => (
+                <QueueRow
+                  key={q.id}
+                  darkMode={darkMode}
+                  item={q}
+                  busy={isPending}
+                  onAdvance={() => advanceQueued(q)}
+                  onRemove={() => runAction(() => removeQueueEntry(q.id))}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
 

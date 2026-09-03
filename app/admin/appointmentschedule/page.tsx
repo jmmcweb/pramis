@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: 'Manage scheduled patient appointments',
 }
 
-const STAFF_ROLES = ['SUPERADMIN', 'ADMIN', 'STAFF']
+const STAFF_ROLES = ['SUPERADMIN', 'ADMIN', 'MEDSTAFF']
 
 export default async function AppointmentSchedulePage() {
   const session = await getServerSession(authOptions)

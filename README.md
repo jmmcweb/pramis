@@ -117,7 +117,8 @@ Read queries use `'use cache'` with tags for automatic deduplication and manual 
 ```
 app/                        # Next.js App Router
   api/auth/[...nextauth]/   # NextAuth API handler
-  dashboard/                # Protected pages (users, profile, security)
+  admin/                    # Admin dashboard (users, appointments, queueing, ...)
+  staff/                    # Staff dashboard (appointments, patients, queueing, ...)
   login/                    # Public auth pages
   signup/
   forgot-password/
@@ -125,7 +126,7 @@ app/                        # Next.js App Router
 
 components/
   forms/                    # Login, Signup, Profile, Security forms
-  globals/                  # Header, Footer, Aside, Drawer
+  globals/                  # Header, Footer, Drawer
   users/UsersTable.tsx      # Paginated user list
 
 config/constants.ts         # APP_NAME, APP_BASE_URL, SMTP constants, USERS_PER_PAGE
@@ -133,16 +134,16 @@ config/constants.ts         # APP_NAME, APP_BASE_URL, SMTP constants, USERS_PER_
 lib/
   authOptions.ts            # NextAuth config
   prisma.ts                 # Prisma singleton (Neon adapter)
-  actions/                  # Server actions (user.ts, me.ts, media.ts, util.ts)
+  actions/                  # Server actions (user.ts, me.ts, util.ts)
 
 prisma/
   schema.prisma             # Database schema
   seed.ts                   # Seeds default admin user
   migrations/               # Migration history
 
-store/                      # Zustand stores (useAside, useDrawer)
+store/                      # Zustand stores (useDrawer, useSignup, useUnsavedChanges)
 
-templates/                  # Layout templates (Default, Dashboard, Blank)
+templates/                  # Layout templates (Default, Blank)
 
 types/                      # Shared TypeScript types
 ```

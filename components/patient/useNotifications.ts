@@ -10,6 +10,7 @@ import type { PatientNotification } from './notificationData'
 
 const POLL_INTERVAL_MS = 30_000
 
+// This hook manages patient notifications, including fetching, marking as read, and polling for updates. It provides the current list of notifications, the count of unread notifications, and functions to refresh the list or mark notifications as read.
 export function useNotifications(initial?: PatientNotification[]) {
   const [notifications, setNotifications] = useState<PatientNotification[]>(
     initial ?? [],
@@ -63,6 +64,7 @@ export function useNotifications(initial?: PatientNotification[]) {
     [refresh],
   )
 
+  // Marks all notifications as read, updating the local state and making an API call to mark them as read on the server. If the API call fails, it refreshes the notifications list to ensure consistency.
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })))
     markAllNotificationsRead()

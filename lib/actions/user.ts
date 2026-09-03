@@ -1,3 +1,4 @@
+// Guarded, exported entry point: verifies the caller is a user
 "use server"
 
 import prisma from "@/lib/prisma"
@@ -13,6 +14,7 @@ const table = "user"
 const MIN_PASSWORD_LENGTH = 8
 const VALID_ROLES = ["SUPERADMIN", "ADMIN", "USER"]
 
+// Displays a user's name based on their profile information. If the user has a first and/or last name, it returns the full name; otherwise, it defaults to using the email prefix (the part before the '@' symbol) as the display name.
 function displayName(user: any): string {
   const p = user?.profile
   if (p?.firstName || p?.lastName) {
@@ -21,6 +23,7 @@ function displayName(user: any): string {
   return String(user?.email ?? "").split("@")[0]
 }
 
+// Fetches a user's data from the database based on their ID. It retrieves the user record and sanitizes it to remove sensitive information before returning it. If the user is not found or an error occurs during the database query, it returns a failure status with a null payload and an error message.
 async function getUserData(id: string) {
   'use cache'
   cacheTag('users')
@@ -34,11 +37,13 @@ async function getUserData(id: string) {
   }
 }
 
+// Retrieves a user's data based on their ID, ensuring that the caller is an authenticated user. If the caller is not authorized, it returns a failure status with a null payload and an error message. Otherwise, it fetches the user's data using the getUserData function.
 export async function getUser(id: string) {
   if (!(await requireUser())) return { success: false, payload: null, message: "Not authorized" }
   return getUserData(id)
 }
 
+// Fetches a paginated list of users from the database, including their profile information. It calculates the total number of users and the total number of pages based on the specified page and perPage parameters. The function sanitizes the user data to remove sensitive information before returning it. If an error occurs during the database query, it returns a failure status with an empty payload and an error message.
 async function getUsersData(page: number, perPage: number) {
   'use cache'
   cacheTag('users')
@@ -66,11 +71,13 @@ async function getUsersData(page: number, perPage: number) {
   }
 }
 
+// Retrieves a paginated list of users, ensuring that the caller is an authenticated admin. If the caller is not authorized, it returns a failure status with an empty payload and an error message. Otherwise, it fetches the users' data using the getUsersData function.
 export async function getUsers(page: number = 1, perPage: number = USERS_PER_PAGE) {
   if (!(await requireAdmin())) return { success: false, payload: null, total: 0, totalPages: 1, message: "Not authorized" }
   return getUsersData(page, perPage)
 }
 
+// Creates a new user account based on the provided form data. It validates the input fields (name, email, password) and checks for existing users with the same email. If the input is valid and the email is unique, it hashes the password and creates a new user record in the database. The function returns a success status, message, and sanitized user data if successful; otherwise, it returns an error message and any validation errors.
 export async function signupUser(_prevState: any, formData: FormData) {
   const name = formData.get("name")?.toString().trim()
   const email = formData.get("email")?.toString().trim()
@@ -91,6 +98,7 @@ export async function signupUser(_prevState: any, formData: FormData) {
   return persistNewUser({ name: name!, email: email!, password: password!, role: "USER" })
 }
 
+// Creates a new user account in the database with the provided data. It checks for existing users with the same email, hashes the password, and creates a new user record. The function also revalidates relevant cache tags and paths to ensure that the user list is updated. It returns a success status, message, and sanitized user data if successful; otherwise, it returns an error message.
 export async function createUser(_prevState: any, formData: FormData) {
   if (!(await requireAdmin())) {
     return { success: false, message: "You are not authorized to perform this action." }
@@ -115,6 +123,7 @@ export async function createUser(_prevState: any, formData: FormData) {
   return persistNewUser({ name: "", email: email!, password: password!, role: safeRole })
 }
 
+// Creates a new user in the database with the provided data. It checks for existing users with the same email, hashes the password, and creates a new user record. The function also revalidates relevant cache tags and paths to ensure that the user list is updated. It returns a success status, message, and sanitized user data if successful; otherwise, it returns an error message.
 async function persistNewUser(data: { name: string; email: string; password: string; role: string }) {
   try {
     const userExist = await prisma[table].findFirst({ where: { email: data.email } })
@@ -183,6 +192,7 @@ export async function softDeleteUser(id: string) {
   }
 }
 
+// Updates a user's information based on the provided form data. It validates the input fields (email, role) and checks for existing users with the same email. If the input is valid and the email is unique, it updates the user record in the database. The function returns a success status, message, and sanitized user data if successful; otherwise, it returns an error message and any validation errors.
 export async function updateUser(_prevState: any, formData: FormData) {
   const session = await requireAdmin()
   if (!session) {

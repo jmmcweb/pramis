@@ -34,7 +34,7 @@ export default function FormResetPassword({
     }
   }, [searchParams])
 
-  if (!email && !token) {
+  if (!email || !token) {
     return (
       <div className="m-auto w-full max-w-lg space-y-10">
         <div className="space-y-4">

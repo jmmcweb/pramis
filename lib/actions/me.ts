@@ -1,3 +1,5 @@
+// This file contains server-side actions related to user profile management, including fetching and updating user data, as well as handling password changes. It uses Prisma for database interactions and NextAuth for session management. The functions are designed to be used in a Next.js application with server-side rendering and caching capabilities.
+
 'use server'
 
 import prisma from '@/lib/prisma'
@@ -18,11 +20,13 @@ const MIN_PASSWORD_LENGTH = 8
 
 const table = 'user'
 
+// Fetches the current user's data from the database based on their session ID. It checks for user authentication and returns the user's sanitized data if found, or an appropriate error message if not authenticated or if an error occurs during the database query.
 async function getMeData(id: string) {
   'use cache'
   cacheTag('me')
   cacheLife('max')
 
+  // Check if the user is authenticated by verifying the session ID. If not authenticated, return an error message.
   try {
     const me = await prisma[table].findFirst({
       where: {
@@ -69,6 +73,7 @@ export const getMe = cache(async () => {
   return getMeData(session.user.id)
 })
 
+// Converts a user object to a profile view object.
 function toProfileView(user: any): MyProfileView {
   const p = user?.profile ?? {}
   return {
@@ -101,6 +106,7 @@ function toProfileView(user: any): MyProfileView {
   }
 }
 
+// Fetches the current user's profile data from the database, including personal information and family members. It checks for user authentication and returns the profile view object if found, or an appropriate error message if not authenticated or if an error occurs during the database query.
 export async function getMyProfile(): Promise<{
   success: boolean
   message: string
@@ -131,6 +137,7 @@ export async function getMyProfile(): Promise<{
   }
 }
 
+// Updates the current user's profile data in the database based on the provided form data. It checks for user authentication, validates the input fields, and updates the user's personal information and family members. The function returns a success status, message, and the updated profile view object if successful, or an appropriate error message if not authenticated or if validation fails.
 export async function updateMyProfile(
   _prevState: any,
   formData: FormData
@@ -222,6 +229,7 @@ export async function updateMyProfile(
     return { success: false, message: null, errors }
   }
 
+  // Check if the email is already taken by another user (excluding the current user). If the email is taken, return an error message indicating that the email is already registered to another account.
   try {
     const emailTaken = await (prisma as any).user.findFirst({
       where: { email, NOT: { id } },
@@ -302,6 +310,7 @@ export async function updateMyProfile(
   }
 }
 
+// Updates the current user's profile data in the database based on the provided form data. It checks for user authentication, validates the input fields, and updates the user's personal information and family members. The function returns a success status, message, and the updated profile view object if successful, or an appropriate error message if not authenticated or if validation fails.
 export async function updateMe(_prevState: any, formData: FormData) {
   const session = await getServerSession(authOptions)
   const id = session?.user?.id as string
@@ -394,6 +403,8 @@ export async function updateMe(_prevState: any, formData: FormData) {
     }
   }
 }
+
+// Updates the current user's password in the database based on the provided form data. It checks for user authentication, validates the input fields, and updates the user's password if the current password is correct and the new password meets the required criteria. The function returns a success status, message, and the updated user data if successful, or an appropriate error message if not authenticated or if validation fails.
 
 export async function updateMePassword(_prevState: any, formData: FormData) {
   const session = (await getServerSession(authOptions)) as Session | null

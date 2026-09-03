@@ -5,7 +5,7 @@ import { nextReferenceId } from '@/lib/referenceId'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 
-const roles = ['SUPERADMIN', 'ADMIN', 'STAFF', 'MIDWIFE', 'USER'] as const
+const roles = ['SUPERADMIN', 'ADMIN', 'MEDSTAFF', 'USER'] as const
 
 async function requireAdminSession() {
   const session = await getServerSession(authOptions)
@@ -44,7 +44,7 @@ export async function GET() {
           email: account.email,
           password: '********',
           role: account.role === 'ADMIN' ? 'Admin' : 'Medical Staff',
-          position: account.role === 'MIDWIFE' ? 'Midwife' : 'Nurse',
+          position: account.position || 'Nurse',
           dateJoined: account.createdAt,
         })),
         ...users.map((account: any) => ({
@@ -59,6 +59,26 @@ export async function GET() {
           role: account.role === 'USER' ? 'Patient' : 'Admin',
           hasRecord: account.patients.length > 0,
           dateJoined: account.createdAt,
+          profile: account.profile
+            ? {
+                firstName: account.profile.firstName,
+                middleName: account.profile.middleName,
+                lastName: account.profile.lastName,
+                suffix: account.profile.suffix,
+                birthdate: account.profile.birthdate,
+                phoneNumber: account.profile.phoneNumber,
+                houseNumber: account.profile.houseNumber,
+                barangay: account.profile.barangay,
+                city: account.profile.city,
+                province: account.profile.province,
+                zipCode: account.profile.zipCode,
+                philHealthNo: account.profile.philHealthNo,
+                membershipType: account.profile.membershipType,
+                philHealthStatus: account.profile.philHealthStatus,
+                validIdType: account.profile.validIdType,
+              }
+            : null,
+          patientRecord: account.patients[0] ?? null,
         })),
       ],
     })
@@ -83,6 +103,7 @@ export async function POST(request: Request) {
     role?: string
     firstName?: string
     lastName?: string
+    position?: string
   }
   try {
     body = await request.json()
@@ -127,7 +148,7 @@ export async function POST(request: Request) {
       )
     }
 
-    if (role === 'ADMIN' || role === 'MIDWIFE') {
+    if (role === 'ADMIN' || role === 'MEDSTAFF') {
       const staffid = await nextReferenceId(role === 'ADMIN' ? 'ADM' : 'MS')
       const staff = await (prisma as any).staff.create({
         data: {
@@ -137,6 +158,10 @@ export async function POST(request: Request) {
           email,
           password: await hash(password, 12),
           role,
+          position:
+            body.position && typeof body.position === 'string'
+              ? body.position
+              : 'Nurse',
         },
       })
 
@@ -199,9 +224,7 @@ export async function PUT(request: Request) {
     body.role === 'Admin'
       ? 'ADMIN'
       : body.role === 'Medical Staff'
-        ? body.position === 'Midwife'
-          ? 'MIDWIFE'
-          : 'STAFF'
+        ? 'MEDSTAFF'
         : 'USER'
 
   if (!id || !email)
@@ -212,16 +235,32 @@ export async function PUT(request: Request) {
 
   try {
     if (kind === 'staff') {
+      // Staff accounts can only hold staff roles.
+      if (role !== 'ADMIN' && role !== 'MEDSTAFF') {
+        return NextResponse.json(
+          { message: 'Staff accounts must be Admin or Medical Staff.' },
+          { status: 400 },
+        )
+      }
       const data: any = {
         firstName: body.firstName?.trim(),
         lastName: body.lastName?.trim(),
         email,
         role,
       }
+      if (body.position && typeof body.position === 'string')
+        data.position = body.position
       if (body.password && body.password !== '********')
         data.password = await hash(body.password, 12)
       await (prisma as any).staff.update({ where: { staffid: id }, data })
     } else {
+      // Patient/user accounts stay as USER role here.
+      if (role !== 'USER') {
+        return NextResponse.json(
+          { message: 'Create a staff account to assign an admin role.' },
+          { status: 400 },
+        )
+      }
       const data: any = { email, role }
       if (body.password && body.password !== '********')
         data.password = await hash(body.password, 12)

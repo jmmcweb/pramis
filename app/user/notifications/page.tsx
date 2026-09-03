@@ -19,7 +19,7 @@ export default async function NotificationsPage() {
 
   const role = session.user.role as string | undefined
   if (role === 'SUPERADMIN' || role === 'ADMIN') redirect('/admin')
-  if (role === 'STAFF' || role === 'NURSE') redirect('/staff')
+  if (role === 'MEDSTAFF' || role === 'NURSE') redirect('/staff')
   if (role !== 'USER') redirect('/login')
 
   const result = await getMyNotifications()

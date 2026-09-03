@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import { initialRecords, type PatientRecord } from '@/src/data/patientRecords'
@@ -27,6 +26,24 @@ type StaffUser = BaseUser & {
   position: StaffPosition
 }
 
+type PatientProfile = {
+  firstName?: string
+  middleName?: string | null
+  lastName?: string
+  suffix?: string | null
+  birthdate?: string | Date
+  phoneNumber?: string
+  houseNumber?: string
+  barangay?: string
+  city?: string
+  province?: string
+  zipCode?: string
+  philHealthNo?: string | null
+  membershipType?: string | null
+  philHealthStatus?: string | null
+  validIdType?: string | null
+}
+
 type PatientUser = BaseUser & {
   kind: 'patient'
   id: string
@@ -34,6 +51,8 @@ type PatientUser = BaseUser & {
   lastName: string
   record?: PatientRecord
   hasRecord?: boolean
+  profile?: PatientProfile | null
+  patientRecord?: any
 }
 type AnyUser = StaffUser | PatientUser
 
@@ -259,23 +278,22 @@ type AddAccountForm = {
   lastName: string
   email: string
   password: string
-  role: 'ADMIN' | 'MIDWIFE'
+  role: 'ADMIN' | 'MEDSTAFF'
+  position: StaffPosition
 }
 
 export default function UserManagementPage() {
   const { darkMode } = useDarkMode()
-  const searchParams = useSearchParams()
-  const initialType =
-    (searchParams?.get('type') as 'All' | 'Medical Staff' | 'Patient / User') ||
-    'All'
   const [users, setUsers] = useState<AnyUser[]>([])
-  const [typeFilter, setTypeFilter] = useState<
-    'All' | 'Medical Staff' | 'Patient / User'
-  >(initialType)
   const [searchQuery, setSearchQuery] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [cardFilter, setCardFilter] = useState<
+    'all' | 'staff' | 'patient' | 'records'
+  >('all')
+  const [staffPage, setStaffPage] = useState(1)
+  const [patientPage, setPatientPage] = useState(1)
   const [sortAsc, setSortAsc] = useState(true)
   const [editing, setEditing] = useState<AnyUser | null>(null)
+  const [viewingPatient, setViewingPatient] = useState<PatientUser | null>(null)
   const [deleting, setDeleting] = useState<AnyUser | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [revealedPasswords, setRevealedPasswords] = useState<
@@ -287,7 +305,8 @@ export default function UserManagementPage() {
     lastName: '',
     email: '',
     password: '',
-    role: 'MIDWIFE',
+    role: 'MEDSTAFF',
+    position: 'Nurse',
   })
   const [addPending, setAddPending] = useState(false)
 
@@ -323,13 +342,7 @@ export default function UserManagementPage() {
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     const qDigits = q.replace(/\D/g, '')
-    let list = users.filter(
-      (u) =>
-        typeFilter === 'All' ||
-        (typeFilter === 'Medical Staff'
-          ? u.kind === 'staff'
-          : u.kind === 'patient'),
-    )
+    let list = users
     if (q) {
       list = list.filter((u) => {
         const name = fullName(u).toLowerCase()
@@ -344,31 +357,42 @@ export default function UserManagementPage() {
         )
       })
     }
-    return [...list].sort(
+    const sorted = [...list].sort(
       (a, b) =>
         dateKey(a.dateJoined).localeCompare(dateKey(b.dateJoined)) ||
         a.id.localeCompare(b.id),
     )
-  }, [users, searchQuery, typeFilter])
+    return sortAsc ? sorted : sorted.reverse()
+  }, [users, searchQuery, sortAsc])
 
-  const shownAsc = sortAsc ? filtered : [...filtered].reverse()
-  const totalPages = Math.max(1, Math.ceil(shownAsc.length / PER_PAGE))
-  const safePage = Math.min(currentPage, totalPages)
-  const pageRows = shownAsc.slice(
-    (safePage - 1) * PER_PAGE,
-    safePage * PER_PAGE,
+  const filteredStaff = useMemo(
+    () => filtered.filter((u) => u.kind === 'staff'),
+    [filtered],
   )
-  const firstShown = shownAsc.length === 0 ? 0 : (safePage - 1) * PER_PAGE + 1
-  const lastShown = (safePage - 1) * PER_PAGE + pageRows.length
+  const filteredPatients = useMemo(
+    () => filtered.filter((u) => u.kind === 'patient'),
+    [filtered],
+  )
+
+  const paginate = (rows: AnyUser[], page: number) => {
+    const totalPages = Math.max(1, Math.ceil(rows.length / PER_PAGE))
+    const safePage = Math.min(page, totalPages)
+    const pageRows = rows.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE)
+    return { totalPages, safePage, pageRows, total: rows.length }
+  }
+
+  const staffTable = paginate(filteredStaff, staffPage)
+  const patientTable = paginate(filteredPatients, patientPage)
+  const shownAsc = [...staffTable.pageRows, ...patientTable.pageRows]
 
   const toggleReveal = (id: string) => {
     setRevealedPasswords((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
   const toggleAllReveal = () => {
-    const allRevealed = pageRows.every((u) => revealedPasswords[u.id])
+    const allRevealed = shownAsc.every((u) => revealedPasswords[u.id])
     const next: Record<string, boolean> = { ...revealedPasswords }
-    pageRows.forEach((u) => {
+    shownAsc.forEach((u) => {
       next[u.id] = !allRevealed
     })
     setRevealedPasswords(next)
@@ -469,7 +493,7 @@ export default function UserManagementPage() {
         email: addForm.email.trim().toLowerCase(),
         password: '********',
         role,
-        position: addForm.role === 'MIDWIFE' ? 'Midwife' : 'Nurse',
+        position: addForm.position,
         dateJoined: new Date().toISOString().slice(0, 10),
       }
       setUsers((prev) => [newAccount, ...prev])
@@ -479,7 +503,8 @@ export default function UserManagementPage() {
         lastName: '',
         email: '',
         password: '',
-        role: 'MIDWIFE',
+        role: 'MEDSTAFF',
+        position: 'Nurse',
       })
       toast.success(`${fullName(newAccount)} has been created`)
     } finally {
@@ -511,7 +536,6 @@ export default function UserManagementPage() {
   const inputClass = `w-full px-3.5 py-2.5 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
   const selectClass = `w-full px-3.5 py-2.5 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] appearance-none cursor-pointer box-border`
   const searchInputClass = `pl-10 pr-3.5 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
-  const toolbarSelectClass = `py-3 pl-3 pr-9 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] appearance-none cursor-pointer min-w-[150px] box-border`
   const pageBtnClass = `min-w-[38px] h-[38px] px-2.5 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'}`
   const pageBtnActiveClass =
     'bg-[#4E69D3] text-white border-[#4E69D3] hover:bg-[#4A6BC4] hover:text-white'
@@ -571,6 +595,8 @@ export default function UserManagementPage() {
           value={users.length}
           label="Total Users"
           color="#4E69D3"
+          active={cardFilter === 'all'}
+          onClick={() => setCardFilter('all')}
           icon={
             <>
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -585,6 +611,8 @@ export default function UserManagementPage() {
           value={staffCount}
           label="Medical Staff"
           color="#7C3AED"
+          active={cardFilter === 'staff'}
+          onClick={() => setCardFilter('staff')}
           icon={
             <>
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -599,6 +627,8 @@ export default function UserManagementPage() {
           value={patientCount}
           label="Patients / Users"
           color="#0EA5E9"
+          active={cardFilter === 'patient'}
+          onClick={() => setCardFilter('patient')}
           icon={
             <>
               <circle cx="12" cy="8" r="5" />
@@ -646,35 +676,11 @@ export default function UserManagementPage() {
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
-                  setCurrentPage(1)
+                  setStaffPage(1)
+                  setPatientPage(1)
                 }}
                 className={`w-full sm:w-[340px] ${searchInputClass}`}
               />
-            </div>
-            <div className="relative flex items-center">
-              <select
-                value={typeFilter}
-                onChange={(e) => {
-                  setTypeFilter(e.target.value as typeof typeFilter)
-                  setCurrentPage(1)
-                }}
-                className={`w-full sm:w-auto ${toolbarSelectClass}`}
-              >
-                <option value="All">All Account Types</option>
-                <option value="Medical Staff">Medical Staff</option>
-                <option value="Patient / User">Patient / User</option>
-              </select>
-              <svg
-                className={`absolute right-2.5 w-3.5 h-3.5 ${darkMode ? 'text-[#F9FAFB]' : 'text-gray-400'} pointer-events-none`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
             </div>
             <button
               className={`inline-flex items-center gap-2 px-3.5 py-3 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-colors ${sortAsc ? 'bg-[#4E69D3] text-white border-[#4E69D3] hover:bg-[#4A6BC4]' : `${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'bg-white text-gray-600 border-gray-200'} hover:border-[#4E69D3]`}`}
@@ -721,211 +727,305 @@ export default function UserManagementPage() {
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
-            {pageRows.length > 0 &&
-            pageRows.every((u) => revealedPasswords[u.id])
+            {shownAsc.length > 0 &&
+            shownAsc.every((u) => revealedPasswords[u.id])
               ? 'Hide All Passwords'
               : 'Show All Passwords'}
           </button>
         </div>
+      </div>
 
-        <div className="overflow-x-auto rounded-xl">
-          <table
-            className="w-full border-collapse text-[16px] min-w-[1050px]"
-            style={{ tableLayout: 'fixed' }}
+      {(() => {
+        const showStaff = cardFilter === 'all' || cardFilter === 'staff'
+        const showPatients =
+          cardFilter === 'all' ||
+          cardFilter === 'patient' ||
+          cardFilter === 'records'
+        const patientRows =
+          cardFilter === 'records'
+            ? filteredPatients.filter((u) => (u as PatientUser).hasRecord)
+            : filteredPatients
+        const visibleTables = [
+          ...(showStaff
+            ? [
+                {
+                  key: 'staff',
+                  title: 'Medical Staff Accounts',
+                  table: staffTable,
+                  page: staffPage,
+                  setPage: setStaffPage,
+                },
+              ]
+            : []),
+          ...(showPatients
+            ? [
+                {
+                  key: 'patient',
+                  title: 'Patient / User Accounts',
+                  table: paginate(patientRows, patientPage),
+                  page: patientPage,
+                  setPage: setPatientPage,
+                },
+              ]
+            : []),
+        ]
+        return visibleTables.map((cfg) => (
+          <div
+            key={cfg.key}
+            className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'} border rounded-2xl p-4 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)] mt-5`}
           >
-            <thead>
-              <tr className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}>
-                <th
-                  className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[24%]`}
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <h2
+                className={`font-poppins text-[18px] font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+              >
+                {cfg.title}
+                <span
+                  className={`ml-2 text-[13px] font-semibold px-2.5 py-1 rounded-full align-middle ${darkMode ? 'bg-[#0f1438] text-[#C4B5FD]' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
                 >
-                  Username
-                </th>
-                <th
-                  className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[18%]`}
-                >
-                  Email
-                </th>
-                <th
-                  className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
-                >
-                  Account Type
-                </th>
-                <th
-                  className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[10%]`}
-                >
-                  Date Joined
-                </th>
-                <th
-                  className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className={`px-5 py-14 text-center text-[16px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  {cfg.table.total}
+                </span>
+              </h2>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl">
+              <table
+                className="w-full border-collapse text-[16px] min-w-[1050px]"
+                style={{ tableLayout: 'fixed' }}
+              >
+                <thead>
+                  <tr
+                    className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}
                   >
-                    <svg
-                      className="mx-auto mb-3"
-                      width="40"
-                      height="40"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={darkMode ? '#6B7280' : '#9CA3AF'}
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                    <th
+                      className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[24%]`}
                     >
-                      <circle cx="11" cy="11" r="8" />
-                      <path d="M21 21l-4.35-4.35" />
-                    </svg>
-                    No users found for this search
-                  </td>
-                </tr>
-              ) : (
-                pageRows.map((u) => {
-                  const revealed = !!revealedPasswords[u.id]
-                  return (
-                    <tr
-                      key={u.id}
-                      className={`${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-[#E8EAF6]'} transition-colors`}
+                      Username
+                    </th>
+                    <th
+                      className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[18%]`}
                     >
+                      Email
+                    </th>
+                    <th
+                      className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
+                    >
+                      Account Type
+                    </th>
+                    <th
+                      className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[10%]`}
+                    >
+                      Date Joined
+                    </th>
+                    <th
+                      className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cfg.table.pageRows.length === 0 ? (
+                    <tr>
                       <td
-                        className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                        colSpan={6}
+                        className={`px-5 py-14 text-center text-[16px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                       >
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          <div
-                            className={`w-9 h-9 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'} flex items-center justify-center font-bold text-sm flex-shrink-0`}
-                          >
-                            {u.firstName.charAt(0)}
-                          </div>
-                          <div className="min-w-0">
-                            <span
-                              className="block text-[16px] font-poppins font-semibold flex-1 min-w-0 whitespace-nowrap truncate"
-                              title={fullName(u)}
-                            >
-                              {fullName(u)}
-                            </span>
-                            <span
-                              className={`block text-[12px] font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}
-                            >
-                              {u.id}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td
-                        className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-nowrap overflow-hidden text-ellipsis`}
-                      >
-                        {u.email}
-                      </td>
-                      <td
-                        className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
-                      >
-                        <span
-                          className={`inline-flex px-2.5 py-1 rounded-md text-[13px] font-semibold ${darkMode ? 'bg-[#0f1438] text-[#C4B5FD]' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
+                        <svg
+                          className="mx-auto mb-3"
+                          width="40"
+                          height="40"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={darkMode ? '#6B7280' : '#9CA3AF'}
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                         >
-                          {u.kind === 'staff' ? u.position : 'Patient / User'}
-                        </span>
-                      </td>
-                      <td
-                        className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
-                      >
-                        {fmtDate(u.dateJoined)}
-                      </td>
-                      <td
-                        className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openEdit(u)}
-                            title="Edit user"
-                            className={iconBtnClass()}
-                          >
-                            <svg
-                              width="15"
-                              height="15"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => setDeleting(u)}
-                            title="Delete user"
-                            className={iconBtnClass(true)}
-                          >
-                            <svg
-                              width="15"
-                              height="15"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              <line x1="10" y1="11" x2="10" y2="17" />
-                              <line x1="14" y1="11" x2="14" y2="17" />
-                            </svg>
-                          </button>
-                        </div>
+                          <circle cx="11" cy="11" r="8" />
+                          <path d="M21 21l-4.35-4.35" />
+                        </svg>
+                        No users found for this search
                       </td>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex justify-between items-center gap-3 pt-4 pb-1 flex-wrap">
-          <span
-            className={`text-[13px] ${darkMode ? 'text-gray-400' : 'text-gray-400'}`}
-          >
-            Showing {firstShown}-{lastShown} of {shownAsc.length} users
-          </span>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                className={pageBtnClass}
-                disabled={safePage === 1}
-                onClick={() => setCurrentPage(safePage - 1)}
-              >
-                &lsaquo; Prev
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i + 1}
-                  className={`${pageBtnClass}${safePage === i + 1 ? ' ' + pageBtnActiveClass : ''}`}
-                  onClick={() => setCurrentPage(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
-              <button
-                className={pageBtnClass}
-                disabled={safePage === totalPages}
-                onClick={() => setCurrentPage(safePage + 1)}
-              >
-                Next &rsaquo;
-              </button>
+                  ) : (
+                    cfg.table.pageRows.map((u) => {
+                      const revealed = !!revealedPasswords[u.id]
+                      return (
+                        <tr
+                          key={u.id}
+                          className={`${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-[#E8EAF6]'} transition-colors`}
+                        >
+                          <td
+                            className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div
+                                className={`w-9 h-9 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'} flex items-center justify-center font-bold text-sm flex-shrink-0`}
+                              >
+                                {u.firstName.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <span
+                                  className="block text-[16px] font-poppins font-semibold flex-1 min-w-0 whitespace-nowrap truncate"
+                                  title={fullName(u)}
+                                >
+                                  {fullName(u)}
+                                </span>
+                                <span
+                                  className={`block text-[12px] font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}
+                                >
+                                  {u.id}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td
+                            className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-nowrap overflow-hidden text-ellipsis`}
+                          >
+                            {u.email}
+                          </td>
+                          <td
+                            className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                          >
+                            <span
+                              className={`inline-flex px-2.5 py-1 rounded-md text-[13px] font-semibold ${darkMode ? 'bg-[#0f1438] text-[#C4B5FD]' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
+                            >
+                              {u.kind === 'staff'
+                                ? u.role === 'Admin'
+                                  ? 'Admin'
+                                  : 'Med Staff'
+                                : 'Patient / User'}
+                            </span>
+                          </td>
+                          <td
+                            className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                          >
+                            {fmtDate(u.dateJoined)}
+                          </td>
+                          <td
+                            className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {u.kind === 'staff' ? (
+                                <>
+                                  <button
+                                    onClick={() => openEdit(u)}
+                                    title="Edit user"
+                                    className={iconBtnClass()}
+                                  >
+                                    <svg
+                                      width="15"
+                                      height="15"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleting(u)}
+                                    title="Delete user"
+                                    className={iconBtnClass(true)}
+                                  >
+                                    <svg
+                                      width="15"
+                                      height="15"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                      <line x1="10" y1="11" x2="10" y2="17" />
+                                      <line x1="14" y1="11" x2="14" y2="17" />
+                                    </svg>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    setViewingPatient(u as PatientUser)
+                                  }
+                                  title="View Patient Details"
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                                    darkMode
+                                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20'
+                                      : 'bg-indigo-50 text-[#4E69D3] border-indigo-200 hover:bg-indigo-100'
+                                  }`}
+                                >
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                  View Info
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
-      </div>
+
+            <div className="flex justify-between items-center gap-3 pt-4 pb-1 flex-wrap">
+              <span
+                className={`text-[13px] ${darkMode ? 'text-gray-400' : 'text-gray-400'}`}
+              >
+                {cfg.table.total === 0
+                  ? 'No accounts found'
+                  : `Showing ${(cfg.table.safePage - 1) * PER_PAGE + 1}-${(cfg.table.safePage - 1) * PER_PAGE + cfg.table.pageRows.length} of ${cfg.table.total}`}
+              </span>
+              {cfg.table.totalPages > 1 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    className={pageBtnClass}
+                    disabled={cfg.table.safePage === 1}
+                    onClick={() => cfg.setPage(cfg.table.safePage - 1)}
+                  >
+                    &lsaquo; Prev
+                  </button>
+                  {Array.from({ length: cfg.table.totalPages }, (_, i) => (
+                    <button
+                      key={i + 1}
+                      className={`${pageBtnClass}${cfg.table.safePage === i + 1 ? ' ' + pageBtnActiveClass : ''}`}
+                      onClick={() => cfg.setPage(i + 1)}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    className={pageBtnClass}
+                    disabled={cfg.table.safePage === cfg.table.totalPages}
+                    onClick={() => cfg.setPage(cfg.table.safePage + 1)}
+                  >
+                    Next &rsaquo;
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))
+      })()}
 
       {adding && (
         <div
@@ -948,7 +1048,7 @@ export default function UserManagementPage() {
                 <p
                   className={`text-[13px] m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                 >
-                  Create an admin or midwife account
+                  Create an admin or medical staff account
                 </p>
               </div>
               <button
@@ -1010,7 +1110,25 @@ export default function UserManagementPage() {
                   className={`${selectClass} col-span-2`}
                 >
                   <option value="ADMIN">Admin</option>
-                  <option value="MIDWIFE">Midwife</option>
+                  <option value="MEDSTAFF">Medical Staff</option>
+                </select>
+              </FieldGroup>
+              <FieldGroup darkMode={darkMode} label="Position" required>
+                <select
+                  value={addForm.position}
+                  onChange={(event) =>
+                    setAddForm({
+                      ...addForm,
+                      position: event.target.value as StaffPosition,
+                    })
+                  }
+                  className={`${selectClass} col-span-2`}
+                >
+                  <option value="Nurse">Nurse</option>
+                  <option value="Midwife">Midwife</option>
+                  <option value="Barangay Health Worker (BHW)">
+                    Barangay Health Worker (BHW)
+                  </option>
                 </select>
               </FieldGroup>
             </div>
@@ -1163,7 +1281,12 @@ export default function UserManagementPage() {
                   >
                     <option value="Admin">Admin</option>
                     <option value="Medical Staff">Medical Staff</option>
-                    <option value="Patient">Patient</option>
+                    <option
+                      value="Patient"
+                      disabled={editing?.kind === 'staff'}
+                    >
+                      Patient
+                    </option>
                   </select>
                 </FieldGroup>
               </div>
@@ -1286,6 +1409,252 @@ export default function UserManagementPage() {
           </div>
         </div>
       )}
+
+      {viewingPatient && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1000] p-3 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setViewingPatient(null)}
+        >
+          <div
+            className={`${darkMode ? 'bg-[#2d1b4e] text-white border-white/10' : 'bg-white text-slate-800 border-slate-200'} rounded-2xl w-full max-w-[640px] shadow-[0_25px_60px_rgba(0,0,0,0.3)] overflow-hidden border max-h-[90vh] flex flex-col`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div
+              className={`flex justify-between items-center px-6 py-4 border-b ${
+                darkMode ? 'border-white/10' : 'border-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-11 h-11 rounded-full ${
+                    darkMode
+                      ? 'bg-[#0f1438] text-blue-300'
+                      : 'bg-[#E8EAF6] text-[#4E69D3]'
+                  } flex items-center justify-center font-bold text-lg flex-shrink-0`}
+                >
+                  {viewingPatient.firstName?.charAt(0) || 'P'}
+                </div>
+                <div>
+                  <h2
+                    className={`font-poppins text-xl font-bold m-0 ${
+                      darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'
+                    }`}
+                  >
+                    {fullName(viewingPatient)}
+                  </h2>
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
+                      darkMode
+                        ? 'bg-blue-500/20 text-blue-300'
+                        : 'bg-blue-100 text-blue-700'
+                    }`}
+                  >
+                    Patient ID: {viewingPatient.id}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingPatient(null)}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center border-none cursor-pointer text-lg font-bold ${
+                  darkMode
+                    ? 'bg-white/5 hover:bg-white/15 text-gray-300'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div>
+                <h3
+                  className={`text-xs font-bold uppercase tracking-wider mb-3 ${
+                    darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'
+                  }`}
+                >
+                  Account Details
+                </h3>
+                <div
+                  className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 rounded-xl text-sm ${
+                    darkMode ? 'bg-[#0f1438]' : 'bg-[#F8FAFC]'
+                  }`}
+                >
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Username
+                    </span>
+                    <span className="font-semibold font-mono">
+                      @{viewingPatient.username}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Email Address
+                    </span>
+                    <span className="font-semibold truncate block">
+                      {viewingPatient.email}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Date Joined
+                    </span>
+                    <span className="font-semibold">
+                      {fmtDate(viewingPatient.dateJoined)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Account Role
+                    </span>
+                    <span className="font-semibold inline-flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                      <span className="w-2 h-2 rounded-full bg-green-500" />
+                      Patient / User
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3
+                  className={`text-xs font-bold uppercase tracking-wider mb-3 ${
+                    darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'
+                  }`}
+                >
+                  Personal & Contact Information
+                </h3>
+                <div
+                  className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 rounded-xl text-sm ${
+                    darkMode ? 'bg-[#0f1438]' : 'bg-[#F8FAFC]'
+                  }`}
+                >
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Phone / Contact
+                    </span>
+                    <span className="font-semibold">
+                      {viewingPatient.profile?.phoneNumber ||
+                        viewingPatient.record?.form?.contactNumber ||
+                        'Not specified'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Birthdate
+                    </span>
+                    <span className="font-semibold">
+                      {viewingPatient.profile?.birthdate
+                        ? fmtDate(
+                            String(viewingPatient.profile.birthdate).slice(
+                              0,
+                              10,
+                            ),
+                          )
+                        : viewingPatient.record?.form?.birthdate
+                          ? fmtDate(viewingPatient.record.form.birthdate)
+                          : 'Not specified'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Sex / Gender
+                    </span>
+                    <span className="font-semibold capitalize">
+                      {viewingPatient.record?.form?.sex || 'Not specified'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Civil Status
+                    </span>
+                    <span className="font-semibold capitalize">
+                      {viewingPatient.record?.form?.civilStatus ||
+                        'Not specified'}
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Residence Address
+                    </span>
+                    <span className="font-semibold">
+                      {[
+                        viewingPatient.profile?.houseNumber ||
+                          viewingPatient.record?.form?.street ||
+                          viewingPatient.record?.form?.completeAddress,
+                        viewingPatient.profile?.barangay ||
+                          viewingPatient.record?.form?.barangay,
+                        viewingPatient.profile?.city ||
+                          viewingPatient.record?.form?.city,
+                        viewingPatient.profile?.province ||
+                          viewingPatient.record?.form?.province,
+                        viewingPatient.profile?.zipCode ||
+                          viewingPatient.record?.form?.postalCode,
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || 'Not specified'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3
+                  className={`text-xs font-bold uppercase tracking-wider mb-3 ${
+                    darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'
+                  }`}
+                >
+                  PhilHealth Information
+                </h3>
+                <div
+                  className={`grid grid-cols-1 sm:grid-cols-3 gap-3.5 p-4 rounded-xl text-sm ${
+                    darkMode ? 'bg-[#0f1438]' : 'bg-[#F8FAFC]'
+                  }`}
+                >
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      PhilHealth No.
+                    </span>
+                    <span className="font-semibold font-mono">
+                      {viewingPatient.profile?.philHealthNo ||
+                        viewingPatient.record?.form?.philHealthNo ||
+                        'None'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Membership Type
+                    </span>
+                    <span className="font-semibold">
+                      {viewingPatient.profile?.membershipType || 'None'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500 font-medium mb-0.5">
+                      Status
+                    </span>
+                    <span className="font-semibold">
+                      {viewingPatient.profile?.philHealthStatus || 'Active'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`px-6 py-4 border-t flex justify-end gap-3 ${
+                darkMode ? 'border-white/10' : 'border-slate-200'
+              }`}
+            >
+              <button
+                onClick={() => setViewingPatient(null)}
+                className="px-5 py-2.5 rounded-lg text-sm font-bold bg-[#4E69D3] text-white hover:bg-indigo-600 cursor-pointer border-none transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1296,16 +1665,26 @@ function StatCard({
   label,
   color,
   icon,
+  onClick,
+  active = false,
 }: {
   darkMode: boolean
   value: number
   label: string
   color: string
   icon: React.ReactNode
+  onClick?: () => void
+  active?: boolean
 }) {
   return (
     <div
-      className={`flex items-center gap-4 max-sm:gap-3 ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onClick?.()
+      }}
+      role="button"
+      tabIndex={0}
+      className={`flex items-center gap-4 max-sm:gap-3 cursor-pointer ${active ? (darkMode ? 'ring-2 ring-[#4E69D3] bg-[#2d1b4e] border-[#4E69D3]' : 'ring-2 ring-[#4E69D3] bg-[#E8EAF6] border-[#E8EAF6]') : ''} ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
     >
       <div
         className={`w-14 h-14 max-sm:w-11 max-sm:h-11 rounded-xl ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}

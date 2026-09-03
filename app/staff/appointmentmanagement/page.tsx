@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/authOptions'
 import { getScheduleAppointments } from '@/lib/actions/appointment'
 import { getArchiveAppointments } from '@/lib/actions/appointmentManagement'
+import { getTodayQueues } from '@/lib/actions/queue'
 import { getServices } from '@/lib/actions/service'
 import { todayISO } from '@/config/appointment'
 import AppointmentManagementClient from '@/components/staff/AppointmentManagementClient'
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
   description: "Manage today's schedule, upcoming visits, archives and walk-ins",
 }
 
-const STAFF_ROLES = ['STAFF', 'MIDWIFE']
+const STAFF_ROLES = ['MEDSTAFF']
 
 export default async function StaffAppointmentManagementPage() {
   const session = await getServerSession(authOptions)
@@ -23,9 +24,10 @@ export default async function StaffAppointmentManagementPage() {
     redirect('/staff')
   }
 
-  const [scheduleRes, archiveRes, servicesRes] = await Promise.all([
+  const [scheduleRes, archiveRes, queuesRes, servicesRes] = await Promise.all([
     getScheduleAppointments(),
     getArchiveAppointments(),
+    getTodayQueues(),
     getServices(),
   ])
 
@@ -43,6 +45,7 @@ export default async function StaffAppointmentManagementPage() {
       todays={todays}
       upcoming={upcoming}
       archive={archiveRes.appointments}
+      queues={queuesRes.queues}
       services={servicesRes.services
         .filter(s => s.availability !== false)
         .map(s => ({ id: s.id ?? '', title: s.title }))}

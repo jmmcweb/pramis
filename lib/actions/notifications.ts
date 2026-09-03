@@ -1,3 +1,5 @@
+// This file contains server-side actions related to notifications, including creating notifications, fetching user notifications, and marking notifications as read. It uses Prisma for database interactions and NextAuth for session management. The functions are designed to be used in a Next.js application with server-side rendering and caching capabilities.
+
 'use server'
 
 import prisma from '@/lib/prisma'
@@ -18,6 +20,8 @@ export type NotificationView = {
   time: string // '5 minutes ago'
   unread: boolean
 }
+
+// Creates a new notification in the database for a specific user or staff member. It generates a unique notification ID, associates it with the provided user or staff ID, and saves the notification details (category, title, description) in the database. If an error occurs during the process, it logs the error to the console.
 
 export async function createNotification(input: {
   userId?: string
@@ -42,6 +46,7 @@ export async function createNotification(input: {
   }
 }
 
+// Sends a notification to all staff members (admins and medical staff) in the system. It retrieves the list of staff and user accounts with appropriate roles, filters out duplicates based on email addresses, and creates a notification for each unique staff member. If an error occurs during the process, it logs the error to the console.
 export async function notifyAllStaff(input: {
   category: NotificationCategory
   title: string
@@ -50,11 +55,11 @@ export async function notifyAllStaff(input: {
   try {
     const [staffRows, userRows] = await Promise.all([
       (prisma as any).staff.findMany({
-        where: { role: { in: ['ADMIN', 'MIDWIFE'] } },
+        where: { role: { in: ['ADMIN', 'MEDSTAFF'] } },
         select: { staffid: true, email: true },
       }),
       (prisma as any).user.findMany({
-        where: { role: { in: ['SUPERADMIN', 'ADMIN', 'STAFF', 'MIDWIFE'] } },
+        where: { role: { in: ['SUPERADMIN', 'ADMIN', 'MEDSTAFF'] } },
         select: { id: true, email: true },
       }),
     ])
@@ -82,6 +87,7 @@ export async function notifyAllStaff(input: {
   }
 }
 
+// Converts a given date into a human-readable relative time format (e.g., "5 minutes ago", "2 hours ago"). It calculates the difference between the current time and the provided date, and returns a string representation of that difference. If the date is more than 5 weeks old, it returns the date in a short format (e.g., "Jan 1, 2023").
 function relativeTime(date: Date): string {
   const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000))
   if (seconds < 60) return 'Just now'
@@ -96,6 +102,7 @@ function relativeTime(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Generates a filter object based on the user's session information to ensure they can only access their own notifications or notifications intended for their role.
 async function ownerFilter(session: any) {
   const id = session.user.id as string
   const role = (session.user.role as string) ?? ''
@@ -111,6 +118,7 @@ async function ownerFilter(session: any) {
   return { userId: id }
 }
 
+// Fetches the notifications for the currently authenticated user or staff member. It retrieves the latest 50 notifications from the database, orders them by creation date, and returns them along with a count of unread notifications. If the user is not authenticated, it returns an unauthorized message.
 export async function getMyNotifications(): Promise<{
   success: boolean
   message: string
@@ -122,7 +130,7 @@ export async function getMyNotifications(): Promise<{
     return { success: false, message: 'Unauthorized', notifications: [], unreadCount: 0 }
   }
 
-  try {
+  try { // Fetch the latest 50 notifications for the authenticated user or staff member, ordered by creation date, and return them along with a count of unread notifications.
     const rows = await (prisma as any).notification.findMany({
       where: await ownerFilter(session),
       orderBy: { createdAt: 'desc' },
@@ -150,6 +158,7 @@ export async function getMyNotifications(): Promise<{
   }
 }
 
+// Marks a specific notification as read for the currently authenticated user or staff member. It updates the notification's read timestamp in the database and returns a success status and message indicating the result of the operation. If the user is not authenticated or if the notification ID is not provided, it returns an appropriate error message.
 export async function markNotificationRead(
   id: string,
 ): Promise<{ success: boolean; message: string }> {
@@ -169,6 +178,7 @@ export async function markNotificationRead(
   }
 }
 
+// Marks all notifications as read for the currently authenticated user or staff member. It updates the read timestamp for all unread notifications in the database and returns a success status and message indicating the result of the operation. If the user is not authenticated, it returns an unauthorized message.
 export async function markAllNotificationsRead(): Promise<{
   success: boolean
   message: string

@@ -34,8 +34,7 @@ MEDSTAFF
 enum UserRole {
 SUPERADMIN
 ADMIN
-STAFF
-MIDWIFE
+MEDSTAFF
 USER
 }
 
@@ -52,6 +51,7 @@ patients      Patient[]
 appointments  Appointment[]   
 familyMembers FamilyMember[]
 notifications Notification[]
+deletedAt     DateTime?
  
 @@map("users") 
 }
@@ -79,6 +79,8 @@ city          String
 province      String   
 zipCode       String   
 validId       String?   
+validIdType    String?
+
 philHealthNo    String?   
 membershipType  String?   
 philHealthStatus String?   
@@ -109,10 +111,20 @@ suffix        String?
 email         String      @unique   
 password      String   
 role          StaffRole   
+position      String?
+phone         String?
+address       String?
+department    String?
+education     String?
+license       String?
+joinDate      String?
+emergencyContact String?
+
 createdAt     DateTime    @default(now())   
 updatedAt     DateTime    @updatedAt   
 medicalHistories MedicalHistory[]
 notifications Notification[]
+deletedAt     DateTime?
 }
 
 model Service {   
@@ -211,7 +223,18 @@ createdAt      DateTime   @default(now())
  staff Staff?              @relation(fields: [staffId], references: [staffid], onDelete: Cascade)
 }
 
-model WalkInQueue {   
+model ResetPasswordToken {
+  id        BigInt   @id @default(autoincrement())
+  email     String
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([email, token])
+  @@map("ResetPasswordToken")
+}
+
+model WalkInQueue { 
 qid            String     @id   
 patientId     String      
 queueType     String   

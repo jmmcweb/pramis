@@ -5,6 +5,7 @@ import { nextReferenceId } from '@/lib/referenceId'
 import { notifyAllStaff } from '@/lib/actions/notifications'
 import { PUROKS, FIXED_ADDRESS } from '@/src/data/patientInfo'
 
+// structure for the signup payload
 type SignupPayload = {
   email?: string
   code?: string
@@ -21,8 +22,11 @@ type SignupPayload = {
   province?: string
   zip?: string
   country?: string
+  idType?: string
+  idPhoto?: string
 }
 
+// 
 export async function POST(request: Request) {
   let payload: SignupPayload
 
@@ -50,6 +54,22 @@ export async function POST(request: Request) {
   const province = payload.province?.trim()
   const zip = payload.zip?.trim()
   const country = FIXED_ADDRESS.country
+  const idType = payload.idType?.trim()
+  const idPhoto = payload.idPhoto?.trim()
+
+  // The captured/uploaded valid ID is a base64 data URL (e.g. data:image/jpeg;base64,...)
+  if (idPhoto && !/^data:image\/(jpeg|png|webp);base64,/.test(idPhoto)) {
+    return NextResponse.json(
+      { message: 'The uploaded ID photo must be a JPEG, PNG, or WebP image.' },
+      { status: 400 },
+    )
+  }
+  if (idPhoto && idPhoto.length > 5_000_000) {
+    return NextResponse.json(
+      { message: 'The uploaded ID photo is too large (max ~3.5MB).' },
+      { status: 400 },
+    )
+  }
 
   if (
     !email ||
@@ -142,6 +162,8 @@ export async function POST(request: Request) {
           city,
           province,
           zipCode: zip,
+          validId: idPhoto || null,
+          validIdType: idType || null,
         },
       }),
     ])

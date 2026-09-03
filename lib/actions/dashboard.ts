@@ -12,6 +12,7 @@ export type DashboardStats = {
   pendingRequests: number
 }
 
+// Fetches dashboard statistics for the Meditrack application. It retrieves the total number of users, total staff members, the number of scheduled appointments for today, and the count of pending user requests. The function checks user authorization and returns the computed statistics along with success status and messages.
 export async function getDashboardStats() {
   const session = await requireUser()
   if (!session) {
@@ -59,6 +60,7 @@ export type PopulationResult = {
   population?: PopulationData
 }
 
+// Fetches population statistics for the Meditrack application. It computes various demographic and health-related statistics based on the user data in the database. The function checks user authorization and returns the computed statistics along with success status and messages.
 export async function getPopulationStats(): Promise<PopulationResult> {
   const session = await requireUser()
   if (!session) {

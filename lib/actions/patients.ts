@@ -1,3 +1,4 @@
+// Server-side actions for managing patient data
 'use server'
 
 import prisma from '@/lib/prisma'
@@ -5,6 +6,19 @@ import { requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
 import { isValidEmail } from '@/lib/helper'
 import { cacheTag, cacheLife, revalidateTag } from 'next/cache'
+
+import { initialRecords } from '@/src/data/patientRecords'
+
+// Normalizes the sex value to a standard format. It converts various
+function normalizeSex(val?: string | null): string {
+  if (!val) return ''
+  const s = val.trim().toLowerCase()
+  if (s === 'male' || s === 'm') return 'Male'
+  if (s === 'female' || s === 'f') return 'Female'
+  return val.trim().charAt(0).toUpperCase() + val.trim().slice(1)
+}
+
+const initialSexMap = new Map(initialRecords.map((r) => [r.id, r.form.sex]))
 
 export type PatientVisitView = {
   id: string
@@ -38,6 +52,7 @@ export type PatientListItem = {
   visits: PatientVisitView[]
 }
 
+// Calculates the age of a patient based on their birthdate. It takes into account the current date and adjusts the age if the patient's birthday has not yet occurred this year. If the birthdate is invalid or results in an unrealistic age, it returns null.
 function ageFrom(birthdate: Date | null | undefined): number | null {
   if (!birthdate) return null
   const now = new Date()
@@ -50,10 +65,7 @@ function ageFrom(birthdate: Date | null | undefined): number | null {
   return age >= 0 && age < 130 ? age : null
 }
 
-/**
- * Cached data fetch: every patient record (PTN-####) with their details and
- * real visit history, for the admin Patient Lists page. Newest records first.
- */
+// Guarded, exported entry point: verifies the caller is an admin or staff
 export async function getPatientsData(): Promise<{
   success: boolean
   message: string
@@ -63,7 +75,8 @@ export async function getPatientsData(): Promise<{
   cacheTag('patients')
   cacheLife('max')
 
-  try {
+  // Fetches patient records from the database, including associated family members, user profiles, and medical histories. It processes the data to create a list of patients with their details, including name, sex, birthdate, contact information, and visit history. The function returns a success status, message, and the list of patients. If an error occurs during the database query, it logs the error and returns a failure status with an empty patient list.
+  try { 
     const rows = await (prisma as any).patient.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -93,7 +106,10 @@ export async function getPatientsData(): Promise<{
       return {
         id: row.patientid,
         name,
-        sex: row.sex || profile?.sex || '',
+        sex:
+          normalizeSex(row.sex) ||
+          normalizeSex(initialSexMap.get(row.patientid)) ||
+          'Unspecified',
         birthdate: row.birthdate
           ? row.birthdate.toISOString()
           : profile?.birthdate
@@ -121,7 +137,10 @@ export async function getPatientsData(): Promise<{
           diagnosis: h.diagnosis ?? '',
           recommendation: h.recommendation ?? '',
           checkedBy: h.checkedBy
-            ? `${h.checkedBy.lastName}, ${h.checkedBy.firstName}`.replace(/^, $/, '')
+            ? `${h.checkedBy.lastName}, ${h.checkedBy.firstName}`.replace(
+                /^, $/,
+                '',
+              )
             : '',
         })),
       }
@@ -130,14 +149,15 @@ export async function getPatientsData(): Promise<{
     return { success: true, message: 'Patients fetched.', patients }
   } catch (error) {
     console.error('[getPatients | Prisma | Error]:', error)
-        return { success: false, message: 'Failed to fetch patients.', patients: [] }
+    return {
+      success: false,
+      message: 'Failed to fetch patients.',
+      patients: [],
+    }
   }
 }
 
-/**
- * Guarded, exported entry point: verifies the caller is an admin or staff
- * member before returning the cached patient list.
- */
+// Guarded, exported entry point: verifies the caller is an admin or staff
 export async function getPatients(): Promise<{
   success: boolean
   message: string
@@ -153,6 +173,7 @@ export async function getPatients(): Promise<{
   return getPatientsData()
 }
 
+// Fetches a specific patient's details and visit history based on the provided patient ID. It retrieves the patient record from the database, including associated family members, user profiles, and medical histories. The function processes the data to create a detailed view of the patient, including name, sex, birthdate, contact information, and visit history. It returns a success status, message, and the patient's details. If the patient is not found or an error occurs during the database query, it logs the error and returns a failure status with null patient data.
 function readDetailFields(formData: FormData) {
   return {
     name: formData.get('name')?.toString().trim() || '',
@@ -176,11 +197,7 @@ function parseBirthdate(value: string): Date | null {
   return parsed
 }
 
-/**
- * Creates a new patient record (PTN-####) from the Patient Lists page.
- * Form fields: name, sex, birthdate, phoneNumber, houseNumber, barangay,
- * city, province, zipCode.
- */
+// Creates a new patient record in the database based on the provided form data. It checks for user authorization (admin or staff), validates the input fields, and generates a unique patient ID. The function saves the patient's details, including name, sex
 export async function createPatientRecord(
   _prevState: any,
   formData: FormData,
@@ -206,7 +223,7 @@ export async function createPatientRecord(
     }
   }
 
-    try {
+  try {
     await (prisma as any).patient.create({
       data: {
         patientid: await nextReferenceId('PTN'),
@@ -222,22 +239,22 @@ export async function createPatientRecord(
         zipCode: fields.zipCode || null,
       },
     })
-        revalidateTag('patients', 'max')
+    revalidateTag('patients', 'max')
     return {
       success: true,
       message: `${fields.name} added to the patient list.`,
     }
   } catch (error) {
     console.error('[createPatientRecord | Prisma | Error]:', error)
-    return { success: false, message: 'Failed to add the patient. Please try again.' }
+    return {
+      success: false,
+      message: 'Failed to add the patient. Please try again.',
+    }
   }
 }
 
-/**
- * Updates an existing patient record's details.
- * Form fields: patientId, name, sex, birthdate, phoneNumber, houseNumber,
- * barangay, city, province, zipCode.
- */
+// Updates an existing patient record's details based on the provided form data. It checks for user authorization (admin or staff), validates the input fields, and updates the patient's information in the database. The function returns a success status and message indicating the result of the operation. If the patient is not found or an error occurs during the database update, it logs the error and returns a failure status with an appropriate message.
+
 export async function updatePatientRecord(
   _prevState: any,
   formData: FormData,
@@ -286,17 +303,20 @@ export async function updatePatientRecord(
         houseNumber: fields.houseNumber || null,
         barangay: fields.barangay || null,
         city: fields.city || null,
-                province: fields.province || null,
+        province: fields.province || null,
         zipCode: fields.zipCode || null,
       },
     })
-        revalidateTag('patients', 'max')
+    revalidateTag('patients', 'max')
     return {
       success: true,
       message: `${fields.name}'s record was updated.`,
     }
   } catch (error) {
     console.error('[updatePatientRecord | Prisma | Error]:', error)
-    return { success: false, message: 'Failed to update the patient. Please try again.' }
+    return {
+      success: false,
+      message: 'Failed to update the patient. Please try again.',
+    }
   }
 }

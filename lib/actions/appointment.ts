@@ -1,3 +1,5 @@
+// This file contains server-side actions related to appointments in the Meditrack application. It includes functions for fetching available services, checking slot availability, managing family members, booking and cancelling appointments, retrieving user appointments, and updating appointment statuses. The actions interact with the database using Prisma and handle user authorization to ensure that only authorized users can perform certain actions. Additionally, it includes logic for sending notifications to users and staff regarding appointment bookings and status changes.
+
 'use server'
 
 import prisma from '@/lib/prisma'
@@ -33,6 +35,7 @@ const VALID_STATUSES = [
   'NO_SHOW',
 ]
 
+// Parses the service metadata from the description field, which may contain JSON-encoded information about the service's description, subtitle, time, and icon. If the description is not in JSON format, it treats it as a plain string and assigns default values for missing fields.
 function parseServiceMeta(description: string | null | undefined): {
   desc: string
   subtitle: string
@@ -58,6 +61,7 @@ function parseServiceMeta(description: string | null | undefined): {
   }
 }
 
+// Converts a service record from the database into a ServiceView object, which includes the service's ID, name, description, schedule, time, icon, and availability status. It uses the parseServiceMeta function to extract metadata from the service's description field.
 function toServiceView(s: any): ServiceView {
   const meta = parseServiceMeta(s.description)
   return {
@@ -71,6 +75,7 @@ function toServiceView(s: any): ServiceView {
   }
 }
 
+// Fetches the list of available services for booking appointments. It retrieves the services from the database, processes each service to extract relevant metadata, and returns a structured response containing the success status, message, and an array of ServiceView objects representing the available services.
 export async function getBookingServices(): Promise<{
   success: boolean
   message: string
@@ -96,6 +101,7 @@ export async function getBookingServices(): Promise<{
   }
 }
 
+// Fetches the availability of appointment slots for a specific date. It checks the number of booked appointments for each slot and calculates the remaining capacity. The function returns a structured response containing the success status, message, and an array of SlotAvailability objects representing the availability of each slot on the specified date.
 export async function getDayAvailability(
   dateISO: string,
 ): Promise<{ success: boolean; message: string; slots: SlotAvailability[] }> {
@@ -147,6 +153,7 @@ export async function getDayAvailability(
   }
 }
 
+// Fetches the list of family members associated with the signed-in user. It retrieves the family members from the database, processes each record to extract relevant information, and returns a structured response containing the success status, message, and an array of FamilyMemberOption objects representing the user's family members.
 export async function getMyFamilyMembers(): Promise<{
   success: boolean
   message: string
@@ -181,6 +188,7 @@ export async function getMyFamilyMembers(): Promise<{
   }
 }
 
+// Fetches the list of appointments for the signed-in user. It retrieves the appointments from the database, processes each record to extract relevant information, and returns a structured response containing the success status, message, and an array of MyAppointmentView objects representing the user's appointments.
 export async function getMyAppointments(): Promise<{
   success: boolean
   message: string
@@ -355,7 +363,7 @@ export async function bookAppointment(_prevState: any, formData: FormData) {
       } on ${dateISO} at ${getSlotLabel(slotId)} is pending approval.`,
     })
 
-    // Notify every admin and midwife so they can review the schedule.
+    // Notify every admin and medical staff so they can review the schedule.
     const booker = await (prisma as any).user.findFirst({
       where: { id: session.user.id },
       include: { profile: true },
@@ -408,7 +416,7 @@ export async function cancelAppointment(
     const isAdmin = ['SUPERADMIN', 'ADMIN'].includes(
       (session.user.role as string) ?? '',
     )
-    const isStaff = ['STAFF', 'MIDWIFE'].includes(
+    const isStaff = ['MEDSTAFF'].includes(
       (session.user.role as string) ?? '',
     )
     if (appointment.userId !== session.user.id && !isAdmin && !isStaff) {
@@ -487,6 +495,7 @@ export async function getScheduleAppointments(): Promise<{
       },
     })
 
+    // Map the database rows to ScheduleAppointmentView objects, extracting relevant information such as patient name, service name, appointment date and time, status, and medical record details.
     const appointments: ScheduleAppointmentView[] = rows.map((row: any) => {
       const at = new Date(row.appointmentAt)
       const profile = row.user?.profile
@@ -541,6 +550,7 @@ export async function getScheduleAppointments(): Promise<{
   }
 }
 
+// Retrieves the display name of the signed-in user. If the user has a profile with a first and/or last name, it returns the full name; otherwise, it returns the user's email or a default label "Patient" if no information is available.
 export async function getMyDisplayName(): Promise<string> {
   const session = await requireUser()
   if (!session) return 'Guest'
@@ -665,6 +675,7 @@ export async function updateAppointmentStatus(
   }
 }
 
+// Sends a notification to the patient about their appointment. This function can be called by an admin or staff member to remind the patient of their upcoming appointment. It retrieves the appointment details, constructs a notification message, and sends it to the patient's account and email if available.
 export async function notifyAppointment(
   appointmentId: string,
 ): Promise<{ success: boolean; message: string }> {

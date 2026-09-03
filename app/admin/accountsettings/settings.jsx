@@ -253,7 +253,7 @@ function AccountSection({ darkMode }) {
   const [form, setForm] = useState({
     name: 'Vivianne Hernandez',
     email: 'vhernandez@meditrack.com',
-    role: 'Midwife',
+    role: 'Medical Staff',
     employeeId: 'MS-0001',
   })
   const [showPassword, setShowPassword] = useState(false)
@@ -262,7 +262,7 @@ function AccountSection({ darkMode }) {
   const [showNewPass, setShowNewPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  const currentMatches = passwordForm.current !== '' && passwordForm.current === 'Midwife@2026'
+  const currentMatches = passwordForm.current !== '' && passwordForm.current === 'MedStaff@2026'
   const reqs = [
     { label: '12+ characters', met: passwordForm.newPass.length >= 12 },
     { label: 'A-Z', met: /[A-Z]/.test(passwordForm.newPass) },
@@ -288,7 +288,7 @@ function AccountSection({ darkMode }) {
     toast.success('Account settings updated successfully')
   }
   const handleCancel = () => {
-    setForm({ name: 'Vivianne Hernandez', email: 'vhernandez@meditrack.com', role: 'Midwife', employeeId: 'MS-0001' })
+    setForm({ name: 'Vivianne Hernandez', email: 'vhernandez@meditrack.com', role: 'Medical Staff', employeeId: 'MS-0001' })
     setEditing(false)
   }
 
@@ -297,7 +297,7 @@ function AccountSection({ darkMode }) {
       toast.error('Please fill in all password fields')
       return
     }
-    if (passwordForm.current !== 'Midwife@2026') {
+    if (passwordForm.current !== 'MedStaff@2026') {
       toast.error('Current password does not match')
       return
     }

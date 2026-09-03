@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/actions/guard'
 import type { MedicalRecord, PatientMember } from '@/src/data/records'
 import type { ServiceIconKey } from '@/src/data/appointment'
 
+// Guarded, exported entry point: verifies the caller is a user
 function iconForService(name: string): ServiceIconKey {
   const t = (name || '').toLowerCase()
   if (t.includes('vaccin') || t.includes('immun')) return 'syringe'
@@ -17,11 +18,12 @@ function iconForService(name: string): ServiceIconKey {
   return 'stethoscope'
 }
 
+// Formats a patient's name and relation into a string representation. If the patient is the account holder, it returns the name directly; otherwise, it appends the relation in parentheses.
 function staffRoleLabel(role: string | null | undefined): string {
   if (role === 'ADMIN') return 'Admin'
-  if (role === 'MIDWIFE') return 'Midwife'
   return 'Medical Staff'
 }
+
 
 function initialsOf(name: string): string {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean)
@@ -30,6 +32,7 @@ function initialsOf(name: string): string {
   return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase()
 }
 
+// Guarded, exported entry point: verifies the caller is a user
 export async function getMyMedicalRecords(): Promise<{
   success: boolean
   message: string
@@ -40,6 +43,7 @@ export async function getMyMedicalRecords(): Promise<{
     return { success: false, message: 'Unauthorized', members: [] }
   }
 
+  // Fetches the medical records for the currently authenticated user. It retrieves the user's profile, associated patients, and their completed appointments with medical history. The function processes the data to create a list of patient members, including their names, relations, and medical records. It returns a success status, message, and the list of patient members. If an error occurs during the database query, it logs the error and returns a failure status with an empty members array.
   try {
     const user = await (prisma as any).user.findFirst({
       where: { id: session.user.id },

@@ -1,5 +1,14 @@
 import { FIXED_ADDRESS, PUROKS } from '@/src/data/patientInfo'
 
+export type PurokItem = {
+  label: string
+  value: number
+  households: number
+  residents: number
+  male: number
+  female: number
+}
+
 export type PopulationData = {
   barangay: string
   location: string
@@ -10,7 +19,7 @@ export type PopulationData = {
   female: number
   patientRecords: number
   ageGroups: { label: string; value: number }[]
-  puroks: { label: string; value: number }[]
+  puroks: PurokItem[]
 }
 
 export type PopulationView = {
@@ -23,7 +32,7 @@ export type PopulationView = {
   female: number
   patientRecords: number
   ageGroups: { label: string; value: number; color: string }[]
-  puroks: { label: string; value: number; color: string }[]
+  puroks: (PurokItem & { color: string })[]
   purokTotal: number
 }
 
@@ -72,17 +81,94 @@ export const DEFAULT_POPULATION: PopulationData = {
     { label: '65+', value: 336 },
   ],
   puroks: [
-    { label: 'Purok 1A', value: 660 },
-    { label: 'Purok 1B', value: 555 },
-    { label: 'Purok 2A & 2B', value: 1142 },
-    { label: 'Purok 3A', value: 630 },
-    { label: 'Purok 3B', value: 459 },
-    { label: 'Purok 4', value: 1318 },
-    { label: 'Purok 5A', value: 510 },
-    { label: 'Purok 5B', value: 466 },
-    { label: 'Purok 6', value: 1253 },
-    { label: 'Purok 7', value: 988 },
-    { label: 'Purok 8', value: 500 },
+    {
+      label: 'Purok 1A',
+      value: 660,
+      residents: 660,
+      households: 142,
+      male: 330,
+      female: 330,
+    },
+    {
+      label: 'Purok 1B',
+      value: 555,
+      residents: 555,
+      households: 119,
+      male: 280,
+      female: 275,
+    },
+    {
+      label: 'Purok 2A & 2B',
+      value: 1142,
+      residents: 1142,
+      households: 245,
+      male: 575,
+      female: 567,
+    },
+    {
+      label: 'Purok 3A',
+      value: 630,
+      residents: 630,
+      households: 135,
+      male: 315,
+      female: 315,
+    },
+    {
+      label: 'Purok 3B',
+      value: 459,
+      residents: 459,
+      households: 98,
+      male: 230,
+      female: 229,
+    },
+    {
+      label: 'Purok 4',
+      value: 1318,
+      residents: 1318,
+      households: 283,
+      male: 660,
+      female: 658,
+    },
+    {
+      label: 'Purok 5A',
+      value: 510,
+      residents: 510,
+      households: 109,
+      male: 255,
+      female: 255,
+    },
+    {
+      label: 'Purok 5B',
+      value: 466,
+      residents: 466,
+      households: 100,
+      male: 235,
+      female: 231,
+    },
+    {
+      label: 'Purok 6',
+      value: 1253,
+      residents: 1253,
+      households: 269,
+      male: 630,
+      female: 623,
+    },
+    {
+      label: 'Purok 7',
+      value: 988,
+      residents: 988,
+      households: 212,
+      male: 495,
+      female: 493,
+    },
+    {
+      label: 'Purok 8',
+      value: 500,
+      residents: 500,
+      households: 107,
+      male: 250,
+      female: 250,
+    },
   ],
 }
 

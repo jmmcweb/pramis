@@ -3,14 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import {
-  Plus,
-  Edit3,
-  Eye,
-  X,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react'
+import { Plus, Edit3, Eye, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import {
   createPatientRecord,
@@ -81,7 +74,9 @@ function StatCard({
   return (
     <div
       className={`flex items-center gap-4 p-5 rounded-[18px] border shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)] ${
-        darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.08)]'
+        darkMode
+          ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]'
+          : 'bg-white border-[rgba(15,60,95,0.08)]'
       }`}
     >
       <div
@@ -102,10 +97,16 @@ function StatCard({
         </svg>
       </div>
       <div className="flex flex-col">
-        <span className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+        <span
+          className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+        >
           {value}
         </span>
-        <span className={`text-lg leading-tight ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{label}</span>
+        <span
+          className={`text-lg leading-tight ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+        >
+          {label}
+        </span>
       </div>
     </div>
   )
@@ -121,15 +122,21 @@ function VisitCard({
   return (
     <div
       className={`rounded-xl border p-4 ${
-        darkMode ? 'bg-[#0f1438] border-[rgba(255,255,255,0.10)]' : 'bg-gray-50 border-gray-200'
+        darkMode
+          ? 'bg-[#0f1438] border-[rgba(255,255,255,0.10)]'
+          : 'bg-gray-50 border-gray-200'
       }`}
     >
       <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
         <div>
-          <span className={`font-bold text-[16px] font-poppins block ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+          <span
+            className={`font-bold text-[16px] font-poppins block ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          >
             {formatDate(v.date)}
           </span>
-          <span className={`text-[13px] font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <span
+            className={`text-[13px] font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+          >
             {v.serviceName}
           </span>
         </div>
@@ -143,7 +150,10 @@ function VisitCard({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3">
         {[
           { label: 'Blood Pressure', value: v.bloodPressure },
-          { label: 'O2 Level', value: v.oxygenLevel ? `${v.oxygenLevel}%` : '' },
+          {
+            label: 'O2 Level',
+            value: v.oxygenLevel ? `${v.oxygenLevel}%` : '',
+          },
           { label: 'Height', value: v.height ? `${v.height} cm` : '' },
           { label: 'Weight', value: v.weight ? `${v.weight} kg` : '' },
         ].map((m) => (
@@ -151,10 +161,14 @@ function VisitCard({
             key={m.label}
             className={`rounded-lg px-3 py-2 ${darkMode ? 'bg-[#2d1b4e]' : 'bg-white border border-gray-200'}`}
           >
-            <span className={`block text-[11px] font-semibold uppercase tracking-[0.5px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            <span
+              className={`block text-[11px] font-semibold uppercase tracking-[0.5px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+            >
               {m.label}
             </span>
-            <span className={`block text-[15px] font-bold font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+            <span
+              className={`block text-[15px] font-bold font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+            >
               {m.value || '\u2014'}
             </span>
           </div>
@@ -162,19 +176,33 @@ function VisitCard({
       </div>
 
       {v.diagnosis && (
-        <p className={`m-0 mb-1.5 text-[14px] font-poppins leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-          <span className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>Diagnosis: </span>
+        <p
+          className={`m-0 mb-1.5 text-[14px] font-poppins leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+        >
+          <span
+            className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          >
+            Diagnosis:{' '}
+          </span>
           {v.diagnosis}
         </p>
       )}
       {v.recommendation && (
-        <p className={`m-0 mb-1.5 text-[14px] font-poppins leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-          <span className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>Recommendation: </span>
+        <p
+          className={`m-0 mb-1.5 text-[14px] font-poppins leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+        >
+          <span
+            className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          >
+            Recommendation:{' '}
+          </span>
           {v.recommendation}
         </p>
       )}
       {v.checkedBy && (
-        <p className={`m-0 text-[13px] font-poppins italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+        <p
+          className={`m-0 text-[13px] font-poppins italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+        >
           Checked by {v.checkedBy}
         </p>
       )}
@@ -187,7 +215,7 @@ export default function PatientsTable({
   darkMode: darkModeProp,
 }: {
   patients: PatientListItem[]
-  /** Optional override so staff/midwife shells can pass their own dark-mode state. */
+  /** Optional override so staff shells can pass their own dark-mode state. */
   darkMode?: boolean
 }) {
   const { darkMode: contextDarkMode } = useDarkMode()
@@ -200,7 +228,9 @@ export default function PatientsTable({
 
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [viewingPatient, setViewingPatient] = useState<PatientListItem | null>(null)
+  const [viewingPatient, setViewingPatient] = useState<PatientListItem | null>(
+    null,
+  )
   const [form, setForm] = useState<PatientForm>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -223,11 +253,16 @@ export default function PatientsTable({
     (safePage - 1) * RECORDS_PER_PAGE,
     safePage * RECORDS_PER_PAGE,
   )
-  const firstShown = filtered.length === 0 ? 0 : (safePage - 1) * RECORDS_PER_PAGE + 1
+  const firstShown =
+    filtered.length === 0 ? 0 : (safePage - 1) * RECORDS_PER_PAGE + 1
   const lastShown = (safePage - 1) * RECORDS_PER_PAGE + pagePatients.length
 
-  const maleCount = patients.filter((p) => p.sex === 'Male').length
-  const femaleCount = patients.filter((p) => p.sex === 'Female').length
+  const maleCount = patients.filter(
+    (p) => (p.sex || '').toLowerCase() === 'male' || p.sex === 'M',
+  ).length
+  const femaleCount = patients.filter(
+    (p) => (p.sex || '').toLowerCase() === 'female' || p.sex === 'F',
+  ).length
   const seniorCount = patients.filter((p) => (p.age ?? 0) >= 60).length
 
   const inputClass = `w-full px-3.5 py-2.5 ${
@@ -269,9 +304,11 @@ export default function PatientsTable({
 
   const handleSave = () => {
     const errors: Record<string, string> = {}
-    if (form.name.trim().length < 3) errors.name = 'Enter the patient\u2019s full name.'
+    if (form.name.trim().length < 3)
+      errors.name = 'Enter the patient\u2019s full name.'
     if (!form.sex) errors.sex = 'Select the patient\u2019s sex.'
-    if (!form.birthdate) errors.birthdate = 'Enter a valid birthday (not in the future).'
+    if (!form.birthdate)
+      errors.birthdate = 'Enter a valid birthday (not in the future).'
     if (Object.keys(errors).length > 0) {
       setFormError(Object.values(errors)[0])
       return
@@ -298,7 +335,9 @@ export default function PatientsTable({
         router.refresh()
         toast.success(result.message)
       } else {
-        setFormError(result.message || 'Something went wrong. Please try again.')
+        setFormError(
+          result.message || 'Something went wrong. Please try again.',
+        )
       }
     })
   }
@@ -370,7 +409,9 @@ export default function PatientsTable({
 
       <div
         className={`rounded-2xl p-4 sm:p-6 ${
-          darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.08)]'
+          darkMode
+            ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]'
+            : 'bg-white border-[rgba(15,60,95,0.08)]'
         } border shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]`}
       >
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 mb-5">
@@ -398,7 +439,9 @@ export default function PatientsTable({
               className={`w-full pl-10 pr-3.5 py-2.5 ${
                 darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'
               } rounded-lg text-[15px] font-poppins ${
-                darkMode ? 'text-[#F9FAFB] bg-[#2d1b4e]' : 'text-gray-800 bg-gray-100'
+                darkMode
+                  ? 'text-[#F9FAFB] bg-[#2d1b4e]'
+                  : 'text-gray-800 bg-gray-100'
               } outline-none focus:border-[#4E69D3]`}
             />
           </div>
@@ -413,10 +456,19 @@ export default function PatientsTable({
         </div>
 
         <div className="overflow-x-auto rounded-xl">
-          <table className="w-full border-collapse text-[16px] min-w-[900px]" style={{ tableLayout: 'fixed' }}>
+          <table
+            className="w-full border-collapse text-[16px] min-w-[900px]"
+            style={{ tableLayout: 'fixed' }}
+          >
             <thead>
               <tr className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}>
-                {['Patient', 'Age / Sex', 'Contact', 'Address', 'Last Visit'].map((label, i) => (
+                {[
+                  'Patient',
+                  'Age / Sex',
+                  'Contact',
+                  'Address',
+                  'Last Visit',
+                ].map((label, i) => (
                   <th
                     key={label}
                     className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b`}
@@ -425,7 +477,9 @@ export default function PatientsTable({
                     {label}
                   </th>
                 ))}
-                <th className={`px-5 py-4 text-right font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b w-[10%]`}>
+                <th
+                  className={`px-5 py-4 text-right font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b w-[10%]`}
+                >
                   Actions
                 </th>
               </tr>
@@ -433,40 +487,79 @@ export default function PatientsTable({
             <tbody>
               {pagePatients.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className={`px-5 py-12 text-center text-[16px] font-semibold font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <td
+                    colSpan={6}
+                    className={`px-5 py-12 text-center text-[16px] font-semibold font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     No patients found{q ? ` matching "${searchQuery}"` : ''}.
                   </td>
                 </tr>
               ) : (
                 pagePatients.map((p) => (
-                  <tr key={p.id} className={`border-b last:border-none ${darkMode ? 'border-[rgba(255,255,255,0.08)]' : 'border-gray-100'}`}>
+                  <tr
+                    key={p.id}
+                    className={`border-b last:border-none ${darkMode ? 'border-[rgba(255,255,255,0.08)]' : 'border-gray-100'}`}
+                  >
                     <td className="px-5 py-4 align-middle">
                       <div className="flex items-center gap-3 min-w-0">
                         <div
                           className={`w-11 h-11 max-sm:w-9 max-sm:h-9 rounded-full ${
-                            darkMode ? 'bg-[#141a45] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'
+                            darkMode
+                              ? 'bg-[#141a45] text-blue-300'
+                              : 'bg-[#E8EAF6] text-[#4E69D3]'
                           } flex items-center justify-center font-bold text-sm flex-shrink-0`}
                         >
                           {initials(p.name)}
                         </div>
                         <div className="min-w-0">
-                          <p className={`text-[16px] font-bold m-0 truncate font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                          <p
+                            className={`text-[16px] font-bold m-0 truncate font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                          >
                             {p.name}
                           </p>
-                          <p className={`text-[13px] font-semibold m-0 truncate font-poppins ${darkMode ? 'text-[#4E9FFF]' : 'text-[#4E69D3]'}`}>
+                          <p
+                            className={`text-[13px] font-semibold m-0 truncate font-poppins ${darkMode ? 'text-[#4E9FFF]' : 'text-[#4E69D3]'}`}
+                          >
                             {p.id}
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td className={`px-5 py-4 align-middle text-[15px] font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
-                      {p.age ?? '\u2014'} / {p.sex || '\u2014'}
+                    <td
+                      className={`px-5 py-4 align-middle text-[15px] font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                    >
+                      {p.age !== null && p.age !== undefined
+                        ? `${p.age} yrs`
+                        : '\u2014'}{' '}
+                      /{' '}
+                      <span
+                        className={`inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md text-xs align-middle ${
+                          (p.sex || '').toLowerCase() === 'male'
+                            ? darkMode
+                              ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                              : 'bg-sky-100 text-sky-700 border border-sky-200'
+                            : (p.sex || '').toLowerCase() === 'female'
+                              ? darkMode
+                                ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30'
+                                : 'bg-pink-100 text-pink-700 border border-pink-200'
+                              : darkMode
+                                ? 'bg-gray-700 text-gray-300'
+                                : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {p.sex || 'Unspecified'}
+                      </span>
                     </td>
-                    <td className={`px-5 py-4 align-middle text-[15px] font-poppins truncate ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    <td
+                      className={`px-5 py-4 align-middle text-[15px] font-poppins truncate ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                    >
                       {p.phoneNumber || '\u2014'}
                     </td>
-                    <td className={`px-5 py-4 align-middle text-[15px] font-poppins truncate ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                      {[p.barangay, p.city].filter(Boolean).join(', ') || '\u2014'}
+                    <td
+                      className={`px-5 py-4 align-middle text-[15px] font-poppins truncate ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                    >
+                      {[p.barangay, p.city].filter(Boolean).join(', ') ||
+                        '\u2014'}
                     </td>
                     <td
                       onClick={() => setViewingPatient(p)}
@@ -475,8 +568,12 @@ export default function PatientsTable({
                     >
                       {p.visits.length > 0 ? (
                         <>
-                          <span className="font-bold block truncate">{formatDate(p.visits[0].date)}</span>
-                          <span className="text-[13px] block truncate">{p.visits[0].serviceName}</span>
+                          <span className="font-bold block truncate">
+                            {formatDate(p.visits[0].date)}
+                          </span>
+                          <span className="text-[13px] block truncate">
+                            {p.visits[0].serviceName}
+                          </span>
                         </>
                       ) : (
                         <span className="italic">No visits yet</span>
@@ -517,7 +614,9 @@ export default function PatientsTable({
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
-          <p className={`m-0 text-[14px] font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <p
+            className={`m-0 text-[14px] font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+          >
             Showing {firstShown}&ndash;{lastShown} of {filtered.length}
           </p>
           <div className="flex items-center gap-2">
@@ -562,8 +661,12 @@ export default function PatientsTable({
             className={`${darkMode ? 'bg-[#2d1b4e]' : 'bg-white'} rounded-2xl w-full max-w-[520px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] flex flex-col relative overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`flex justify-between items-center px-4 sm:px-7 py-4 sm:py-5 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'} border-b`}>
-              <h2 className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+            <div
+              className={`flex justify-between items-center px-4 sm:px-7 py-4 sm:py-5 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'} border-b`}
+            >
+              <h2
+                className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+              >
                 {editingId ? 'Edit Patient' : 'Add New Patient'}
               </h2>
               <button
@@ -579,13 +682,17 @@ export default function PatientsTable({
 
             <div className="px-4 sm:px-7 py-6 overflow-y-auto flex flex-col gap-3.5">
               <div>
-                <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <label
+                  className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                >
                   Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, name: e.target.value }))
+                  }
                   placeholder="e.g. Juan Dela Cruz"
                   disabled={isPending}
                   className={inputClass}
@@ -593,12 +700,16 @@ export default function PatientsTable({
               </div>
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     Sex <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={form.sex}
-                    onChange={(e) => setForm((prev) => ({ ...prev, sex: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, sex: e.target.value }))
+                    }
                     disabled={isPending}
                     className={`${inputClass} cursor-pointer`}
                   >
@@ -607,13 +718,20 @@ export default function PatientsTable({
                   </select>
                 </div>
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     Birthdate <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
                     value={form.birthdate}
-                    onChange={(e) => setForm((prev) => ({ ...prev, birthdate: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        birthdate: e.target.value,
+                      }))
+                    }
                     disabled={isPending}
                     className={inputClass}
                   />
@@ -622,26 +740,40 @@ export default function PatientsTable({
 
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     Phone Number
                   </label>
                   <input
                     type="tel"
                     value={form.phoneNumber}
-                    onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        phoneNumber: e.target.value,
+                      }))
+                    }
                     placeholder="e.g. 0917 123 4567"
                     disabled={isPending}
                     className={inputClass}
                   />
                 </div>
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     House Number
                   </label>
                   <input
                     type="text"
                     value={form.houseNumber}
-                    onChange={(e) => setForm((prev) => ({ ...prev, houseNumber: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        houseNumber: e.target.value,
+                      }))
+                    }
                     placeholder="e.g. 123 Rizal St."
                     disabled={isPending}
                     className={inputClass}
@@ -651,25 +783,33 @@ export default function PatientsTable({
 
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     Barangay
                   </label>
                   <input
                     type="text"
                     value={form.barangay}
-                    onChange={(e) => setForm((prev) => ({ ...prev, barangay: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, barangay: e.target.value }))
+                    }
                     disabled={isPending}
                     className={inputClass}
                   />
                 </div>
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     City
                   </label>
                   <input
                     type="text"
                     value={form.city}
-                    onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, city: e.target.value }))
+                    }
                     disabled={isPending}
                     className={inputClass}
                   />
@@ -678,25 +818,33 @@ export default function PatientsTable({
 
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     Province
                   </label>
                   <input
                     type="text"
                     value={form.province}
-                    onChange={(e) => setForm((prev) => ({ ...prev, province: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, province: e.target.value }))
+                    }
                     disabled={isPending}
                     className={inputClass}
                   />
                 </div>
                 <div>
-                  <label className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <label
+                    className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
                     Zip Code
                   </label>
                   <input
                     type="text"
                     value={form.zipCode}
-                    onChange={(e) => setForm((prev) => ({ ...prev, zipCode: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, zipCode: e.target.value }))
+                    }
                     disabled={isPending}
                     className={inputClass}
                   />
@@ -704,11 +852,15 @@ export default function PatientsTable({
               </div>
 
               {formError && (
-                <p className="m-0 text-[13px] font-semibold text-red-500">{formError}</p>
+                <p className="m-0 text-[13px] font-semibold text-red-500">
+                  {formError}
+                </p>
               )}
             </div>
 
-            <div className={`flex justify-end gap-3 mt-auto px-4 sm:px-7 py-4 border-t ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'}`}>
+            <div
+              className={`flex justify-end gap-3 mt-auto px-4 sm:px-7 py-4 border-t ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'}`}
+            >
               <button
                 onClick={() => !isPending && closeModal()}
                 disabled={isPending}
@@ -725,7 +877,11 @@ export default function PatientsTable({
                 disabled={isPending}
                 className="px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border-none transition-all bg-[#4E69D3] text-white hover:bg-[#4A6BC4] disabled:opacity-50"
               >
-                {isPending ? 'Saving...' : editingId ? 'Save Changes' : 'Add Patient'}
+                {isPending
+                  ? 'Saving...'
+                  : editingId
+                    ? 'Save Changes'
+                    : 'Add Patient'}
               </button>
             </div>
           </div>
@@ -742,12 +898,18 @@ export default function PatientsTable({
             className={`${darkMode ? 'bg-[#2d1b4e]' : 'bg-white'} rounded-2xl w-full max-w-[720px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] flex flex-col relative overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`flex justify-between items-center px-4 sm:px-7 py-4 sm:py-5 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'} border-b`}>
+            <div
+              className={`flex justify-between items-center px-4 sm:px-7 py-4 sm:py-5 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'} border-b`}
+            >
               <div className="flex flex-col">
-                <h2 className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                <h2
+                  className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                >
                   Medical History
                 </h2>
-                <span className={`text-[13px] font-poppins mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <span
+                  className={`text-[13px] font-poppins mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                >
                   {viewingPatient.name} &middot; {viewingPatient.id}
                 </span>
               </div>
@@ -763,7 +925,9 @@ export default function PatientsTable({
 
             <div className="px-4 sm:px-7 py-6 overflow-y-auto flex flex-col gap-4">
               {viewingPatient.visits.length === 0 && (
-                <p className={`m-0 text-[15px] font-poppins italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <p
+                  className={`m-0 text-[15px] font-poppins italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                >
                   No medical history recorded for this patient yet.
                 </p>
               )}
@@ -772,7 +936,9 @@ export default function PatientsTable({
               ))}
             </div>
 
-            <div className={`flex justify-end gap-3 mt-auto px-4 sm:px-7 py-4 border-t ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'}`}>
+            <div
+              className={`flex justify-end gap-3 mt-auto px-4 sm:px-7 py-4 border-t ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'}`}
+            >
               <button
                 onClick={() => setViewingPatient(null)}
                 className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${
@@ -790,7 +956,3 @@ export default function PatientsTable({
     </div>
   )
 }
-
-
-
-

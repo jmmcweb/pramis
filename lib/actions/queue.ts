@@ -1,3 +1,4 @@
+// Guarded, exported entry point: verifies the caller is an admin or staff
 'use server'
 
 import prisma from '@/lib/prisma'
@@ -14,6 +15,7 @@ export type QueueEntry = {
   service: string
   status: 'WAITING' | 'IN_CONSULTATION' | 'DONE'
   priority?: 'SENIOR' | 'PWD'
+  uploadedId?: string | null // URL or path to uploaded ID image
 }
 
 export type TodayQueues = {
@@ -22,6 +24,7 @@ export type TodayQueues = {
   priority: QueueEntry[]
 }
 
+// Extracts the full name from a user profile object.
 function profileName(profile: any): string {
   if (!profile?.lastName && !profile?.firstName) return ''
   return `${(profile.lastName || '').toUpperCase()}, ${profile.firstName || ''}${
@@ -29,6 +32,7 @@ function profileName(profile: any): string {
   }`.trim()
 }
 
+// Formats a Date object into a clock label string (e.g., "3:45 PM") in the UTC timezone.
 function clockLabel(at: Date): string {
   return at.toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -38,6 +42,7 @@ function clockLabel(at: Date): string {
   })
 }
 
+// Guarded, exported entry point: verifies the caller is an admin or staff member before returning the today's queues.
 export async function getTodayQueues(): Promise<{
   success: boolean
   message: string
@@ -55,6 +60,7 @@ export async function getTodayQueues(): Promise<{
     }
   }
 
+  // Fetches today's scheduled appointments and walk-in queues from the database. It processes the data to create a list of queue entries for scheduled visits, walk-ins, and priority patients. The function returns a success status, message, and the queues for today. If an error occurs during the database query, it logs the error and returns a failure status with empty queues.
   try {
     const { start, end } = dayRange(todayISO())
 
@@ -96,6 +102,7 @@ export async function getTodayQueues(): Promise<{
       time: clockLabel(new Date(row.appointmentAt)),
       service: row.service?.name ?? 'Consultation',
       status: row.status === 'COMPLETED' ? 'DONE' : 'WAITING',
+      uploadedId: row.user?.profile?.validId || null,
     }))
 
     const walkins: QueueEntry[] = []
@@ -119,9 +126,14 @@ export async function getTodayQueues(): Promise<{
             : row.priority === 'PWD'
               ? 'PWD'
               : undefined,
+        uploadedId: row.patient?.user?.profile?.validId || null,
       }
-      if (entry.kind === 'priority') priority.push(entry)
-      else walkins.push(entry)
+      // Priority queue: only include Senior Citizens & PWD patients
+      if (entry.kind === 'priority' && (entry.priority === 'SENIOR' || entry.priority === 'PWD')) {
+        priority.push(entry)
+      } else if (entry.kind === 'walkin') {
+        walkins.push(entry)
+      }
     }
 
     return {
@@ -139,13 +151,7 @@ export async function getTodayQueues(): Promise<{
   }
 }
 
-/**
- * Adds an existing patient (verified PTN-####) to the walk-in or priority
- * lane.
- *
- * Form fields: patientId, lane ('WALKIN'|'PRIORITY'), priority
- * ('SENIOR'|'PWD', priority lane only), serviceId (optional).
- */
+// Adds a patient to the walk-in queue based on the provided form data. It checks for user authorization (admin or staff), validates the input fields, and creates a new queue entry in the database. The function returns a success status and message indicating the result of the operation. If the patient is already in the queue or if an error occurs during the database operation, it logs the error and returns a failure status with an appropriate message.
 export async function addToQueue(_prevState: any, formData: FormData) {
   const session = await requireAdmin()
   if (!session) {
@@ -233,6 +239,7 @@ export async function addToQueue(_prevState: any, formData: FormData) {
   }
 }
 
+// Advances the status of a queue entry (scheduled or walk-in) based on its current status. It checks for user authorization (admin or staff), validates the input queue ID, and updates the status in the database. If the entry is marked as "DONE," it also updates any related scheduled appointments for the patient. The function returns a success status and message indicating the result of the operation. If an error occurs during the database update, it logs the error and returns a failure status with an appropriate message.
 export async function advanceQueueEntry(
   qid: string,
 ): Promise<{ success: boolean; message: string }> {
@@ -298,6 +305,7 @@ export async function advanceQueueEntry(
   }
 }
 
+// Marks a queue entry as "DONE" based on the provided queue ID. It checks for user authorization (admin or staff), validates the input queue ID, and updates the status in the database. The function returns a success status and message indicating the result of the operation. If an error occurs during the database update, it logs the error and returns a failure status with an appropriate message.
 export async function markQueueDone(
   qid: string,
 ): Promise<{ success: boolean; message: string }> {
@@ -321,6 +329,7 @@ export async function markQueueDone(
   }
 }
 
+// Removes a queue entry from the walk-in queue based on the provided queue ID. It checks for user authorization (admin or staff), validates the input queue ID, and deletes the entry from the database. The function returns a success status and message indicating the result of the operation. If an error occurs during the database deletion, it logs the error and returns a failure status with an appropriate message.
 export async function removeQueueEntry(
   qid: string,
 ): Promise<{ success: boolean; message: string }> {

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: 'Manage patient records',
 }
 
-const VIEWER_ROLES = ['SUPERADMIN', 'ADMIN', 'STAFF', 'MIDWIFE']
+const VIEWER_ROLES = ['SUPERADMIN', 'ADMIN', 'MEDSTAFF']
 
 export default async function ServicesPage() {
   const session = await getServerSession(authOptions)

@@ -6,12 +6,13 @@ import { getPatients } from '@/lib/actions/patients'
 import type { PatientListItem } from '@/lib/actions/patients'
 import StaffPatientsTable from '@/components/patient/StaffPatientsTable'
 
+// 
 export const metadata: Metadata = {
   title: 'Patient Records | Meditrack',
   description: 'Manage patient records',
 }
 
-const VIEWER_ROLES = ['SUPERADMIN', 'ADMIN', 'STAFF', 'MIDWIFE']
+const VIEWER_ROLES = ['SUPERADMIN', 'ADMIN', 'MEDSTAFF']
 
 export default async function PatientRecordPage() {
   const session = await getServerSession(authOptions)

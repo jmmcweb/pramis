@@ -11,8 +11,7 @@ function roleHome(role?: string): string {
     case 'SUPERADMIN':
     case 'ADMIN':
       return '/admin'
-    case 'STAFF':
-    case 'MIDWIFE':
+    case 'MEDSTAFF':
     case 'NURSE':
       return '/staff'
     case 'USER':

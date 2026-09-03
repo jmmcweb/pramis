@@ -1,5 +1,6 @@
 import type { NotificationCategory } from '@/lib/actions/notifications'
 
+// This file defines the structure and types for patient notifications in the Meditrack application. It includes the PatientNotification type, which represents a notification with properties such as id, category, title, description, time, and unread status. Additionally, it defines a mapping of notification categories to their corresponding colors for UI representation.
 export type PatientNotification = {
   id: string
   category: NotificationCategory
