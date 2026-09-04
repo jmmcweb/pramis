@@ -11,9 +11,7 @@ import { authOptions } from '@/lib/authOptions'
 import { isValidEmail } from '@/lib/helper'
 import { sanitizeUser, requireUser } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
-import {
-  patientInfoFromProfile,
-} from '@/src/data/patientInfo'
+import { normalizeSex, patientInfoFromProfile } from '@/src/data/patientInfo'
 import type { MyProfileView } from '@/src/data/patientInfo'
 
 const MIN_PASSWORD_LENGTH = 8
@@ -76,6 +74,7 @@ export const getMe = cache(async () => {
 // Converts a user object to a profile view object.
 function toProfileView(user: any): MyProfileView {
   const p = user?.profile ?? {}
+  const patient = user?.patients?.find((item: any) => !item.familyMemberId)
   return {
     referenceId: user?.id ?? '',
     email: user?.email ?? '',
@@ -86,13 +85,19 @@ function toProfileView(user: any): MyProfileView {
     birthdate: p.birthdate
       ? new Date(p.birthdate).toISOString().slice(0, 10)
       : '',
+    sex: normalizeSex(p.sex || patient?.sex),
     phoneNumber: p.phoneNumber ?? '',
     houseNumber: p.houseNumber ?? '',
     barangay: p.barangay ?? '',
     city: p.city ?? '',
     province: p.province ?? '',
     zipCode: p.zipCode ?? '',
+    purok: p.purok ?? '',
     philHealthNo: p.philHealthNo ?? '',
+    bloodType: p.bloodType ?? '',
+    religion: p.religion ?? '',
+    fathersName: p.fathersName ?? '',
+    mothersName: p.mothersName ?? '',
     membershipType: p.membershipType ?? '',
     philHealthStatus: p.philHealthStatus ?? '',
     familyMembers: Array.isArray(user?.familyMembers)
@@ -101,6 +106,21 @@ function toProfileView(user: any): MyProfileView {
           name: m.name ?? '',
           relation: m.relation ?? '',
           phone: m.phone ?? '',
+          birthdate: m.birthdate
+            ? new Date(m.birthdate).toISOString().slice(0, 10)
+            : '',
+          sex: m.sex ?? '',
+          houseNumber: m.houseNumber ?? '',
+          barangay: m.barangay ?? '',
+          city: m.city ?? '',
+          province: m.province ?? '',
+          zipCode: m.zipCode ?? '',
+          purok: m.purok ?? '',
+          philHealthNo: m.philHealthNo ?? '',
+          bloodType: m.bloodType ?? '',
+          religion: m.religion ?? '',
+          fathersName: m.fathersName ?? '',
+          mothersName: m.mothersName ?? '',
         }))
       : [],
   }
@@ -120,7 +140,11 @@ export async function getMyProfile(): Promise<{
   try {
     const user = await (prisma as any).user.findFirst({
       where: { id: session.user.id },
-      include: { profile: true, familyMembers: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        profile: true,
+        patients: { select: { familyMemberId: true, sex: true } },
+        familyMembers: { orderBy: { createdAt: 'asc' } },
+      },
     })
     if (!user) {
       return { success: false, message: 'Account not found.', profile: null }
@@ -133,14 +157,18 @@ export async function getMyProfile(): Promise<{
     }
   } catch (error) {
     console.error('[getMyProfile | Prisma | Error]:', error)
-    return { success: false, message: 'Failed to fetch profile.', profile: null }
+    return {
+      success: false,
+      message: 'Failed to fetch profile.',
+      profile: null,
+    }
   }
 }
 
 // Updates the current user's profile data in the database based on the provided form data. It checks for user authentication, validates the input fields, and updates the user's personal information and family members. The function returns a success status, message, and the updated profile view object if successful, or an appropriate error message if not authenticated or if validation fails.
 export async function updateMyProfile(
   _prevState: any,
-  formData: FormData
+  formData: FormData,
 ): Promise<{
   success: boolean
   message: string | null
@@ -159,6 +187,7 @@ export async function updateMyProfile(
   const lastName = formData.get('lastName')?.toString().trim() || ''
   const suffix = formData.get('suffix')?.toString().trim() || ''
   const birthdate = formData.get('birthdate')?.toString().trim() || ''
+  const sex = formData.get('sex')?.toString().trim() || ''
   const phoneNumber = formData.get('phoneNumber')?.toString().trim() || ''
   const email = formData.get('email')?.toString().trim().toLowerCase() || ''
   const houseNumber = formData.get('houseNumber')?.toString().trim() || ''
@@ -166,26 +195,173 @@ export async function updateMyProfile(
   const city = formData.get('city')?.toString().trim() || ''
   const province = formData.get('province')?.toString().trim() || ''
   const zipCode = formData.get('zipCode')?.toString().trim() || ''
+  const purok = formData.get('purok')?.toString().trim() || ''
   const philHealthNo = formData.get('philHealthNo')?.toString().trim() || ''
   const membershipType = formData.get('membershipType')?.toString().trim() || ''
-  const philHealthStatus = formData.get('philHealthStatus')?.toString().trim() || ''
+  const philHealthStatus =
+    formData.get('philHealthStatus')?.toString().trim() || ''
+  const bloodType = formData.get('bloodType')?.toString().trim() || ''
+  const religion = formData.get('religion')?.toString().trim() || ''
+  const fathersName = formData.get('fathersName')?.toString().trim() || ''
+  const mothersName = formData.get('mothersName')?.toString().trim() || ''
 
-  const familyNames = formData.getAll('familyName').map((v) => v.toString().trim())
-  const familyRelations = formData.getAll('familyRelation').map((v) => v.toString().trim())
-  const familyPhones = formData.getAll('familyPhone').map((v) => v.toString().trim())
-  const familyRowCount = Math.max(familyNames.length, familyRelations.length, familyPhones.length)
-  const familyRows: { name: string; relation: string; phone: string | null }[] = []
+  const familyIds = formData
+    .getAll('familyMemberId')
+    .map((v) => v.toString().trim())
+  const familyNames = formData
+    .getAll('familyName')
+    .map((v) => v.toString().trim())
+  const familyRelations = formData
+    .getAll('familyRelation')
+    .map((v) => v.toString().trim())
+  const familyPhones = formData
+    .getAll('familyPhone')
+    .map((v) => v.toString().trim())
+  const familyBirthdates = formData
+    .getAll('familyBirthdate')
+    .map((v) => v.toString().trim())
+  const familySexes = formData
+    .getAll('familySex')
+    .map((v) => v.toString().trim())
+  const familyHouseNumbers = formData
+    .getAll('familyHouseNumber')
+    .map((v) => v.toString().trim())
+  const familyBarangays = formData
+    .getAll('familyBarangay')
+    .map((v) => v.toString().trim())
+  const familyCities = formData
+    .getAll('familyCity')
+    .map((v) => v.toString().trim())
+  const familyProvinces = formData
+    .getAll('familyProvince')
+    .map((v) => v.toString().trim())
+  const familyZipCodes = formData
+    .getAll('familyZipCode')
+    .map((v) => v.toString().trim())
+  const familyPuroks = formData
+    .getAll('familyPurok')
+    .map((v) => v.toString().trim())
+  const familyPhilHealthNos = formData
+    .getAll('familyPhilHealthNo')
+    .map((v) => v.toString().trim())
+  const familyBloodTypes = formData
+    .getAll('familyBloodType')
+    .map((v) => v.toString().trim())
+  const familyReligions = formData
+    .getAll('familyReligion')
+    .map((v) => v.toString().trim())
+  const familyFathersNames = formData
+    .getAll('familyFathersName')
+    .map((v) => v.toString().trim())
+  const familyMothersNames = formData
+    .getAll('familyMothersName')
+    .map((v) => v.toString().trim())
+  const familyRowCount = Math.max(
+    familyNames.length,
+    familyRelations.length,
+    familyPhones.length,
+    familyBirthdates.length,
+    familySexes.length,
+    familyHouseNumbers.length,
+    familyBarangays.length,
+    familyCities.length,
+    familyProvinces.length,
+    familyZipCodes.length,
+    familyPuroks.length,
+    familyPhilHealthNos.length,
+    familyBloodTypes.length,
+    familyReligions.length,
+    familyFathersNames.length,
+    familyMothersNames.length,
+  )
+  const familyRows: {
+    id: string | null
+    name: string
+    relation: string
+    phone: string | null
+    birthdate: Date | null
+    sex: string | null
+    houseNumber: string | null
+    barangay: string | null
+    city: string | null
+    province: string | null
+    zipCode: string | null
+    purok: string | null
+    philHealthNo: string | null
+    bloodType: string | null
+    religion: string | null
+    fathersName: string | null
+    mothersName: string | null
+  }[] = []
   let familyError: string | null = null
   for (let i = 0; i < familyRowCount; i++) {
     const name = familyNames[i] ?? ''
     const relation = familyRelations[i] ?? ''
     const phone = familyPhones[i] ?? ''
-    if (!name && !relation && !phone) continue
+    const birthdate = familyBirthdates[i] ?? ''
+    const sex = familySexes[i] ?? ''
+    const houseNumber = familyHouseNumbers[i] ?? ''
+    const barangay = familyBarangays[i] ?? ''
+    const city = familyCities[i] ?? ''
+    const province = familyProvinces[i] ?? ''
+    const zipCode = familyZipCodes[i] ?? ''
+    const familyPurok = familyPuroks[i] ?? ''
+    const philHealthNo = familyPhilHealthNos[i] ?? ''
+    const familyBloodType = familyBloodTypes[i] ?? ''
+    const familyReligion = familyReligions[i] ?? ''
+    const familyFathersName = familyFathersNames[i] ?? ''
+    const familyMothersName = familyMothersNames[i] ?? ''
+    if (
+      !name &&
+      !relation &&
+      !phone &&
+      !birthdate &&
+      !sex &&
+      !houseNumber &&
+      !barangay &&
+      !city &&
+      !province &&
+      !zipCode &&
+      !familyPurok &&
+      !philHealthNo &&
+      !familyBloodType &&
+      !familyReligion &&
+      !familyFathersName &&
+      !familyMothersName
+    ) {
+      continue
+    }
     if (!name || !relation) {
       familyError = 'Each family member needs at least a name and a relation.'
       break
     }
-    familyRows.push({ name, relation, phone: phone || null })
+    let parsedBirthdate: Date | null = null
+    if (birthdate) {
+      parsedBirthdate = new Date(`${birthdate}T00:00:00.000Z`)
+      if (Number.isNaN(parsedBirthdate.getTime())) {
+        familyError = `Please provide a valid date of birth for ${name}.`
+        break
+      }
+    }
+    familyRows.push({
+      id: familyIds[i] || null,
+      name,
+      relation,
+      phone: phone || null,
+      birthdate: parsedBirthdate,
+      sex: sex || null,
+      houseNumber: houseNumber || null,
+      barangay: barangay || null,
+      city: city || null,
+      province: province || null,
+      zipCode: zipCode || null,
+      purok: familyPurok || null,
+      philHealthNo: philHealthNo || null,
+      bloodType: familyBloodType || null,
+      religion: familyReligion || null,
+      fathersName: familyFathersName || null,
+      mothersName: familyMothersName || null,
+    })
   }
 
   let errors: Record<string, string> = {}
@@ -249,17 +425,46 @@ export async function updateMyProfile(
       lastName,
       suffix: suffix || null,
       birthdate: parsedBirthdate,
+      sex: sex || null,
       phoneNumber,
       houseNumber,
       barangay,
       city,
       province,
       zipCode,
+      purok: purok || null,
       philHealthNo: philHealthNo || null,
       membershipType: membershipType || null,
       philHealthStatus: philHealthStatus || null,
+      bloodType: bloodType || null,
+      religion: religion || null,
+      fathersName: fathersName || null,
+      mothersName: mothersName || null,
       updatedAt: new Date(),
     }
+
+    const existingFamilyMembers = await (prisma as any).familyMember.findMany({
+      where: { userId: id },
+      select: { familymemberid: true },
+    })
+    const existingFamilyMemberIds = new Set(
+      existingFamilyMembers.map((member: any) => member.familymemberid),
+    )
+    const retainedFamilyMemberIds = familyRows
+      .map((member) => member.id)
+      .filter((memberId): memberId is string =>
+        Boolean(memberId && existingFamilyMemberIds.has(memberId)),
+      )
+    const familyUpdates = await Promise.all(
+      familyRows.map(async (member) => {
+        const familymemberid =
+          member.id && existingFamilyMemberIds.has(member.id)
+            ? member.id
+            : await nextReferenceId('FAM')
+        const { id: _id, ...data } = member
+        return { familymemberid, data }
+      }),
+    )
 
     await (prisma as any).$transaction([
       (prisma as any).userProfile.upsert({
@@ -275,25 +480,31 @@ export async function updateMyProfile(
         where: { id },
         data: { email, updatedAt: new Date() },
       }),
-      (prisma as any).familyMember.deleteMany({ where: { userId: id } }),
-      ...(familyRows.length
-        ? [
-            (prisma as any).familyMember.createMany({
-              data: await Promise.all(
-                familyRows.map(async (m) => ({
-                  familymemberid: await nextReferenceId('FAM'),
-                  userId: id,
-                  ...m,
-                })),
-              ),
-            }),
-          ]
-        : []),
+      (prisma as any).familyMember.deleteMany({
+        where: {
+          userId: id,
+          ...(retainedFamilyMemberIds.length
+            ? { familymemberid: { notIn: retainedFamilyMemberIds } }
+            : {}),
+          appointments: { none: {} },
+          patients: { none: {} },
+        },
+      }),
+      ...familyUpdates.map(({ familymemberid, data }) =>
+        (prisma as any).familyMember.upsert({
+          where: { familymemberid },
+          update: data,
+          create: { familymemberid, userId: id, ...data },
+        }),
+      ),
     ])
 
     const fresh = await (prisma as any).user.findFirst({
       where: { id },
-      include: { profile: true, familyMembers: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        profile: true,
+        familyMembers: { orderBy: { createdAt: 'asc' } },
+      },
     })
 
     return {
@@ -345,7 +556,6 @@ export async function updateMe(_prevState: any, formData: FormData) {
         errors[key] = `${label} is required.`
       }
     })
-
 
     if (email && !isValidEmail(email)) {
       errors['email'] = 'Please enter a valid email address.'

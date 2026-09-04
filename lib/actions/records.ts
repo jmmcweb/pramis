@@ -24,7 +24,6 @@ function staffRoleLabel(role: string | null | undefined): string {
   return 'Medical Staff'
 }
 
-
 function initialsOf(name: string): string {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'
@@ -77,16 +76,39 @@ export async function getMyMedicalRecords(): Promise<{
       const isSelf = !p.familyMemberId
       const name = isSelf
         ? ownerName
-        : p.familyMember?.name ?? 'Family Member'
+        : (p.familyMember?.name ?? 'Family Member')
       const relation = isSelf
         ? 'Account Holder'
-        : p.familyMember?.relation ?? 'Family'
+        : (p.familyMember?.relation ?? 'Family')
+      const profileInfo = isSelf ? user.profile : p.familyMember
+
+      // Helper to format date to YYYY-MM-DD string
+      const fmtDate = (d: any) => {
+        if (!d) return undefined
+        const date = new Date(d)
+        if (Number.isNaN(date.getTime())) return undefined
+        return date.toISOString().slice(0, 10)
+      }
 
       const records: MedicalRecord[] = (p.appointments ?? [])
         .filter((a: any) => a.medicalHistory)
         .map((a: any) => {
           const mh = a.medicalHistory
           const staff = mh.checkedBy
+
+          // Extract the ITR snapshot (patient demographics filled during the
+          // ITR consultation) when present so the record carries the full
+          // profile for PDF / view rendering.
+          const itr: Record<string, string> =
+            mh.itrData &&
+            typeof mh.itrData === 'object' &&
+            !Array.isArray(mh.itrData)
+              ? (Object.fromEntries(
+                  Object.entries(mh.itrData as Record<string, unknown>).map(
+                    ([k, v]) => [k, v == null ? '' : String(v)],
+                  ),
+                ) as Record<string, string>)
+              : {}
           return {
             id: mh.medhisid,
             date: new Date(mh.checkedDate).toLocaleDateString('en-US', {
@@ -100,13 +122,107 @@ export async function getMyMedicalRecords(): Promise<{
               : 'Health Staff',
             role: staffRoleLabel(staff?.role),
             condition: mh.status || undefined,
+            // ITR patient profile (from the saved ITR snapshot)
+            lastName: itr.lastName || profileInfo?.lastName || undefined,
+            firstName: itr.firstName || profileInfo?.firstName || undefined,
+            middleName: itr.middleName || profileInfo?.middleName || undefined,
+            suffix: itr.suffix || profileInfo?.suffix || undefined,
+            birthday:
+              itr.birthday || fmtDate(profileInfo?.birthdate) || undefined,
+            age: itr.age || undefined,
+            sex: itr.sex || profileInfo?.sex || undefined,
+            civilStatus: itr.civilStatus || undefined,
+            birthplace: itr.birthplace || undefined,
+            bloodType: itr.bloodType || profileInfo?.bloodType || undefined,
+            religion: itr.religion || profileInfo?.religion || undefined,
+            contactNumber:
+              itr.contactNumber || profileInfo?.phoneNumber || undefined,
+            address:
+              itr.address ||
+              [
+                profileInfo?.houseNumber,
+                profileInfo?.purok,
+                profileInfo?.barangay,
+                profileInfo?.city,
+                profileInfo?.province,
+              ]
+                .filter(Boolean)
+                .join(', ') ||
+              undefined,
+            fathersName:
+              itr.fathersName || profileInfo?.fathersName || undefined,
+            mothersName:
+              itr.mothersName || profileInfo?.mothersName || undefined,
+            spouseName: itr.spouseName || undefined,
+            maidenName: itr.maidenName || undefined,
+            educationalAttainment: itr.educationalAttainment || undefined,
+            philHealthNo: itr.philHealthNo || undefined,
+            memberName: itr.memberName || undefined,
+            memberBirthday: itr.memberBirthday || undefined,
+            memberDependent: itr.memberDependent || undefined,
+            familyMemberRole: itr.familyMemberRole || undefined,
+            // Female patient health
+            ageOfMenarche: itr.ageOfMenarche || undefined,
+            lmp: itr.lmp || undefined,
+            gravidity: itr.gravidity || undefined,
+            edc: itr.edc || undefined,
+            parityFullTerm: itr.parityFullTerm || undefined,
+            parityPreterm: itr.parityPreterm || undefined,
+            parityAbortion: itr.parityAbortion || undefined,
+            parityLivebirth: itr.parityLivebirth || undefined,
+            // Consent
+            consentPatientName: itr.consentPatientName || undefined,
+            consentDate: itr.consentDate || undefined,
+            consentRepresentative: itr.consentRepresentative || undefined,
+            // Vital signs
             bloodPressure: mh.bloodPressure || undefined,
+            heartRate: mh.heartRate != null ? String(mh.heartRate) : undefined,
+            respiratoryRate:
+              mh.respiratoryRate != null
+                ? String(mh.respiratoryRate)
+                : undefined,
+            temperature:
+              mh.temperature != null ? String(mh.temperature) : undefined,
             oxygenLevel:
               mh.oxygenLevel != null ? String(mh.oxygenLevel) : undefined,
             height: mh.height != null ? String(mh.height) : undefined,
             weight: mh.weight != null ? String(mh.weight) : undefined,
+            // Clinical info
+            chiefComplaints: mh.chiefComplaints || undefined,
             diagnosis: mh.diagnosis,
-            prescription: mh.recommendation || 'No prescription',
+            medications: mh.medications || undefined,
+            prescription: mh.recommendation || undefined,
+            // Child birth details
+            birthLength:
+              mh.birthLength != null ? String(mh.birthLength) : undefined,
+            birthWeight:
+              mh.birthWeight != null ? String(mh.birthWeight) : undefined,
+            placeDelivered: mh.placeDelivered || undefined,
+            typeOfDelivery: mh.typeOfDelivery || undefined,
+            attendantAtBirth: mh.attendantAtBirth || undefined,
+            // Immunization records
+            immBcg: fmtDate(mh.immBcg),
+            immHepab24: fmtDate(mh.immHepab24),
+            immHepab24plus: fmtDate(mh.immHepab24plus),
+            immPenta1: fmtDate(mh.immPenta1),
+            immPenta2: fmtDate(mh.immPenta2),
+            immPenta3: fmtDate(mh.immPenta3),
+            immOpv1: fmtDate(mh.immOpv1),
+            immOpv2: fmtDate(mh.immOpv2),
+            immOpv3: fmtDate(mh.immOpv3),
+            immRota1: fmtDate(mh.immRota1),
+            immRota2: fmtDate(mh.immRota2),
+            immPcv1: fmtDate(mh.immPcv1),
+            immPcv2: fmtDate(mh.immPcv2),
+            immPcv3: fmtDate(mh.immPcv3),
+            immMcv1: fmtDate(mh.immMcv1),
+            immMcv2: fmtDate(mh.immMcv2),
+            immHepab2: fmtDate(mh.immHepab2),
+            immHepab3: fmtDate(mh.immHepab3),
+            immHepaa: fmtDate(mh.immHepaa),
+            immPneumonia: fmtDate(mh.immPneumonia),
+            immInfluenza: fmtDate(mh.immInfluenza),
+            immOthers: fmtDate(mh.immOthers),
             icon: iconForService(a.service?.name ?? ''),
           }
         })
@@ -139,6 +255,10 @@ export async function getMyMedicalRecords(): Promise<{
     return { success: true, message: 'Records fetched.', members }
   } catch (error) {
     console.error('[getMyMedicalRecords | Prisma | Error]:', error)
-    return { success: false, message: 'Failed to fetch medical records.', members: [] }
+    return {
+      success: false,
+      message: 'Failed to fetch medical records.',
+      members: [],
+    }
   }
 }

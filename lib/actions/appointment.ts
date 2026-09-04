@@ -18,6 +18,9 @@ import {
   slotIdToDate,
   todayISO,
   dayRange,
+  isServiceAvailableOnDate,
+  extractPatientItrInfo,
+  toMedicalRecordSummary,
 } from '@/config/appointment'
 import type {
   ServiceView,
@@ -234,6 +237,103 @@ export async function getMyAppointments(): Promise<{
   }
 }
 
+// Fetches a full appointment view for staff to complete the ITR.
+export async function getMyAppointmentForItr(appointmentId: string): Promise<{
+  success: boolean
+  message: string
+  appointment: ScheduleAppointmentView | null
+}> {
+  const session = await requireUser()
+  if (!session) {
+    return { success: false, message: 'Unauthorized', appointment: null }
+  }
+  if (
+    !['SUPERADMIN', 'ADMIN', 'MEDSTAFF'].includes(
+      String(session.user.role ?? ''),
+    )
+  ) {
+    return {
+      success: false,
+      message: 'Only admin or medical staff may view this record.',
+      appointment: null,
+    }
+  }
+
+  try {
+    const row = await (prisma as any).appointment.findFirst({
+      where: { appointmentid: appointmentId },
+      include: {
+        service: true,
+        patient: true,
+        familyMember: true,
+        user: { include: { profile: true } },
+        medicalHistory: true,
+      },
+    })
+
+    if (!row) {
+      return {
+        success: false,
+        message: 'Appointment not found.',
+        appointment: null,
+      }
+    }
+    if (['CANCELLED', 'NO_SHOW'].includes(row.status)) {
+      return {
+        success: false,
+        message: 'This appointment cannot be recorded.',
+        appointment: null,
+      }
+    }
+
+    const at = new Date(row.appointmentAt)
+    const profile = row.user?.profile
+    const name = row.familyMember
+      ? row.familyMember.name
+      : profile
+        ? `${(profile.lastName || '').toUpperCase()}, ${profile.firstName || ''}${
+            profile.middleName ? ' ' + profile.middleName : ''
+          }`.trim()
+        : row.user?.email || 'Patient'
+
+    return {
+      success: true,
+      message: 'Appointment fetched.',
+      appointment: {
+        id: row.appointmentid,
+        patientName: name,
+        patientReference: row.user?.id || '',
+        email: row.user?.email || '',
+        serviceName: row.service?.name ?? 'Service',
+        dateISO: `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, '0')}-${String(at.getUTCDate()).padStart(2, '0')}`,
+        dateLabel: at.toLocaleDateString('en-US', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }),
+        timeLabel: getSlotLabel(
+          `${String(at.getUTCHours()).padStart(2, '0')}:00`,
+        ),
+        status: row.status,
+        patientInfo: extractPatientItrInfo(row),
+        hasMedicalRecord: Boolean(row.medicalHistory),
+        medicalRecord: row.medicalHistory
+          ? toMedicalRecordSummary(row.medicalHistory)
+          : null,
+      },
+    }
+  } catch (error) {
+    console.error('[getMyAppointmentForItr | Prisma | Error]:', error)
+    return {
+      success: false,
+      message: 'Failed to fetch appointment.',
+      appointment: null,
+    }
+  }
+}
+
 // Books an appointment for the signed-in user.
 export async function bookAppointment(_prevState: any, formData: FormData) {
   const session = await requireUser()
@@ -266,13 +366,47 @@ export async function bookAppointment(_prevState: any, formData: FormData) {
   try {
     const account = await (prisma as any).user.findFirst({
       where: { id: session.user.id },
-      select: { status: true },
+      select: {
+        status: true,
+        profile: {
+          select: {
+            firstName: true,
+            lastName: true,
+            birthdate: true,
+            phoneNumber: true,
+            houseNumber: true,
+            barangay: true,
+            city: true,
+            province: true,
+            zipCode: true,
+          },
+        },
+      },
     })
     if (!account || account.status !== 'ACTIVE') {
       return {
         success: false,
         message:
           'Your account is not approved yet. You can book once an admin activates your account.',
+      }
+    }
+    const profile = account.profile
+    const missingProfileField = [
+      profile?.firstName,
+      profile?.lastName,
+      profile?.birthdate,
+      profile?.phoneNumber,
+      profile?.houseNumber,
+      profile?.barangay,
+      profile?.city,
+      profile?.province,
+      profile?.zipCode,
+    ].some((value) => !value)
+    if (missingProfileField) {
+      return {
+        success: false,
+        message:
+          'Complete your personal information once in Profile before booking an appointment.',
       }
     }
     const service = await (prisma as any).service.findUnique({
@@ -288,6 +422,14 @@ export async function bookAppointment(_prevState: any, formData: FormData) {
       return {
         success: false,
         message: 'This service is currently unavailable.',
+      }
+    }
+
+    const serviceMeta = parseServiceMeta(service.description)
+    if (!isServiceAvailableOnDate(serviceMeta.subtitle, dateISO)) {
+      return {
+        success: false,
+        message: `This service is only available on ${serviceMeta.subtitle}. Please choose another date.`,
       }
     }
 
@@ -338,7 +480,6 @@ export async function bookAppointment(_prevState: any, formData: FormData) {
           : 'You already have an appointment booked for this date and time.',
       }
     }
-
 
     const created = await (prisma as any).appointment.create({
       data: {
@@ -416,9 +557,7 @@ export async function cancelAppointment(
     const isAdmin = ['SUPERADMIN', 'ADMIN'].includes(
       (session.user.role as string) ?? '',
     )
-    const isStaff = ['MEDSTAFF'].includes(
-      (session.user.role as string) ?? '',
-    )
+    const isStaff = ['MEDSTAFF'].includes((session.user.role as string) ?? '')
     if (appointment.userId !== session.user.id && !isAdmin && !isStaff) {
       return {
         success: false,
@@ -489,6 +628,7 @@ export async function getScheduleAppointments(): Promise<{
       orderBy: { appointmentAt: 'asc' },
       include: {
         service: true,
+        patient: true,
         familyMember: true,
         user: { include: { profile: true } },
         medicalHistory: true,
@@ -524,17 +664,10 @@ export async function getScheduleAppointments(): Promise<{
           `${String(at.getUTCHours()).padStart(2, '0')}:00`,
         ),
         status: row.status,
+        patientInfo: extractPatientItrInfo(row),
         hasMedicalRecord: Boolean(row.medicalHistory),
         medicalRecord: row.medicalHistory
-          ? {
-              status: row.medicalHistory.status ?? '',
-              bloodPressure: row.medicalHistory.bloodPressure ?? '',
-              oxygenLevel: String(row.medicalHistory.oxygenLevel ?? ''),
-              height: String(row.medicalHistory.height ?? ''),
-              weight: String(row.medicalHistory.weight ?? ''),
-              diagnosis: row.medicalHistory.diagnosis ?? '',
-              recommendation: row.medicalHistory.recommendation ?? '',
-            }
+          ? toMedicalRecordSummary(row.medicalHistory)
           : null,
       }
     })

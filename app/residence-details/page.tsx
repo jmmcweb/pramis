@@ -104,40 +104,53 @@ const ResidenceDetails = () => {
         />
 
         <div className="field">
-          <span className="auth-label">
+          <label className="auth-label" htmlFor="purok">
             Purok<span className="text-brand"> *</span>
-          </span>
+          </label>
           <div className={`auth-box ${errors.purok ? 'has-errors' : ''}`}>
             <select
+              id="purok"
               name="purok"
               value={purok}
-              onChange={(e) => setPurok(e.target.value)}
+              onChange={(e) => {
+                setPurok(e.target.value)
+                if (errors.purok) setErrors((prev) => ({ ...prev, purok: '' }))
+              }}
               required
-              className="w-full bg-transparent text-[15px] text-ink outline-none cursor-pointer appearance-none py-3"
+              className="auth-input cursor-pointer appearance-none pr-6"
             >
-              <option value="" disabled>
-                Select Purok
-              </option>
+              {purokOptions.length === 0 ? (
+                <option value="" disabled>
+                  Loading puroks…
+                </option>
+              ) : (
+                <option value="" disabled>
+                  Select purok
+                </option>
+              )}
               {purokOptions.map((option) => (
-                <option key={option} value={option}>
+                <option key={option} value={option} className="text-ink">
                   {option}
                 </option>
               ))}
             </select>
-            <ChevronDown size={15} className="text-slate pointer-events-none" />
+            <ChevronDown
+              size={15}
+              className="text-slate pointer-events-none shrink-0"
+            />
           </div>
           {errors.purok && <p className="error">{errors.purok}</p>}
         </div>
 
-        <Field
-          label="Barangay"
-          name="barangay"
-          value={lockedBarangay}
-          readOnly
-          className="opacity-70"
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Locked address fields */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field
+            label="Barangay"
+            name="barangay"
+            value={lockedBarangay}
+            readOnly
+            className="opacity-70"
+          />
           <Field
             label="City / Municipality"
             name="city"
@@ -154,22 +167,23 @@ const ResidenceDetails = () => {
           />
         </div>
 
-        <Field
-          label="ZIP / Postal code"
-          name="zip"
-          inputMode="numeric"
-          value={lockedZip}
-          readOnly
-          className="opacity-70"
-        />
-
-        <Field
-          label="Country"
-          name="country"
-          value={lockedCountry}
-          readOnly
-          className="opacity-70"
-        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field
+            label="ZIP / Postal code"
+            name="zip"
+            inputMode="numeric"
+            value={lockedZip}
+            readOnly
+            className="opacity-70"
+          />
+          <Field
+            label="Country"
+            name="country"
+            value={lockedCountry}
+            readOnly
+            className="opacity-70"
+          />
+        </div>
 
         <button type="submit" className="btn btn--primary mt-1">
           Next

@@ -2,20 +2,24 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ChevronDown, Eye, EyeOff, X } from 'lucide-react'
+import { Check, Eye, EyeOff, X } from 'lucide-react'
 import AuthShell from '@/components/auth/AuthShell'
 import Field from '@/components/auth/Field'
 import { useSignup } from '@/store/useSignup'
 
-const countries = [
-  { name: 'Philippines', code: '+63', flag: '/ph.png' },
-  { name: 'United States', code: '+1', flag: '/us.png' },
-  { name: 'Canada', code: '+1', flag: '/ca.png' },
-  { name: 'United Kingdom', code: '+44', flag: '/gb.png' },
-  { name: 'China', code: '+86', flag: '/cn.png' },
-]
-
 type Errors = Record<string, string>
+
+// PH mobile numbers only: 10 digits starting with 9, displayed as 917 123 4567.
+const formatMobile = (raw: string) => {
+  let digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('0')) digits = digits.replace(/^0+/, '')
+  digits = digits.slice(0, 10)
+  return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 10)]
+    .filter(Boolean)
+    .join(' ')
+}
+
+const mobileDigits = (value: string) => value.replace(/\D/g, '')
 
 const Signup = () => {
   const setPersonal = useSignup((state) => state.setPersonal)
@@ -23,13 +27,13 @@ const Signup = () => {
 
   const formRef = useRef<HTMLFormElement>(null)
 
-  const [selectedCountry, setSelectedCountry] = useState(countries[0])
-  const [isOpen, setIsOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
   const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [suffix, setSuffix] = useState('')
   const [birthday, setBirthday] = useState('')
   const [gender, setGender] = useState('')
   const [mobile, setMobile] = useState('')
@@ -103,6 +107,8 @@ const Signup = () => {
     if (!birthday) nextErrors.birthday = 'Select your birthday.'
     if (!gender) nextErrors.gender = 'Select a gender.'
     if (!mobile.trim()) nextErrors.mobile = 'Enter your mobile number.'
+    else if (!/^9\d{9}$/.test(mobileDigits(mobile)))
+      nextErrors.mobile = 'Enter a valid PH mobile number (e.g. 917 123 4567).'
     if (!email.trim()) nextErrors.email = 'Enter your email address.'
     else if (!/\S+@\S+\.\S+/.test(email))
       nextErrors.email = 'Enter a valid email address.'
@@ -123,11 +129,13 @@ const Signup = () => {
 
     setPersonal({
       firstName,
+      middleName,
       lastName,
+      suffix,
       birthday,
       gender,
-      countryCode: selectedCountry.code,
-      mobile,
+      countryCode: '+63',
+      mobile: mobileDigits(mobile),
       email,
       password,
     })
@@ -144,7 +152,8 @@ const Signup = () => {
         cardClassName="lg:max-w-2xl"
       >
       <form ref={formRef} onSubmit={handleNext} noValidate className="flex flex-col gap-3.5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {/* Row 1 — legal name */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Field
             label="First name"
             name="firstName"
@@ -154,6 +163,15 @@ const Signup = () => {
             error={errors.firstName}
             autoComplete="given-name"
             required
+          />
+          <Field
+            label="Middle name"
+            name="middleName"
+            placeholder="Michael"
+            value={middleName}
+            onChange={(e) => setMiddleName(e.target.value)}
+            error={errors.middleName}
+            autoComplete="additional-name"
           />
           <Field
             label="Last name"
@@ -166,6 +184,19 @@ const Signup = () => {
             required
           />
           <Field
+            label="Suffix"
+            name="suffix"
+            placeholder="Jr."
+            value={suffix}
+            onChange={(e) => setSuffix(e.target.value)}
+            error={errors.suffix}
+            autoComplete="honorific-suffix"
+          />
+        </div>
+
+        {/* Row 2 — birthday, gender, mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Field
             label="Birthday"
             name="birthday"
             type="date"
@@ -174,14 +205,11 @@ const Signup = () => {
             error={errors.birthday}
             required
           />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="field">
             <span className="auth-label">
               Gender<span className="text-brand"> *</span>
             </span>
-            <div className="flex items-center gap-6 pt-1.5">
+            <div className="flex items-center gap-5 pt-1.5">
               {['Male', 'Female'].map((option) => (
                 <label
                   key={option}
@@ -201,54 +229,33 @@ const Signup = () => {
             {errors.gender && <p className="error">{errors.gender}</p>}
           </div>
 
-          <div className="relative lg:col-span-2">
+          <div className="lg:col-span-2">
           <Field
             label="Mobile number"
             name="mobile"
             placeholder="917 123 4567"
             inputMode="tel"
             value={mobile}
-            onChange={(e) => setMobile(e.target.value)}
+            onChange={(e) => {
+              setMobile(formatMobile(e.target.value))
+              if (errors.mobile) setErrors((prev) => ({ ...prev, mobile: '' }))
+            }}
             error={errors.mobile}
             autoComplete="tel-national"
+            maxLength={12}
             required
             leading={
-              <button
-                type="button"
-                onClick={() => setIsOpen((v) => !v)}
-                aria-label="Select country code"
-                className="flex items-center gap-1.5 bg-transparent p-1 pt-1.5 text-ink cursor-pointer"
+              <span
+                aria-label="Philippine country code"
+                className="flex items-center gap-1.5 pt-1.5 select-none"
               >
-                <img src={selectedCountry.flag} alt="" className="w-6 h-4 object-cover" />
-                <span className="font-inter text-[15px] font-bold tracking-wide">
-                  {selectedCountry.code}
+                <img src="/ph.png" alt="" className="w-6 h-4 object-cover" />
+                <span className="font-inter text-[15px] font-bold tracking-wide text-slate">
+                  +63
                 </span>
-                <ChevronDown size={14} className="text-slate" />
-              </button>
+              </span>
             }
           />
-
-          {isOpen && (
-            <div className="absolute left-0 top-full mt-1 w-full bg-white border border-line rounded-[3px] shadow-xl z-50 py-1">
-              {countries.map((country) => (
-                <button
-                  key={country.name}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCountry(country)
-                    setIsOpen(false)
-                  }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 bg-white hover:bg-mist transition-colors cursor-pointer"
-                >
-                  <img src={country.flag} alt="" className="w-6 h-4 object-cover" />
-                  <span className="text-[14px] text-ink">{country.name}</span>
-                  <span className="ml-auto font-inter text-[13px] font-bold text-slate">
-                    {country.code}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
           </div>
         </div>
 

@@ -23,15 +23,11 @@ export default async function RecordsPage() {
   if (!access) redirect('/login')
   const allowed = access.approved
 
-  const recordsResult = allowed
-    ? await getMyMedicalRecords()
-    : null
+  const recordsResult = allowed ? await getMyMedicalRecords() : null
 
   return (
     <>
-      <section
-        className="min-h-dvh bg-cover bg-center bg-no-repeat lg:ml-[360px] bg-[url('/purplebackground.png')] dark:bg-none dark:bg-[#050617]"
-      >
+      <section className="min-h-dvh bg-cover bg-center bg-no-repeat lg:ml-[360px] bg-[url('/purplebackground.png')] dark:bg-none dark:bg-[#050617]">
         <PatientHeader />
 
         <div className="max-w-md mx-auto pb-32 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl">
@@ -39,14 +35,14 @@ export default async function RecordsPage() {
             {allowed ? (
               <>
                 <div className="bg-white dark:bg-card rounded-3xl shadow-card p-5">
-                  {/* The account's own reference ID (USR-####). */}
-                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-widest">
-                    {session.user.id}
-                  </p>
-                  <h1 className="text-3xl font-bold text-brand mt-1">Your Medical Records</h1>
+                  <h1 className="text-3xl font-bold text-brand mt-1">
+                    Your Medical Records
+                  </h1>
                 </div>
 
-                <MedicalRecordsTimeline members={recordsResult?.members ?? []} />
+                <MedicalRecordsTimeline
+                  members={recordsResult?.members ?? []}
+                />
               </>
             ) : (
               <AccountStatusScreen status={access.status} />

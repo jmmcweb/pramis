@@ -176,7 +176,9 @@ const SendCodeButton = ({
 const VerificationPage = () => {
   const {
     firstName,
+    middleName,
     lastName,
+    suffix,
     birthday,
     gender,
     countryCode,
@@ -268,7 +270,9 @@ const VerificationPage = () => {
     mobile: string
     password: string
     firstName: string
+    middleName: string
     lastName: string
+    suffix: string
     birthday: string
     gender: string
     street: string
@@ -352,7 +356,9 @@ const VerificationPage = () => {
       mobile: `${countryCode} ${mobile}`,
       password,
       firstName,
+      middleName,
       lastName,
+      suffix,
       birthday,
       gender,
       street,

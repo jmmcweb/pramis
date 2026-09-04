@@ -72,12 +72,18 @@ middleName    String?
 lastName      String   
 suffix        String?   
 birthdate     DateTime   
+sex           String?
 phoneNumber   String   
 houseNumber   String   
 barangay      String   
 city          String   
 province      String   
-zipCode       String   
+  zipCode       String
+  purok         String?
+  bloodType     String?
+  religion      String?
+  fathersName   String?
+  mothersName   String?
 validId       String?   
 validIdType    String?
 
@@ -95,6 +101,19 @@ model FamilyMember {
   name           String
   relation       String
   phone          String?
+  birthdate      DateTime?
+  sex            String?
+  houseNumber    String?
+  barangay       String?
+  city           String?
+  province       String?
+  zipCode        String?
+  purok          String?
+  philHealthNo   String?
+  bloodType      String?
+  religion       String?
+  fathersName    String?
+  mothersName    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -163,6 +182,11 @@ barangay      String?
 city          String?
 province      String?
 zipCode       String?
+purok         String?
+  bloodType     String?
+  religion      String?
+  fathersName   String?
+  mothersName   String?
 createdAt     DateTime    @default(now())   
 updatedAt     DateTime    @updatedAt   
  user User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -197,11 +221,47 @@ appointmentId  String     @unique
 checkedById    String?    
 status         String   
 bloodPressure  String   
+heartRate      Decimal?   @db.Decimal(5,2)   
+respiratoryRate Decimal?  @db.Decimal(5,2)   
+temperature    Decimal?   @db.Decimal(4,2)   
 height         Decimal    @db.Decimal(5,2)   
 weight         Decimal    @db.Decimal(5,2)   
-oxygenLevel    Decimal    @db.Decimal(5,2)   
+oxygenLevel    Decimal?   @db.Decimal(5,2)   
+chiefComplaints String?  
 diagnosis      String   
-recommendation String?   
+medications    String?   
+recommendation String?
+// Child immunization records (stored as dates)
+immBcg         DateTime?
+immHepab24     DateTime?
+immHepab24plus DateTime?
+immPenta1      DateTime?
+immPenta2      DateTime?
+immPenta3      DateTime?
+immOpv1        DateTime?
+immOpv2        DateTime?
+immOpv3        DateTime?
+immRota1       DateTime?
+immRota2       DateTime?
+immPcv1        DateTime?
+immPcv2        DateTime?
+immPcv3        DateTime?
+immMcv1        DateTime?
+immMcv2        DateTime?
+immHepab2      DateTime?
+immHepab3      DateTime?
+immHepaa       DateTime?
+immPneumonia   DateTime?
+immInfluenza   DateTime?
+immOthers      DateTime?
+// Child birth details
+placeDelivered String?
+placeDeliveredOthers String?
+typeOfDelivery String?
+birthLength    Decimal?   @db.Decimal(5,2)
+birthWeight    Decimal?   @db.Decimal(5,2)
+attendantAtBirth String?   
+itrData        Json?   
 checkedDate    DateTime   
 createdAt      DateTime   @default(now())   
 updatedAt      DateTime   @updatedAt  
@@ -246,4 +306,5 @@ updatedAt     DateTime    @updatedAt
  patient Patient           @relation(fields: [patientId], references: [patientid])
  service Service?          @relation(fields: [serviceId], references: [serviceid])
 }
+
 

@@ -16,6 +16,8 @@ type BaseUser = {
   password: string
   role: UserRole
   dateJoined: string
+  middleName?: string | null
+  suffix?: string | null
 }
 
 type StaffUser = BaseUser & {
@@ -246,7 +248,15 @@ function dateKey(value: string) {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-const fullName = (u: AnyUser) => `${u.lastName}, ${u.firstName}`
+// "Dela Cruz, Juan M. Jr." — middle name collapses to an initial when present.
+const fullName = (u: AnyUser) => {
+  const middle = u.middleName?.trim()
+  const initial = middle ? `${middle[0].toUpperCase()}.` : ''
+  const suffix = u.suffix?.trim() || ''
+  return `${u.lastName}, ${u.firstName}${initial ? ` ${initial}` : ''}${
+    suffix ? ` ${suffix}` : ''
+  }`
+}
 
 const ROLE_COLORS: Record<UserRole, { badge: string; darkBadge: string }> = {
   Admin: {
@@ -265,7 +275,9 @@ const ROLE_COLORS: Record<UserRole, { badge: string; darkBadge: string }> = {
 
 type EditForm = {
   firstName: string
+  middleName: string
   lastName: string
+  suffix: string
   username: string
   email: string
   password: string
@@ -296,9 +308,6 @@ export default function UserManagementPage() {
   const [viewingPatient, setViewingPatient] = useState<PatientUser | null>(null)
   const [deleting, setDeleting] = useState<AnyUser | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
-  const [revealedPasswords, setRevealedPasswords] = useState<
-    Record<string, boolean>
-  >({})
   const [adding, setAdding] = useState(false)
   const [addForm, setAddForm] = useState<AddAccountForm>({
     firstName: '',
@@ -324,6 +333,18 @@ export default function UserManagementPage() {
             ...user,
             databaseId: user.id,
             dateJoined: user.dateJoined.slice(0, 10),
+            // Hoist profile name fields so list/search/fullName can use them.
+            middleName:
+              user.middleName ??
+              ((user as any).profile?.middleName as
+                | string
+                | null
+                | undefined) ??
+              null,
+            suffix:
+              user.suffix ??
+              ((user as any).profile?.suffix as string | null | undefined) ??
+              null,
           })),
         )
       })
@@ -383,25 +404,12 @@ export default function UserManagementPage() {
 
   const staffTable = paginate(filteredStaff, staffPage)
   const patientTable = paginate(filteredPatients, patientPage)
-  const shownAsc = [...staffTable.pageRows, ...patientTable.pageRows]
-
-  const toggleReveal = (id: string) => {
-    setRevealedPasswords((prev) => ({ ...prev, [id]: !prev[id] }))
-  }
-
-  const toggleAllReveal = () => {
-    const allRevealed = shownAsc.every((u) => revealedPasswords[u.id])
-    const next: Record<string, boolean> = { ...revealedPasswords }
-    shownAsc.forEach((u) => {
-      next[u.id] = !allRevealed
-    })
-    setRevealedPasswords(next)
-  }
-
   const openEdit = (user: AnyUser) => {
     setEditForm({
       firstName: user.firstName,
+      middleName: user.middleName || '',
       lastName: user.lastName,
+      suffix: user.suffix || '',
       username: user.username,
       email: user.email,
       password: user.password,
@@ -443,7 +451,9 @@ export default function UserManagementPage() {
           ? {
               ...u,
               firstName: editForm.firstName.trim(),
+              middleName: editForm.middleName.trim() || null,
               lastName: editForm.lastName.trim(),
+              suffix: editForm.suffix.trim() || null,
               username: editForm.username.trim(),
               email: editForm.email.trim(),
               password: editForm.password,
@@ -710,28 +720,6 @@ export default function UserManagementPage() {
               {sortAsc ? 'Ascending' : 'Descending'}
             </button>
           </div>
-          <button
-            className={`inline-flex items-center gap-2 px-3.5 py-3 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-colors lg:ml-auto ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}
-            onClick={toggleAllReveal}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            {shownAsc.length > 0 &&
-            shownAsc.every((u) => revealedPasswords[u.id])
-              ? 'Hide All Passwords'
-              : 'Show All Passwords'}
-          </button>
         </div>
       </div>
 
@@ -849,7 +837,6 @@ export default function UserManagementPage() {
                     </tr>
                   ) : (
                     cfg.table.pageRows.map((u) => {
-                      const revealed = !!revealedPasswords[u.id]
                       return (
                         <tr
                           key={u.id}
@@ -1231,6 +1218,27 @@ export default function UserManagementPage() {
                     onChange={(e) =>
                       setEditForm({ ...editForm, firstName: e.target.value })
                     }
+                    className={inputClass}
+                  />
+                </FieldGroup>
+                <FieldGroup darkMode={darkMode} label="Middle Name">
+                  <input
+                    type="text"
+                    value={editForm.middleName}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, middleName: e.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </FieldGroup>
+                <FieldGroup darkMode={darkMode} label="Suffix">
+                  <input
+                    type="text"
+                    value={editForm.suffix}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, suffix: e.target.value })
+                    }
+                    placeholder="Jr., Sr., III…"
                     className={inputClass}
                   />
                 </FieldGroup>

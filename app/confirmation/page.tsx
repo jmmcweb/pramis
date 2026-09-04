@@ -6,19 +6,23 @@ import { useSignup } from '@/store/useSignup'
 
 type RowProps = { label: string; value: string }
 
-const Row = ({ label, value }: RowProps) => (
-  <div className="flex items-baseline justify-between gap-6 py-1.5 border-b border-line last:border-0">
-    <dt className="font-inter text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate shrink-0">
+const Item = ({ label, value, wide = false }: RowProps & { wide?: boolean }) => (
+  <div
+    className={`py-2 border-b border-line ${wide ? 'sm:col-span-2' : ''}`}
+  >
+    <dt className="font-inter text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate">
       {label}
     </dt>
-    <dd className="text-[14px] text-ink text-right truncate">{value || '—'}</dd>
+    <dd className="text-[14px] text-ink mt-0.5 break-words">{value || '—'}</dd>
   </div>
 )
 
 const Confirmation = () => {
   const {
     firstName,
+    middleName,
     lastName,
+    suffix,
     birthday,
     gender,
     countryCode,
@@ -52,21 +56,30 @@ const Confirmation = () => {
     >
       <dl className="border-t border-line">
         <dt className="auth-label mt-3 mb-1">Personal information</dt>
-        <Row label="First name" value={firstName} />
-        <Row label="Last name" value={lastName} />
-        <Row label="Birthday" value={birthday} />
-        <Row label="Gender" value={gender} />
-        <Row label="Mobile" value={`${countryCode} ${mobile}`} />
-        <Row label="Email" value={email} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+          <Item
+            wide
+            label="Full name"
+            value={`${[firstName, middleName, lastName]
+              .filter(Boolean)
+              .join(' ')}${suffix ? ` ${suffix}` : ''}`}
+          />
+          <Item label="Birthday" value={birthday} />
+          <Item label="Gender" value={gender} />
+          <Item label="Mobile" value={`${countryCode} ${mobile}`} />
+          <Item label="Email" value={email} />
+        </div>
 
         <dt className="auth-label mt-4 mb-1">Residence</dt>
-        <Row label="Street" value={street} />
-        <Row label="Purok" value={purok} />
-        <Row label="Barangay" value={barangay} />
-        <Row label="City / Municipality" value={city} />
-        <Row label="Province" value={province} />
-        <Row label="ZIP / Postal code" value={zip} />
-        <Row label="Country" value={country} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+          <Item label="Street" value={street} />
+          <Item label="Purok" value={purok} />
+          <Item label="Barangay" value={barangay} />
+          <Item label="City / Municipality" value={city} />
+          <Item label="Province" value={province} />
+          <Item label="ZIP / Postal code" value={zip} />
+          <Item label="Country" value={country} />
+        </div>
       </dl>
 
       <Link href="/identification" className="btn btn--primary mt-4">

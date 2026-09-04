@@ -551,6 +551,10 @@ export default function AppointmentsScheduleClient({
           appointment={recordFor}
           darkMode={darkMode}
           onClose={() => setRecordFor(null)}
+          onSaved={() => {
+            setRecordFor(null)
+            router.refresh()
+          }}
         />
       )}
     </div>

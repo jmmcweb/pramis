@@ -1,0 +1,30 @@
+create new file named: .env.local
+paste this
+
+DATABASE_URL="postgresql://neondb_owner:npg_rdOwfmls5V3Z@ep-soft-thunder-az7v9fho-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require"
+DATABASE_URL_UNPOOLED="postgresql://neondb_owner:npg_rdOwfmls5V3Z@ep-soft-thunder-az7v9fho.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+
+NEXTAUTH_SECRET="gTD/R38203UiyGjHa7MuxnaGZs10chX+NdzpAz+O60o="
+NEXTAUTH_URL="http://localhost:3000"
+
+SMTP_HOST="smtp-relay.brevo.com"
+SMTP_USER="b6437f001@smtp-brevo.com"
+SMTP_KEY="xsmtpsib-e05da9475bc6d1b04e92a8ac7db349a096756feaf11fc1e33bc5ddb93a76d0e4-FZycb1grQ5dD5PVM"
+
+
+in terminal:
+
+npm ci
+
+npm install
+
+npm run dev
+
+
+for db:
+
+npm run db:generate
+
+npx prisma push
+
+npm run db:studio

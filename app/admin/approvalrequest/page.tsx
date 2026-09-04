@@ -12,7 +12,9 @@ type StaffPosition = 'Nurse' | 'Midwife' | 'Barangay Health Worker (BHW)'
 type BaseAccount = {
   databaseId?: string
   firstName: string
+  middleName?: string | null
   lastName: string
+  suffix?: string | null
   email: string
   dateApplied: string
   status: AccountStatus
@@ -312,7 +314,15 @@ function addYear(iso: string) {
   })
 }
 
-const fullName = (a: BaseAccount) => `${a.lastName}, ${a.firstName}`
+// "Dela Cruz, Juan M. Jr." — middle name collapses to an initial when present.
+const fullName = (a: BaseAccount) => {
+  const middle = a.middleName?.trim()
+  const initial = middle ? `${middle[0].toUpperCase()}.` : ''
+  const suffix = a.suffix?.trim() || ''
+  return `${a.lastName}, ${a.firstName}${initial ? ` ${initial}` : ''}${
+    suffix ? ` ${suffix}` : ''
+  }`
+}
 
 export default function UserManagementPage() {
   const { darkMode } = useDarkMode()

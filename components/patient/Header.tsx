@@ -19,7 +19,7 @@ export default function PatientHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 bg-white/65 dark:bg-[rgba(45,27,78,0.65)] backdrop-blur border-b border-line px-4 py-3 flex items-center justify-between lg:static lg:justify-end lg:py-5 lg:border-0 lg:pl-7 lg:pr-0">
+    <header className="sticky top-0 z-40 lg:relative lg:z-[100] bg-white/65 dark:bg-[rgba(45,27,78,0.65)] backdrop-blur border-b border-line px-4 py-3 flex items-center justify-between lg:justify-end lg:py-5 lg:border-0 lg:pl-7 lg:pr-0">
       <div className="lg:hidden">
         <MediTrackBrand compact />
       </div>

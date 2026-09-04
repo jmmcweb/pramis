@@ -9,7 +9,13 @@ import { requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
 import { createNotification } from '@/lib/actions/notifications'
 import { isValidEmail } from '@/lib/helper'
-import { dayRange, todayISO, getSlotLabel } from '@/config/appointment'
+import {
+  dayRange,
+  todayISO,
+  getSlotLabel,
+  extractPatientItrInfo,
+  toMedicalRecordSummary,
+} from '@/config/appointment'
 import type { ScheduleAppointmentView } from '@/config/appointment'
 
 function generateTempPassword(): string {
@@ -61,17 +67,10 @@ function toScheduleView(row: any): ScheduleAppointmentView {
     }),
     timeLabel: getSlotLabel(`${String(at.getUTCHours()).padStart(2, '0')}:00`),
     status: row.status,
+    patientInfo: extractPatientItrInfo(row),
     hasMedicalRecord: Boolean(row.medicalHistory),
     medicalRecord: row.medicalHistory
-      ? {
-          status: row.medicalHistory.status ?? '',
-          bloodPressure: row.medicalHistory.bloodPressure ?? '',
-          oxygenLevel: String(row.medicalHistory.oxygenLevel ?? ''),
-          height: String(row.medicalHistory.height ?? ''),
-          weight: String(row.medicalHistory.weight ?? ''),
-          diagnosis: row.medicalHistory.diagnosis ?? '',
-          recommendation: row.medicalHistory.recommendation ?? '',
-        }
+      ? toMedicalRecordSummary(row.medicalHistory)
       : null,
   }
 }

@@ -39,7 +39,9 @@ export async function GET() {
           id: account.staffid,
           referenceId: account.staffid,
           firstName: account.firstName,
+          middleName: account.middleName || null,
           lastName: account.lastName,
+          suffix: account.suffix || null,
           username: account.email.split('@')[0],
           email: account.email,
           password: '********',
@@ -244,7 +246,9 @@ export async function PUT(request: Request) {
       }
       const data: any = {
         firstName: body.firstName?.trim(),
+        middleName: body.middleName?.trim() || null,
         lastName: body.lastName?.trim(),
+        suffix: body.suffix?.trim() || null,
         email,
         role,
       }
@@ -265,6 +269,38 @@ export async function PUT(request: Request) {
       if (body.password && body.password !== '********')
         data.password = await hash(body.password, 12)
       await (prisma as any).user.update({ where: { id }, data })
+      // Keep the patient profile name fields in sync with the edit form.
+      const profileData = {
+        middleName: body.middleName?.trim() || null,
+        suffix: body.suffix?.trim() || null,
+      }
+      const existingProfile = await (prisma as any).userProfile.findUnique({
+        where: { userId: id },
+      })
+      if (existingProfile) {
+        await (prisma as any).userProfile.update({
+          where: { userId: id },
+          data: profileData,
+        })
+      } else {
+        const profileId = await nextReferenceId('PRF')
+        await (prisma as any).userProfile.create({
+          data: {
+            userprofileid: profileId,
+            userId: id,
+            firstName: body.firstName?.trim() || 'User',
+            lastName: body.lastName?.trim() || '',
+            ...profileData,
+            birthdate: new Date('1970-01-01T00:00:00.000Z'),
+            phoneNumber: '',
+            houseNumber: '',
+            barangay: '',
+            city: '',
+            province: '',
+            zipCode: '',
+          },
+        })
+      }
     }
     return NextResponse.json({ success: true })
   } catch (error) {

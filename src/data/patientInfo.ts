@@ -1,4 +1,3 @@
-
 // Type definition for the patient's personal and contact information, including address and PhilHealth details.
 export type PatientInfo = {
   firstName: string
@@ -6,6 +5,7 @@ export type PatientInfo = {
   lastName: string
   suffix: string
   dateOfBirth: string
+  sex: string
   mobile: string
   email: string
   houseStreet: string
@@ -13,7 +13,12 @@ export type PatientInfo = {
   municipality: string
   province: string
   zipCode: string
+  purok: string
   philHealthNo: string
+  bloodType: string
+  religion: string
+  fathersName: string
+  mothersName: string
   membershipType: string
   philHealthStatus: string
 }
@@ -70,11 +75,29 @@ export function getAddressOptions(): AddressOptions {
 }
 
 // Type definition for a family member row in the family members table.
+// The optional "patient info" fields mirror the account holder's personal
+// information (birthdate, sex, address, PhilHealth) so they can be captured
+// per family member and auto-populated on the Individual Treatment Record
+// (ITR) when an appointment is booked for that family member.
 export type FamilyMemberRow = {
   id: string
   name: string
   relation: string
   phone: string
+  /** YYYY-MM-DD */
+  birthdate: string
+  sex: string
+  houseNumber: string
+  barangay: string
+  city: string
+  province: string
+  zipCode: string
+  purok: string
+  philHealthNo: string
+  bloodType: string
+  religion: string
+  fathersName: string
+  mothersName: string
 }
 
 // Type definition for the user's profile view, which includes personal and address information.
@@ -87,15 +110,21 @@ export type MyProfileView = {
   suffix: string
   /** YYYY-MM-DD */
   birthdate: string
+  sex: string
   phoneNumber: string
   houseNumber: string
   barangay: string
   city: string
   province: string
   zipCode: string
+  purok: string
   philHealthNo: string
   membershipType: string
   philHealthStatus: string
+  bloodType: string
+  religion: string
+  fathersName: string
+  mothersName: string
   familyMembers: FamilyMemberRow[]
 }
 
@@ -105,6 +134,7 @@ export const emptyPatientInfo: PatientInfo = {
   lastName: '',
   suffix: '',
   dateOfBirth: '',
+  sex: '',
   mobile: '',
   email: '',
   houseStreet: '',
@@ -112,26 +142,58 @@ export const emptyPatientInfo: PatientInfo = {
   municipality: '',
   province: '',
   zipCode: '',
+  purok: '',
   philHealthNo: '',
+  bloodType: '',
+  religion: '',
+  fathersName: '',
+  mothersName: '',
   membershipType: '',
   philHealthStatus: '',
 }
 
+export function normalizeSex(value: string | null | undefined): string {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === 'male' || normalized === 'm') return 'Male'
+  if (normalized === 'female' || normalized === 'f') return 'Female'
+  return value?.trim() || ''
+}
+
+export function splitHouseAndPurok(
+  houseNumber: string,
+  purok: string,
+): { houseNumber: string; purok: string } {
+  if (purok) return { houseNumber, purok }
+  const match = houseNumber.match(/^(.*?)(?:,\s*|\s+)(Purok\s+[^,]+)$/i)
+  if (!match) return { houseNumber, purok: '' }
+  return { houseNumber: match[1].trim(), purok: match[2].trim() }
+}
+
 export function patientInfoFromProfile(profile: MyProfileView): PatientInfo {
+  const address = splitHouseAndPurok(
+    profile.houseNumber || '',
+    profile.purok || '',
+  )
   return {
     firstName: profile.firstName || '',
     middleName: profile.middleName || '',
     lastName: profile.lastName || '',
     suffix: profile.suffix || '',
     dateOfBirth: profile.birthdate || '',
+    sex: normalizeSex(profile.sex),
     mobile: profile.phoneNumber || '',
     email: profile.email || '',
-    houseStreet: profile.houseNumber || '',
+    houseStreet: address.houseNumber,
     barangay: profile.barangay || '',
     municipality: profile.city || '',
     province: profile.province || '',
     zipCode: profile.zipCode || '',
+    purok: address.purok,
     philHealthNo: profile.philHealthNo || '',
+    bloodType: profile.bloodType || '',
+    religion: profile.religion || '',
+    fathersName: profile.fathersName || '',
+    mothersName: profile.mothersName || '',
     membershipType: profile.membershipType || '',
     philHealthStatus: profile.philHealthStatus || '',
   }

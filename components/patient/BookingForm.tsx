@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { useActionState } from 'react'
+import Link from 'next/link'
 import {
   CalendarCheck,
   ChevronLeft,
@@ -12,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { bookAppointment, getDayAvailability } from '@/lib/actions/appointment'
+import { isServiceAvailableOnDate } from '@/config/appointment'
 import type {
   FamilyMemberOption,
   ServiceView,
@@ -29,7 +31,11 @@ type CalendarDay = {
 
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function buildMonthCells(year: number, month: number): (CalendarDay | null)[] {
+function buildMonthCells(
+  year: number,
+  month: number,
+  schedule: string,
+): (CalendarDay | null)[] {
   const first = new Date(year, month, 1)
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const startOffset = first.getDay()
@@ -42,9 +48,12 @@ function buildMonthCells(year: number, month: number): (CalendarDay | null)[] {
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d)
     const isPast = date < today
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6
+    const isUnavailableDay = !isServiceAvailableOnDate(
+      schedule,
+      `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+    )
     const status: DayStatus =
-      isPast || isWeekend ? 'unavailable' : 'available'
+      isPast || isUnavailableDay ? 'unavailable' : 'available'
     cells.push({
       day: d,
       status,
@@ -63,7 +72,10 @@ function buildMonthCells(year: number, month: number): (CalendarDay | null)[] {
 function Legend({ color, label }: { color: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted">
-      <span className={`w-2.5 h-2.5 rounded-full ${color}`} aria-hidden="true" />
+      <span
+        className={`w-2.5 h-2.5 rounded-full ${color}`}
+        aria-hidden="true"
+      />
       {label}
     </span>
   )
@@ -97,12 +109,14 @@ export default function BookingForm({
     setViewMonth(next.getMonth())
   }
 
-  const cells = buildMonthCells(viewYear, viewMonth)
-  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  })
-
+  const cells = buildMonthCells(viewYear, viewMonth, service.schedule)
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString(
+    'en-US',
+    {
+      month: 'long',
+      year: 'numeric',
+    },
+  )
 
   useEffect(() => {
     if (!selectedDate) {
@@ -156,6 +170,16 @@ export default function BookingForm({
           </span>
           <h2 className="text-2xl font-bold text-brand">Appointment For</h2>
         </div>
+        <p className="text-sm text-muted mb-4">
+          Your saved personal information is reused automatically for every
+          appointment.
+          <Link
+            href="/user/profile"
+            className="ml-1 font-semibold text-brand hover:underline"
+          >
+            Manage profile
+          </Link>
+        </p>
 
         <div className="flex flex-col gap-2">
           <button
@@ -191,7 +215,9 @@ export default function BookingForm({
                 onClick={() => setSelectedForMemberId(member.id)}
                 aria-pressed={isSelected}
                 className={`w-full bg-surface rounded-2xl p-4 flex items-center gap-3 border-2 transition-colors ${
-                  isSelected ? 'border-brand' : 'border-transparent hover:border-line'
+                  isSelected
+                    ? 'border-brand'
+                    : 'border-transparent hover:border-line'
                 }`}
               >
                 <span className="w-9 h-9 shrink-0 rounded-full bg-brand-tint text-brand text-xs font-bold flex items-center justify-center">
@@ -199,7 +225,8 @@ export default function BookingForm({
                 </span>
                 <span className="min-w-0 text-left">
                   <span className="block text-sm text-body truncate">
-                    <span className="font-bold">Booking For:</span> {member.name}{' '}
+                    <span className="font-bold">Booking For:</span>{' '}
+                    {member.name}{' '}
                     <span className="text-muted">({member.relation})</span>
                   </span>
                   <span className="block text-xs text-muted mt-0.5">
@@ -283,13 +310,17 @@ export default function BookingForm({
           <p className="text-sm text-muted mt-4 inline-flex items-center gap-1.5">
             <CalendarCheck className="w-4 h-4 text-brand" aria-hidden="true" />
             Selected:{' '}
-            <span className="font-semibold text-body">{selectedDate.label}</span>
+            <span className="font-semibold text-body">
+              {selectedDate.label}
+            </span>
           </p>
         )}
       </div>
 
       <div className="bg-card rounded-3xl shadow-card p-5">
-        <h2 className="text-2xl font-bold text-brand mb-1">Available Time Slots</h2>
+        <h2 className="text-2xl font-bold text-brand mb-1">
+          Available Time Slots
+        </h2>
         <p className="text-sm text-muted mb-4">
           {selectedDate
             ? 'Live availability for the selected date.'
@@ -330,7 +361,9 @@ export default function BookingForm({
                   aria-pressed={isSelected}
                   className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-colors ${className}`}
                 >
-                  <span className="text-sm font-bold leading-tight">{slot.label}</span>
+                  <span className="text-sm font-bold leading-tight">
+                    {slot.label}
+                  </span>
                   <span
                     className={`inline-flex items-center gap-1 text-[11px] font-semibold leading-tight ${
                       isSelected ? 'text-white/80' : 'opacity-80'
@@ -361,28 +394,36 @@ export default function BookingForm({
 
       {selectedDate && selectedSlot && (
         <div className="bg-card rounded-3xl shadow-card p-5">
-          <h2 className="text-lg font-bold text-brand mb-3">Confirm Appointment</h2>
+          <h2 className="text-lg font-bold text-brand mb-3">
+            Confirm Appointment
+          </h2>
           <dl className="divide-y divide-line">
             <div className="flex items-center justify-between gap-3 py-2.5">
               <dt className="text-sm text-muted">Appointment For</dt>
               <dd className="text-sm font-semibold text-body">
                 {selectedForMemberId
-                  ? familyMembers.find((m) => m.id === selectedForMemberId)?.name ??
-                    patientName
+                  ? (familyMembers.find((m) => m.id === selectedForMemberId)
+                      ?.name ?? patientName)
                   : patientName}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-3 py-2.5">
               <dt className="text-sm text-muted">Service</dt>
-              <dd className="text-sm font-semibold text-body">{service.name}</dd>
+              <dd className="text-sm font-semibold text-body">
+                {service.name}
+              </dd>
             </div>
             <div className="flex items-center justify-between gap-3 py-2.5">
               <dt className="text-sm text-muted">Date</dt>
-              <dd className="text-sm font-semibold text-body">{selectedDate.label}</dd>
+              <dd className="text-sm font-semibold text-body">
+                {selectedDate.label}
+              </dd>
             </div>
             <div className="flex items-center justify-between gap-3 py-2.5">
               <dt className="text-sm text-muted">Time</dt>
-              <dd className="text-sm font-semibold text-body">{selectedSlot.label}</dd>
+              <dd className="text-sm font-semibold text-body">
+                {selectedSlot.label}
+              </dd>
             </div>
           </dl>
         </div>

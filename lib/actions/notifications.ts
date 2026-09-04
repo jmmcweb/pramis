@@ -197,3 +197,4 @@ export async function markAllNotificationsRead(): Promise<{
     return { success: false, message: 'Failed to mark notifications as read.' }
   }
 }
+

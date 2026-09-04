@@ -79,3 +79,4 @@ export async function getPopulationStats(): Promise<PopulationResult> {
     return { success: false, message: 'Failed to fetch population statistics.' }
   }
 }
+

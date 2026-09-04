@@ -2,7 +2,9 @@ import { create } from 'zustand'
 
 type SignupState = {
   firstName: string
+  middleName: string
   lastName: string
+  suffix: string
   birthday: string
   gender: string
   countryCode: string
@@ -25,7 +27,9 @@ type SignupState = {
 
 export const useSignup = create<SignupState>()((set) => ({
   firstName: '',
+  middleName: '',
   lastName: '',
+  suffix: '',
   birthday: '',
   gender: '',
   countryCode: '+63',

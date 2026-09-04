@@ -1,7 +1,9 @@
 // This file contains logic for classifying medical cases based on diagnosis text and blood pressure readings.
 
 // The classification rules are defined in the DISEASE_RULES array, which maps disease labels to keywords that may appear in the diagnosis text. If no keywords match, an elevated blood pressure reading (>= 140/90) is treated as hypertension. If there is a diagnosis text but no matching keywords or elevated BP, it is classified as "Other Cases". If there is no diagnosis and normal/missing BP, it returns null.
-function parseBp(bp?: string | null): { systolic: number; diastolic: number } | null {
+function parseBp(
+  bp?: string | null,
+): { systolic: number; diastolic: number } | null {
   if (!bp) return null
   const m = String(bp).match(/(\d+)\s*\/\s*(\d+)/)
   if (!m) return null
@@ -15,7 +17,14 @@ function parseBp(bp?: string | null): { systolic: number; diastolic: number } | 
 const DISEASE_RULES: Array<{ label: string; keywords: string[] }> = [
   {
     label: 'Hypertension / High Blood',
-    keywords: ['hypertens', 'high blood', 'hta', 'hbp', 'elevated bp', 'elevated blood'],
+    keywords: [
+      'hypertens',
+      'high blood',
+      'hta',
+      'hbp',
+      'elevated bp',
+      'elevated blood',
+    ],
   },
   {
     label: 'Diabetes',
@@ -24,22 +33,45 @@ const DISEASE_RULES: Array<{ label: string; keywords: string[] }> = [
   {
     label: 'Respiratory / TB',
     keywords: [
-      'cough', 'colds', 'asthma', 'pneumonia', 'bronch', 'tubercul', 'tb ',
-      'respiratory', 'influenza', 'flu', 'shortness of breath',
+      'cough',
+      'colds',
+      'asthma',
+      'pneumonia',
+      'bronch',
+      'tubercul',
+      'tb ',
+      'respiratory',
+      'influenza',
+      'flu',
+      'shortness of breath',
     ],
   },
   {
     label: 'Infectious / Fever',
     keywords: [
-      'fever', 'dengue', 'chickenpox', 'measles', 'infection', 'abscess',
-      'boil', 'wound', 'covid',
+      'fever',
+      'dengue',
+      'chickenpox',
+      'measles',
+      'infection',
+      'abscess',
+      'boil',
+      'wound',
+      'covid',
     ],
   },
   {
     label: 'Gastrointestinal',
     keywords: [
-      'diarrhea', 'abdominal pain', 'gastro', 'vomit', 'ulcer',
-      'constipation', 'stomach ache', 'stomachache', 'dyspepsia',
+      'diarrhea',
+      'abdominal pain',
+      'gastro',
+      'vomit',
+      'ulcer',
+      'constipation',
+      'stomach ache',
+      'stomachache',
+      'dyspepsia',
     ],
   },
   {
@@ -56,8 +88,13 @@ const DISEASE_RULES: Array<{ label: string; keywords: string[] }> = [
 export function classifyMedicalCase(
   diagnosis?: string | null,
   bp?: string | null,
+  serviceName?: string | null,
 ): string | null {
   const text = String(diagnosis ?? '').toLowerCase()
+  const service = String(serviceName ?? '').toLowerCase()
+  if (service.includes('vaccin') || service.includes('immuniz')) {
+    return 'Immunization / Vaccination'
+  }
   for (const rule of DISEASE_RULES) {
     if (rule.keywords.some((k) => text.includes(k))) return rule.label
   }

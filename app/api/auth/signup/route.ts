@@ -11,7 +11,9 @@ type SignupPayload = {
   code?: string
   password?: string
   firstName?: string
+  middleName?: string
   lastName?: string
+  suffix?: string
   birthday?: string
   gender?: string
   mobile?: string
@@ -26,7 +28,7 @@ type SignupPayload = {
   idPhoto?: string
 }
 
-// 
+//
 export async function POST(request: Request) {
   let payload: SignupPayload
 
@@ -43,7 +45,9 @@ export async function POST(request: Request) {
   const code = payload.code?.trim()
   const password = payload.password?.trim()
   const firstName = payload.firstName?.trim()
+  const middleName = payload.middleName?.trim()
   const lastName = payload.lastName?.trim()
+  const suffix = payload.suffix?.trim()
   const birthday = payload.birthday?.trim()
   const gender = payload.gender?.trim()
   const mobile = payload.mobile?.trim()
@@ -101,7 +105,6 @@ export async function POST(request: Request) {
     )
   }
 
-
   if (!purok || !PUROKS.includes(purok)) {
     return NextResponse.json(
       { message: 'Please select a valid purok in Barangay Sumapang Matanda.' },
@@ -154,8 +157,11 @@ export async function POST(request: Request) {
           userprofileid: profileId,
           userId,
           firstName,
+          middleName: middleName || null,
           lastName,
+          suffix: suffix || null,
           birthdate: parsedBirthday,
+          sex: gender,
           phoneNumber: mobile,
           houseNumber: `${street}, ${purok}`,
           barangay,

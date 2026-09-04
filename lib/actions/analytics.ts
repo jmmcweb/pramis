@@ -31,17 +31,23 @@ export type AnalyticsStats = {
 // Maps a service name to a reason for the visit based on predefined keywords.
 function reasonFromService(name: string): string {
   const n = name.toLowerCase()
-  if (n.includes('immuniz') || n.includes('vaccin')) return 'Immunization / Vaccination'
+  if (n.includes('immuniz') || n.includes('vaccin'))
+    return 'Immunization / Vaccination'
   if (n.includes('prenatal')) return 'Prenatal Care'
-  if (n.includes('hypertension') || n.includes('hdm')) return 'Hypertension Management'
-  if (n.includes('family planning') || n.includes('condom') || n.includes('pill'))
+  if (n.includes('hypertension') || n.includes('hdm'))
+    return 'Hypertension Management'
+  if (
+    n.includes('family planning') ||
+    n.includes('condom') ||
+    n.includes('pill')
+  )
     return 'Family Planning'
-  if (n.includes('consultation') || n.includes('check')) return 'Routine Check-up'
+  if (n.includes('consultation') || n.includes('check'))
+    return 'Routine Check-up'
   if (n.includes('visual') || n.includes('via')) return 'Cancer Screening'
   if (n.includes('adolescent')) return 'Adolescent Health'
   return 'Others'
 }
-
 
 // Fetches analytics statistics for appointments and medical cases within a specified date range. It computes various breakdowns such as service share, reasons for visits, outcomes, peak hours, and disease cases. The function checks user authorization and returns the computed statistics along with success status and messages.
 export async function getAnalyticsStats(
@@ -57,7 +63,8 @@ export async function getAnalyticsStats(
     return { success: false, message: 'Unauthorized' }
   }
 
-  const range = ANALYTICS_RANGES.find((r) => r.key === rangeKey) || ANALYTICS_RANGES[1]
+  const range =
+    ANALYTICS_RANGES.find((r) => r.key === rangeKey) || ANALYTICS_RANGES[1]
 
   const where: any = {}
   if (range.days > 0) {
@@ -90,7 +97,8 @@ export async function getAnalyticsStats(
 
     const ownerCounts = new Map<string, number>()
     for (const r of rows) {
-      if (r.userId) ownerCounts.set(r.userId, (ownerCounts.get(r.userId) ?? 0) + 1)
+      if (r.userId)
+        ownerCounts.set(r.userId, (ownerCounts.get(r.userId) ?? 0) + 1)
     }
     let repeatVisits = 0
     for (const c of ownerCounts.values()) {
@@ -158,7 +166,11 @@ export async function getAnalyticsStats(
 
       const cases = await (prisma as any).medicalHistory.findMany({
         where: mhWhere,
-        select: { diagnosis: true, bloodPressure: true },
+        select: {
+          diagnosis: true,
+          bloodPressure: true,
+          appointment: { select: { service: { select: { name: true } } } },
+        },
       })
 
       // Classify each case into a disease category via diagnosis keywords
@@ -166,7 +178,11 @@ export async function getAnalyticsStats(
       const diseaseMap = new Map<string, number>()
       let categorized = 0
       for (const c of cases) {
-        const label = classifyMedicalCase(c.diagnosis, c.bloodPressure)
+        const label = classifyMedicalCase(
+          c.diagnosis,
+          c.bloodPressure,
+          c.appointment?.service?.name,
+        )
         if (!label) continue
         categorized += 1
         diseaseMap.set(label, (diseaseMap.get(label) ?? 0) + 1)
