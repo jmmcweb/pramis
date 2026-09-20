@@ -8,6 +8,7 @@ import { cacheLife, cacheTag } from "next/cache"
 import { USERS_PER_PAGE } from "@/config/constants"
 import { isValidEmail } from "@/lib/helper"
 import { requireAdmin, requireUser, sanitizeUser, sanitizeUsers } from "@/lib/actions/guard"
+import { recordAudit } from "@/lib/actions/audit"
 import { nextReferenceId } from "@/lib/referenceId"
 
 const table = "user"
@@ -148,6 +149,14 @@ async function persistNewUser(data: { name: string; email: string; password: str
     revalidatePath("/admin/users")
     revalidatePath("/staff/users")
 
+    await recordAudit({
+      action: "CREATE",
+      entity: "USER",
+      entityId: user.id,
+      description: `Created user account ${data.email} with role ${data.role}.`,
+      metadata: { email: data.email, role: data.role },
+    })
+
     return { success: true, message: "User created successfully", payload: sanitizeUser(user) }
   } catch {
 
@@ -185,6 +194,14 @@ export async function softDeleteUser(id: string) {
     revalidateTag("users", "max")
     revalidatePath("/admin/users")
     revalidatePath("/staff/users")
+
+    await recordAudit({
+      action: "DELETE",
+      entity: "USER",
+      entityId: targetId,
+      description: `Deleted user account ${(target as any).email}.`,
+      metadata: { email: (target as any).email, role: (target as any).role },
+    })
 
     return { success: true, payload: sanitizeUser(target) }
   } catch {
@@ -248,6 +265,18 @@ export async function updateUser(_prevState: any, formData: FormData) {
     revalidateTag("users", "max")
     revalidatePath("/admin/users")
     revalidatePath("/staff/users")
+
+    await recordAudit({
+      action: "UPDATE",
+      entity: "USER",
+      entityId: id,
+      description: `Updated user account ${email} (role: ${safeRole}).`,
+      metadata: {
+        email,
+        previousRole: (target as any).role,
+        role: safeRole,
+      },
+    })
 
     return { success: true, message: "User updated successfully.", payload: sanitizeUser(user) }
   } catch {

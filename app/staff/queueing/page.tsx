@@ -7,7 +7,7 @@ import { getServices } from '@/lib/actions/service'
 import QueueingClient from '@/components/admin/QueueingClient'
 
 export const metadata: Metadata = {
-  title: 'Queueing | Meditrack',
+  title: 'Queueing | PRAMIS',
   description: "Live queue board for today's visits, walk-ins and priority patients",
 }
 

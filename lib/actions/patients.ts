@@ -4,6 +4,7 @@
 import prisma from '@/lib/prisma'
 import { requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
+import { recordAudit } from '@/lib/actions/audit'
 import { isValidEmail } from '@/lib/helper'
 import { cacheTag, cacheLife, revalidateTag } from 'next/cache'
 
@@ -224,9 +225,10 @@ export async function createPatientRecord(
   }
 
   try {
+    const patientid = await nextReferenceId('PTN')
     await (prisma as any).patient.create({
       data: {
-        patientid: await nextReferenceId('PTN'),
+        patientid,
         userId: null,
         name: fields.name,
         sex: fields.sex,
@@ -240,6 +242,15 @@ export async function createPatientRecord(
       },
     })
     revalidateTag('patients', 'max')
+
+    await recordAudit({
+      action: 'CREATE',
+      entity: 'PATIENT',
+      entityId: patientid,
+      description: `Created patient record ${patientid} for ${fields.name}.`,
+      metadata: { patientId: patientid, name: fields.name, sex: fields.sex },
+    })
+
     return {
       success: true,
       message: `${fields.name} added to the patient list.`,
@@ -308,6 +319,15 @@ export async function updatePatientRecord(
       },
     })
     revalidateTag('patients', 'max')
+
+    await recordAudit({
+      action: 'UPDATE',
+      entity: 'PATIENT',
+      entityId: patientId,
+      description: `Updated patient record ${patientId} (${fields.name}).`,
+      metadata: { patientId, name: fields.name, sex: fields.sex },
+    })
+
     return {
       success: true,
       message: `${fields.name}'s record was updated.`,

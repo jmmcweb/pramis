@@ -10,27 +10,29 @@ import { getServerSession, Session } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { isValidEmail } from '@/lib/helper'
 import { sanitizeUser, requireUser } from '@/lib/actions/guard'
+import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
 import { normalizeSex, patientInfoFromProfile } from '@/src/data/patientInfo'
 import type { MyProfileView } from '@/src/data/patientInfo'
 
 const MIN_PASSWORD_LENGTH = 8
 
-const table = 'user'
-
 // Fetches the current user's data from the database based on their session ID. It checks for user authentication and returns the user's sanitized data if found, or an appropriate error message if not authenticated or if an error occurs during the database query.
-async function getMeData(id: string) {
+//
+// For staff accounts the session id is `staff.staffid`, so we query the Staff
+// table (by `staffid`) instead of the User table (by `id`). The session's
+// `accountType` field tells us which table to use.
+async function getMeData(id: string, accountType?: string) {
   'use cache'
   cacheTag('me')
   cacheLife('max')
 
   // Check if the user is authenticated by verifying the session ID. If not authenticated, return an error message.
   try {
-    const me = await prisma[table].findFirst({
-      where: {
-        id: id as any,
-      },
-    })
+    const isStaff = accountType === 'staff'
+    const me = isStaff
+      ? await prisma.staff.findUnique({ where: { staffid: id } })
+      : await prisma.user.findFirst({ where: { id } })
 
     console.log(`---DB HIT: GET ME with ID: ${id} from database---`)
 
@@ -68,7 +70,7 @@ export const getMe = cache(async () => {
     }
   }
 
-  return getMeData(session.user.id)
+  return getMeData(session.user.id, session.user.accountType)
 })
 
 // Converts a user object to a profile view object.
@@ -525,6 +527,8 @@ export async function updateMyProfile(
 export async function updateMe(_prevState: any, formData: FormData) {
   const session = await getServerSession(authOptions)
   const id = session?.user?.id as string
+  const accountType = session?.user?.accountType as string
+  const isStaff = accountType === 'staff'
 
   const name = formData.get('name')?.toString().trim() || null
   const email = formData.get('email')?.toString().trim() || null
@@ -574,14 +578,18 @@ export async function updateMe(_prevState: any, formData: FormData) {
       }
     }
 
-    const userExist = await prisma[table].findFirst({
-      where: {
-        email: email,
-      },
-    })
-
-    if (userExist) {
-      if (String(userExist.id) !== id) {
+    if (email) {
+      let emailConflict: any = null
+      if (isStaff) {
+        emailConflict = await prisma.staff.findFirst({
+          where: { email, NOT: { staffid: id } },
+        })
+      } else {
+        emailConflict = await prisma.user.findFirst({
+          where: { email, NOT: { id } },
+        })
+      }
+      if (emailConflict) {
         return {
           success: false,
           payload: null,
@@ -590,12 +598,15 @@ export async function updateMe(_prevState: any, formData: FormData) {
       }
     }
 
-    const updatedUser = await prisma[table].update({
-      where: {
-        id: id as any,
-      },
-      data: updateData,
-    })
+    const updatedUser = isStaff
+      ? await prisma.staff.update({
+          where: { staffid: id },
+          data: updateData,
+        })
+      : await prisma.user.update({
+          where: { id },
+          data: updateData,
+        })
 
     revalidateTag('me', 'max')
 
@@ -627,6 +638,8 @@ export async function updateMePassword(_prevState: any, formData: FormData) {
   }
 
   const id = session.user.id
+  const accountType = session.user.accountType
+  const isStaff = accountType === 'staff'
 
   const current_password = formData.get('current_password')?.toString().trim()
   const new_password = formData.get('new_password')?.toString().trim()
@@ -674,9 +687,13 @@ export async function updateMePassword(_prevState: any, formData: FormData) {
   }
 
   try {
-    const me = await prisma[table].findFirst({
-      where: { id: id as any },
-    })
+    // Staff records live in the Staff table (keyed by staffid); user records
+    // live in the User table (keyed by id). The session's accountType tells us
+    // which table to query.
+    const me = isStaff
+      ? await prisma.staff.findUnique({ where: { staffid: id } })
+      : await prisma.user.findFirst({ where: { id } })
+
     if (
       !me ||
       !me.password ||
@@ -692,12 +709,25 @@ export async function updateMePassword(_prevState: any, formData: FormData) {
 
     const hashedPassword = await hash(new_password, 12)
 
-    const updatedUser = await prisma[table].update({
-      where: { id: id as any },
-      data: { password: hashedPassword, updatedAt: new Date() },
-    })
+    const updatedUser = isStaff
+      ? await prisma.staff.update({
+          where: { staffid: id },
+          data: { password: hashedPassword, updatedAt: new Date() },
+        })
+      : await prisma.user.update({
+          where: { id },
+          data: { password: hashedPassword, updatedAt: new Date() },
+        })
 
     revalidateTag('me', 'max')
+
+    await recordAudit({
+      action: 'PASSWORD_CHANGE',
+      entity: 'PROFILE',
+      entityId: id,
+      description: 'Changed own account password.',
+      metadata: { self: true },
+    })
 
     return {
       success: true,

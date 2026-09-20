@@ -2,7 +2,7 @@ import { Metadata } from 'next'
 import { ReactNode } from 'react'
 
 export const metadata: Metadata = {
-  title: 'Profile | Meditrack',
+  title: 'Profile | PRAMIS',
 }
 
 export default function ProfileLayout({ children }: { children: ReactNode }) {

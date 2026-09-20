@@ -8,6 +8,8 @@ import { hash } from 'bcrypt'
 import { APP_NAME, APP_BASE_URL } from '@/config/constants'
 import { isValidEmail } from '../helper'
 import { sendMail } from '@/lib/mailer'
+import { recordAudit } from '@/lib/actions/audit'
+import { isAuditedRole } from '@/lib/audit'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -178,11 +180,15 @@ export async function resetPassword(_prevState: any, formData: FormData) {
       where: { email, deletedAt: null },
     })
 
-    const staff = await prisma.staff.findUnique({
+    let staff = await prisma.staff.findUnique({
       where: { email },
     })
 
     const hashedPassword = await hash(password, 12)
+
+    // True when the staff account was created by an admin without a password
+    // and this link is its initial password setup.
+    let staffInitialSetup = false
 
     if (user) {
       await prisma.user.update({
@@ -190,10 +196,16 @@ export async function resetPassword(_prevState: any, formData: FormData) {
         data: { password: hashedPassword, updatedAt: new Date() },
       })
     } else if (staff) {
+      staffInitialSetup = Boolean(staff.mustChangePassword)
       await prisma.staff.update({
         where: { staffid: staff.staffid },
-        data: { password: hashedPassword, updatedAt: new Date() },
+        data: {
+          password: hashedPassword,
+          mustChangePassword: false,
+          updatedAt: new Date(),
+        },
       })
+      staff = { ...staff, mustChangePassword: false }
     } else {
       return {
         success: false,
@@ -205,6 +217,39 @@ export async function resetPassword(_prevState: any, formData: FormData) {
 
     // Delete all reset tokens for this email after successful password reset
     await prisma.resetPasswordToken.deleteMany({ where: { email } })
+    // Audit the reset when it affects an admin or medical staff account. There
+    // is no session here (public reset link), so the actor snapshot is passed
+    // explicitly.
+    const resetActor = staff
+      ? {
+          id: staff.staffid,
+          name: `${staff.firstName ?? ''} ${staff.lastName ?? ''}`.trim(),
+          email: staff.email,
+          role: staff.role,
+          accountType: 'STAFF',
+        }
+      : user
+        ? {
+            id: user.id,
+            name: null,
+            email: user.email,
+            role: user.role,
+            accountType: 'USER',
+          }
+        : null
+    if (resetActor && isAuditedRole(resetActor.role)) {
+      await recordAudit({
+        action: 'PASSWORD_RESET',
+        entity: 'PROFILE',
+        entityId: resetActor.id,
+        description: staffInitialSetup
+          ? `Initial password set via emailed setup link for ${email}.`
+          : `Password was reset via the forgot-password link for ${email}.`,
+        actor: resetActor,
+        force: true,
+      })
+    }
+
 
     // Send confirmation email to the user
     await sendMail({

@@ -4,6 +4,7 @@
 import prisma from '@/lib/prisma'
 import { revalidateTag } from 'next/cache'
 import { requireUser, requireAdmin } from '@/lib/actions/guard'
+import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
 
 export type ServiceItem = {
@@ -195,6 +196,17 @@ export async function createService(data: {
 
     revalidateTag('services', 'max')
 
+    await recordAudit({
+      action: 'CREATE',
+      entity: 'SERVICE',
+      entityId: created.serviceid,
+      description: `Created service "${created.name}".`,
+      metadata: {
+        name: created.name,
+        availability: created.availability,
+      },
+    })
+
     return {
       success: true,
       message: 'Service created successfully in database.',
@@ -243,6 +255,17 @@ export async function updateService(data: {
 
     revalidateTag('services', 'max')
 
+    await recordAudit({
+      action: 'UPDATE',
+      entity: 'SERVICE',
+      entityId: data.id,
+      description: `Updated service "${updated.name}"${data.availability === undefined ? '' : data.availability ? ' and set it available' : ' and set it unavailable'}.`,
+      metadata: {
+        name: updated.name,
+        availability: updated.availability,
+      },
+    })
+
     return {
       success: true,
       message: 'Service updated successfully in database.',
@@ -265,11 +288,23 @@ export async function deleteService(id: string) {
   }
 
   try {
+    const existing = await (prisma as any).service.findUnique({
+      where: { serviceid: id },
+      select: { name: true },
+    })
     await (prisma as any).service.delete({
       where: { serviceid: id },
     })
 
     revalidateTag('services', 'max')
+
+    await recordAudit({
+      action: 'DELETE',
+      entity: 'SERVICE',
+      entityId: id,
+      description: `Deleted service "${existing?.name ?? id}".`,
+      metadata: { name: existing?.name ?? null },
+    })
 
     return { success: true, message: 'Service deleted successfully from database.' }
   } catch (error) {

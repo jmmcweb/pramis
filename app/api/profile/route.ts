@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import prisma from '@/lib/prisma'
+import { recordAudit } from '@/lib/actions/audit'
 
 async function requireStaffSession() {
   const session = await getServerSession(authOptions)
@@ -85,10 +86,32 @@ export async function PUT(request: Request) {
   }
 
   try {
+    const before = await (prisma as any).staff.findUnique({
+      where: { staffid: session.user.id },
+      select: { firstName: true, lastName: true, position: true, email: true },
+    })
     await (prisma as any).staff.update({
       where: { staffid: session.user.id },
       data,
     })
+
+    await recordAudit({
+      action: 'UPDATE',
+      entity: 'PROFILE',
+      entityId: session.user.id,
+      description: `Updated their own staff profile (${session.user.email ?? session.user.id}).`,
+      metadata: {
+        email: before?.email ?? session.user.email ?? null,
+        previousName: before
+          ? `${before.firstName ?? ''} ${before.lastName ?? ''}`.trim()
+          : null,
+        position: data.position ?? before?.position ?? null,
+        changedFields: Object.keys(data).filter(
+          (key) => (data as any)[key] !== undefined,
+        ),
+      },
+    })
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Profile update failed:', error)

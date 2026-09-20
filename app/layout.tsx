@@ -45,7 +45,7 @@ const roboto = Roboto({
 })
 
 export const metadata: Metadata = {
-  title: 'Meditrack | Stay On Track With Us',
+  title: 'PRAMIS | Stay On Track With Us',
   description:
     'Your barangay health tracking platform. Book appointments, manage health records, and stay on track.',
 }

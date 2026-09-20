@@ -48,7 +48,7 @@ export default function Home() {
             />
             <div className="flex flex-col leading-none">
               <span className="font-bebas text-3xl md:text-[42px] text-white tracking-wide">
-                MEDITRACK
+                PRAMIS
               </span>
               <span className="font-asap text-xs md:text-sm text-[#7fb6e6] tracking-[0.129em] md:tracking-[0.164em] whitespace-nowrap -mt-3">
                 Stay On Track With Us

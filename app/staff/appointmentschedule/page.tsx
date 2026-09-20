@@ -6,7 +6,7 @@ import { getScheduleAppointments } from '@/lib/actions/appointment'
 import AppointmentsScheduleClient from '@/components/staff/AppointmentsScheduleClient'
 
 export const metadata: Metadata = {
-  title: 'Appointment Schedule | Meditrack',
+  title: 'Appointment Schedule | PRAMIS',
   description: 'Review pending patient appointments',
 }
 

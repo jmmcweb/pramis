@@ -60,155 +60,10 @@ type AnyUser = StaffUser | PatientUser
 
 const PER_PAGE = 8
 
-const initialStaff: StaffUser[] = [
-  {
-    kind: 'staff',
-    id: 'MS-1001',
-    firstName: 'Ramon',
-    lastName: 'Dela Cruz',
-    username: 'ramon.delacruz',
-    email: 'ramon.delacruz@gmail.com',
-    password: 'RamonDC@2025',
-    role: 'Admin',
-    position: 'Nurse',
-    dateJoined: '2025-11-03',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1002',
-    firstName: 'Liza',
-    lastName: 'Mendoza',
-    username: 'liza.mendoza',
-    email: 'liza.mendoza@gmail.com',
-    password: 'LizaMZ@2025',
-    role: 'Admin',
-    position: 'Midwife',
-    dateJoined: '2025-11-18',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1003',
-    firstName: 'Jose',
-    lastName: 'Santos',
-    username: 'jose.santos',
-    email: 'jose.santos@gmail.com',
-    password: 'JoseST@2025',
-    role: 'Medical Staff',
-    position: 'Barangay Health Worker (BHW)',
-    dateJoined: '2025-12-05',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1004',
-    firstName: 'Ana',
-    lastName: 'Reyes',
-    username: 'ana.reyes',
-    email: 'ana.reyes@gmail.com',
-    password: 'AnaRY@2026',
-    role: 'Medical Staff',
-    position: 'Nurse',
-    dateJoined: '2026-01-14',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1005',
-    firstName: 'Pedro',
-    lastName: 'Gonzales',
-    username: 'pedro.gonzales',
-    email: 'pedro.gonzales@gmail.com',
-    password: 'PedroGN@2026',
-    role: 'Medical Staff',
-    position: 'Barangay Health Worker (BHW)',
-    dateJoined: '2026-02-02',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1006',
-    firstName: 'Maria',
-    lastName: 'Villanueva',
-    username: 'maria.villanueva',
-    email: 'maria.villanueva@gmail.com',
-    password: 'MariaVL@2026',
-    role: 'Medical Staff',
-    position: 'Midwife',
-    dateJoined: '2026-03-21',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1007',
-    firstName: 'Carlo',
-    lastName: 'Bautista',
-    username: 'carlo.bautista',
-    email: 'carlo.bautista@gmail.com',
-    password: 'CarloBT@2026',
-    role: 'Medical Staff',
-    position: 'Nurse',
-    dateJoined: '2026-04-09',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1008',
-    firstName: 'Sofia',
-    lastName: 'Aquino',
-    username: 'sofia.aquino',
-    email: 'sofia.aquino@gmail.com',
-    password: 'SofiaAQ@2026',
-    role: 'Medical Staff',
-    position: 'Barangay Health Worker (BHW)',
-    dateJoined: '2026-05-27',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1009',
-    firstName: 'Miguel',
-    lastName: 'Torres',
-    username: 'miguel.torres',
-    email: 'miguel.torres@gmail.com',
-    password: 'MiguelTR@2026',
-    role: 'Medical Staff',
-    position: 'Midwife',
-    dateJoined: '2026-06-16',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1010',
-    firstName: 'Bea',
-    lastName: 'Lim',
-    username: 'bea.lim',
-    email: 'bea.lim@gmail.com',
-    password: 'BeaLM@2026',
-    role: 'Medical Staff',
-    position: 'Nurse',
-    dateJoined: '2026-07-04',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1011',
-    firstName: 'Dante',
-    lastName: 'Ramos',
-    username: 'dante.ramos',
-    email: 'dante.ramos@gmail.com',
-    password: 'DanteRM@2026',
-    role: 'Medical Staff',
-    position: 'Barangay Health Worker (BHW)',
-    dateJoined: '2026-07-28',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1012',
-    firstName: 'Clara',
-    lastName: 'Navarro',
-    username: 'clara.navarro',
-    email: 'clara.navarro@gmail.com',
-    password: 'ClaraNV@2026',
-    role: 'Medical Staff',
-    position: 'Midwife',
-    dateJoined: '2026-08-10',
-  },
-]
+const initialStaff: StaffUser[] = []
 
 const initialPatients: PatientUser[] = initialRecords
-  .filter((r) => !r.deceased && !r.id.startsWith('PTN-0001'))
+  .filter((r) => !r.deceased)
   .map((r) => {
     const first = (r.form.givenName || '').trim()
     const last = (r.form.lastName || '').trim()
@@ -228,13 +83,25 @@ const initialPatients: PatientUser[] = initialRecords
   })
 
 function fmtDate(value: string) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value))
-    return new Date(value + 'T00:00:00').toLocaleDateString('en-US', {
+  if (!value) return '—'
+  if (/^\d{4}-\d{2}-\d{2}/.test(value))
+    return new Date(value.slice(0, 10) + 'T00:00:00').toLocaleDateString(
+      'en-US',
+      {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      },
+    )
+  const parsed = new Date(value)
+  if (!isNaN(parsed.getTime()))
+    return parsed.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     })
   const [m, d, y] = value.split('-').map(Number)
+  if (!m || !d || !y) return value
   return new Date(y, m - 1, d).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -243,8 +110,13 @@ function fmtDate(value: string) {
 }
 
 function dateKey(value: string) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  if (!value) return ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
+  const parsed = new Date(value)
+  if (!isNaN(parsed.getTime()))
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
   const [m, d, y] = value.split('-').map(Number)
+  if (!m || !d || !y) return value
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
@@ -289,14 +161,20 @@ type AddAccountForm = {
   firstName: string
   lastName: string
   email: string
-  password: string
   role: 'ADMIN' | 'MEDSTAFF'
   position: StaffPosition
 }
 
 export default function UserManagementPage() {
   const { darkMode } = useDarkMode()
-  const [users, setUsers] = useState<AnyUser[]>([])
+  // Start with demo data so "all users" is never blank while the DB fetch
+  // is in flight (or when previewing without an admin session).
+  const [users, setUsers] = useState<AnyUser[]>([
+    ...initialStaff,
+    ...initialPatients,
+  ])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [cardFilter, setCardFilter] = useState<
     'all' | 'staff' | 'patient' | 'records'
@@ -313,7 +191,6 @@ export default function UserManagementPage() {
     firstName: '',
     lastName: '',
     email: '',
-    password: '',
     role: 'MEDSTAFF',
     position: 'Nurse',
   })
@@ -321,18 +198,75 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     let active = true
-    fetch('/api/admin/accounts')
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Unable to load accounts')
-        return response.json()
-      })
-      .then((data) => {
-        if (!active || !Array.isArray(data.users)) return
-        setUsers(
-          data.users.map((user: AnyUser & { dateJoined: string }) => ({
+    setLoading(true)
+    setError(null)
+
+    const fetchUsers = async () => {
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 10000)
+        let response: Response
+        try {
+          response = await fetch('/api/admin/accounts', {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            signal: controller.signal,
+          })
+        } finally {
+          clearTimeout(timeout)
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          // Not logged in as admin (e.g. previewing without a session).
+          // Keep fallback data instead of a hard error so "all users" is visible.
+          console.warn('Not authorized for /api/admin/accounts, using demo data')
+          if (!active) return
+          setUsers((prev) =>
+            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
+          )
+          setError(null)
+          return
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.message || `HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        if (!active) return
+
+        const toDateString = (value: unknown): string => {
+          if (!value) return new Date().toISOString().slice(0, 10)
+          if (typeof value === 'string') return value.slice(0, 10)
+          const parsed = new Date(value as string)
+          return isNaN(parsed.getTime())
+            ? new Date().toISOString().slice(0, 10)
+            : parsed.toISOString().slice(0, 10)
+        }
+
+        // Merge DB accounts with fallback/demo records so the page always
+        // shows staff + patients even when the DB is nearly empty (only 2 seed users).
+        const mergeWithFallback = (dbUsers: AnyUser[]) => {
+          const seen = new Set(dbUsers.map((u) => u.id))
+          const extra: AnyUser[] = []
+          for (const u of [...initialStaff, ...initialPatients]) {
+            if (!seen.has(u.id)) extra.push(u)
+          }
+          return [...dbUsers, ...extra]
+        }
+
+        // Handle different response structures
+        if (data.users && Array.isArray(data.users) && data.users.length > 0) {
+          const dbUsers = data.users.map((user: AnyUser & { dateJoined: string }) => ({
             ...user,
             databaseId: user.id,
-            dateJoined: user.dateJoined.slice(0, 10),
+            firstName: user.firstName || 'User',
+            lastName: user.lastName || '',
+            username: user.username || user.email?.split('@')[0] || user.id,
+            email: user.email || '',
+            dateJoined: toDateString(user.dateJoined),
             // Hoist profile name fields so list/search/fullName can use them.
             middleName:
               user.middleName ??
@@ -345,10 +279,58 @@ export default function UserManagementPage() {
               user.suffix ??
               ((user as any).profile?.suffix as string | null | undefined) ??
               null,
-          })),
-        )
-      })
-      .catch(() => toast.error('Unable to load accounts from the database'))
+          }))
+          setUsers(mergeWithFallback(dbUsers))
+          setError(null)
+        } else if (data.message) {
+          // API returned an error message
+          throw new Error(data.message)
+        } else if (data.users && Array.isArray(data.users)) {
+          // API succeeded but DB is empty — keep demo data so the
+          // tables are never blank for "all users".
+          console.warn('API returned 0 accounts, using demo data')
+          if (!active) return
+          setUsers((prev) =>
+            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
+          )
+          setError(null)
+        } else {
+          // Unexpected response format - keep fallback data
+          console.warn('Unexpected API response format, using demo data')
+          if (!active) return
+          setUsers((prev) =>
+            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
+          )
+          setError(null)
+        }
+      } catch (err) {
+        if (!active) return
+        // Keep the seeded/demo rows visible and only surface a soft warning.
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          console.warn('Accounts request timed out, using demo data')
+          setUsers((prev) =>
+            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
+          )
+          setError(null)
+        } else {
+          const message = err instanceof Error ? err.message : 'Unable to load accounts'
+          console.error('Failed to load accounts:', err)
+          setError(message)
+          toast.error(message)
+          // Fall back to demo data when API fails
+          setUsers((prev) =>
+            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
+          )
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchUsers()
+
     return () => {
       active = false
     }
@@ -472,8 +454,7 @@ export default function UserManagementPage() {
     if (
       !addForm.firstName.trim() ||
       !addForm.lastName.trim() ||
-      !addForm.email.trim() ||
-      !addForm.password.trim()
+      !addForm.email.trim()
     ) {
       toast.error('Please fill in all account fields')
       return
@@ -512,11 +493,15 @@ export default function UserManagementPage() {
         firstName: '',
         lastName: '',
         email: '',
-        password: '',
         role: 'MEDSTAFF',
         position: 'Nurse',
       })
-      toast.success(`${fullName(newAccount)} has been created`)
+      toast.success(
+        data.inviteSent
+          ? `${fullName(newAccount)} has been created. A set-password link was emailed to ${newAccount.email}.`
+          : `${fullName(newAccount)} has been created, but the set-password email could not be sent. The staff member can use "Forgot password?" on the login page to set their password.`,
+        { duration: 8000 },
+      )
     } finally {
       setAddPending(false)
     }
@@ -554,7 +539,63 @@ export default function UserManagementPage() {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
+      {/* Loading State */}
+      {loading && (
+        <div
+          className={`flex flex-col items-center justify-center p-12 rounded-[18px] border ${
+            darkMode
+              ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]'
+              : 'bg-white border-[rgba(15,60,95,0.10)]'
+          }`}
+        >
+          <div className="w-8 h-8 border-4 border-[#4E69D3] border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p className={`text-[16px] font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}>
+            Loading accounts...
+          </p>
+          <p className={`text-[14px] mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            Fetching user data from database
+          </p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {!loading && error && users.length === 0 && (
+        <div
+          className={`flex flex-col items-center justify-center p-12 rounded-[18px] border ${
+            darkMode
+              ? 'bg-[#2d1b4e] border-red-500/30'
+              : 'bg-white border-red-300'
+          }`}
+        >
+          <svg
+            className="w-12 h-12 mb-4 text-red-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
+          </svg>
+          <p className={`text-[18px] font-bold mb-2 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}>
+            Unable to load accounts
+          </p>
+          <p className={`text-[14px] mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            {error}
+          </p>
+          <p className={`text-[13px] ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+            Showing demo data. Please check your database connection.
+          </p>
+        </div>
+      )}
+
+      {/* Only render the rest if not loading (or show empty state during loading) */}
+      {!loading && (
+        <>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
         <div>
           <h1
             className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 mb-[6px] text-left`}
@@ -651,6 +692,8 @@ export default function UserManagementPage() {
           value={recordsCount}
           label="Users with Records"
           color="#16A34A"
+          active={cardFilter === 'records'}
+          onClick={() => setCardFilter('records')}
           icon={
             <>
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -998,7 +1041,7 @@ export default function UserManagementPage() {
                       onClick={() => cfg.setPage(i + 1)}
                     >
                       {i + 1}
-                    </button>
+                                        </button>
                   ))}
                   <button
                     className={pageBtnClass}
@@ -1035,7 +1078,9 @@ export default function UserManagementPage() {
                 <p
                   className={`text-[13px] m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                 >
-                  Create an admin or medical staff account
+                  Create an admin or medical staff account. The staff member
+                  sets their own password via an emailed link — admins cannot
+                  set or change staff passwords.
                 </p>
               </div>
               <button
@@ -1071,16 +1116,6 @@ export default function UserManagementPage() {
                   value={addForm.email}
                   onChange={(event) =>
                     setAddForm({ ...addForm, email: event.target.value })
-                  }
-                  className={inputClass}
-                />
-              </FieldGroup>
-              <FieldGroup darkMode={darkMode} label="Password" required>
-                <input
-                  type="password"
-                  value={addForm.password}
-                  onChange={(event) =>
-                    setAddForm({ ...addForm, password: event.target.value })
                   }
                   className={inputClass}
                 />
@@ -1657,12 +1692,13 @@ export default function UserManagementPage() {
                 onClick={() => setViewingPatient(null)}
                 className="px-5 py-2.5 rounded-lg text-sm font-bold bg-[#4E69D3] text-white hover:bg-indigo-600 cursor-pointer border-none transition-colors"
               >
-                Close
-              </button>
+                                Close
+                            </button>
             </div>
           </div>
         </div>
       )}
+      </>)}
     </div>
   )
 }

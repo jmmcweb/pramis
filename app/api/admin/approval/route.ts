@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { createNotification } from '@/lib/actions/notifications'
+import { recordAudit } from '@/lib/actions/audit'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -29,7 +30,7 @@ export async function GET() {
   try {
     const users = await (prisma as any).user.findMany({
       include: { profile: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     })
 
     return NextResponse.json({
@@ -67,6 +68,50 @@ export async function PUT(request: Request) {
   const body = await request.json()
   const id = body.id?.toString()
   const action = body.action?.toString()
+
+  if (action === 'approveAll' || body.approveAll) {
+    try {
+      const pendingUsers = await (prisma as any).user.findMany({
+        where: { status: 'PENDING' },
+        select: { id: true, email: true },
+      })
+
+      if (pendingUsers.length > 0) {
+        await (prisma as any).user.updateMany({
+          where: { status: 'PENDING' },
+          data: { status: 'ACTIVE' },
+        })
+
+        for (const u of pendingUsers) {
+          await createNotification({
+            userId: u.id,
+            category: 'Account',
+            title: 'Account Approved',
+            description:
+              'Your account has been approved. You can now book appointments and manage your health records.',
+          }).catch(() => {})
+        }
+
+        await recordAudit({
+          action: 'APPROVE',
+          entity: 'ACCOUNT',
+          entityId: 'BULK',
+          description: `Bulk approved ${pendingUsers.length} pending account application(s).`,
+          status: 'SUCCESS',
+          metadata: { count: pendingUsers.length },
+        }).catch(() => {})
+      }
+
+      return NextResponse.json({ success: true, count: pendingUsers.length })
+    } catch (error) {
+      console.error('Bulk approval failed:', error)
+      return NextResponse.json(
+        { message: 'Unable to complete bulk approval.' },
+        { status: 500 },
+      )
+    }
+  }
+
   if (!id || !['approve', 'reject'].includes(action)) {
     return NextResponse.json(
       { message: 'A valid account and action are required.' },
@@ -75,10 +120,32 @@ export async function PUT(request: Request) {
   }
 
   try {
+    const target = await (prisma as any).user.findUnique({
+      where: { id },
+      include: { profile: true },
+    })
+    const targetName = target?.profile
+      ? `${target.profile.firstName ?? ''} ${target.profile.lastName ?? ''}`.trim()
+      : (target?.email ?? id)
+
     const updated = await (prisma as any).user.update({
       where: { id },
       data: { status: action === 'approve' ? 'ACTIVE' : 'INACTIVE' },
     })
+
+    await recordAudit({
+      action: action === 'approve' ? 'APPROVE' : 'REJECT',
+      entity: 'ACCOUNT',
+      entityId: id,
+      description: `${action === 'approve' ? 'Approved' : 'Rejected'} account application of ${targetName} (${target?.email ?? id}).`,
+      status: 'SUCCESS',
+      metadata: {
+        email: target?.email ?? null,
+        previousStatus: target?.status ?? null,
+        status: updated.status,
+      },
+    })
+
     if (action === 'approve') {
       await createNotification({
         userId: id,

@@ -7,7 +7,7 @@ import { dayRange, todayISO } from '@/config/appointment'
 import Homepage from '@/app/staff/Homepage'
 
 export const metadata: Metadata = {
-  title: 'Homepage | Meditrack',
+  title: 'Homepage | PRAMIS',
 }
 
 const STAFF_ROLES = ['MEDSTAFF', 'ADMIN', 'SUPERADMIN']

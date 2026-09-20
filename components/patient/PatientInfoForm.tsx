@@ -100,6 +100,7 @@ function SelectField({
       <span className="text-xs font-bold uppercase tracking-wide text-muted">
         {label}
       </span>
+
       <div className="relative mt-1.5">
         <select
           name={name}
@@ -112,11 +113,13 @@ function SelectField({
             </option>
           ))}
         </select>
+
         <ChevronDown
           className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"
           aria-hidden="true"
         />
       </div>
+
       {error && (
         <span className="block text-xs font-medium text-red-500 mt-1">
           {error}
@@ -132,15 +135,18 @@ export default function PatientInfoForm({
   profile?: MyProfileView | null
 }) {
   const router = useRouter()
+
   const [formKey, setFormKey] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
 
   const initialForm = profile
     ? patientInfoFromProfile(profile)
     : emptyPatientInfo
+
   const initialFamily: FamilyMemberRow[] = (profile?.familyMembers ?? []).map(
     (member) => {
       const address = splitHouseAndPurok(member.houseNumber, member.purok)
+
       return {
         ...member,
         houseNumber: address.houseNumber,
@@ -149,32 +155,43 @@ export default function PatientInfoForm({
     },
   )
 
-  const [family, setFamily] = useState<FamilyMemberRow[]>(initialFamily)
+  const [family, setFamily] =
+    useState<FamilyMemberRow[]>(initialFamily)
 
-  const [addressOptions, setAddressOptions] = useState<AddressOptions | null>(
-    null,
-  )
+  const [addressOptions, setAddressOptions] =
+    useState<AddressOptions | null>(null)
 
   useEffect(() => {
     let cancelled = false
+
     fetch('/api/address')
       .then((res) => res.json())
       .then((data: AddressOptions) => {
-        if (!cancelled && data?.success) setAddressOptions(data)
+        if (!cancelled && data?.success) {
+          setAddressOptions(data)
+        }
       })
       .catch((error) =>
         console.error('[PatientInfoForm | address fetch]:', error),
       )
+
     return () => {
       cancelled = true
     }
   }, [])
 
-  const lockedBarangay = addressOptions?.barangay ?? FIXED_ADDRESS.barangay
+  const lockedBarangay =
+    addressOptions?.barangay ?? FIXED_ADDRESS.barangay
+
   const lockedMunicipality =
     addressOptions?.municipality ?? FIXED_ADDRESS.municipality
-  const lockedProvince = addressOptions?.province ?? FIXED_ADDRESS.province
-  const lockedZipCode = addressOptions?.zipCode ?? FIXED_ADDRESS.zipCode
+
+  const lockedProvince =
+    addressOptions?.province ?? FIXED_ADDRESS.province
+
+  const lockedZipCode =
+    addressOptions?.zipCode ?? FIXED_ADDRESS.zipCode
+
   const purokOptions = Array.from(
     new Set([
       ...(addressOptions?.puroks ?? []),
@@ -182,12 +199,16 @@ export default function PatientInfoForm({
     ]),
   )
 
-  const [state, formAction, isPending] = useActionState(updateMyProfile, null)
+  const [state, formAction, isPending] =
+    useActionState(updateMyProfile, null)
 
   useEffect(() => {
     if (!state) return
+
     if (state.success) {
-      toast.success(state.message ?? 'Profile updated successfully!')
+      toast.success(
+        state.message ?? 'Profile updated successfully!',
+      )
       setIsEditing(false)
       router.refresh()
     } else if (state.message) {
@@ -195,7 +216,8 @@ export default function PatientInfoForm({
     }
   }, [state, router])
 
-  const errors = state && !state.success ? state.errors : undefined
+  const errors =
+    state && !state.success ? state.errors : undefined
 
   const handleCancel = () => {
     setFormKey((k) => k + 1)
@@ -204,7 +226,7 @@ export default function PatientInfoForm({
     toast('Changes discarded')
   }
 
-  const addMember = () =>
+  const addMember = () => {
     setFamily((prev) => [
       ...prev,
       {
@@ -227,9 +249,13 @@ export default function PatientInfoForm({
         mothersName: '',
       },
     ])
+  }
 
-  const removeMember = (id: string) =>
-    setFamily((prev) => prev.filter((member) => member.id !== id))
+  const removeMember = (id: string) => {
+    setFamily((prev) =>
+      prev.filter((member) => member.id !== id),
+    )
+  }
 
   return (
     <form
@@ -238,7 +264,7 @@ export default function PatientInfoForm({
       className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6"
     >
       {!isEditing && (
-        <div className="lg:col-span-2 flex justify-end lg:order-0">
+        <div className="lg:col-span-2 flex justify-end">
           <button
             type="button"
             onClick={() => setIsEditing(true)}
@@ -248,7 +274,11 @@ export default function PatientInfoForm({
           </button>
         </div>
       )}
-      <fieldset disabled={!isEditing} className="contents">
+
+      <fieldset
+        disabled={!isEditing}
+        className="contents"
+      >
         <SectionCard
           title="Personal Information"
           icon={UserRound}
@@ -256,14 +286,21 @@ export default function PatientInfoForm({
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="First Name" error={errors?.firstName}>
+              <Field
+                label="First Name"
+                error={errors?.firstName}
+              >
                 <input
                   name="firstName"
                   defaultValue={initialForm.firstName}
                   className={inputClass}
                 />
               </Field>
-              <Field label="Middle Name" error={errors?.middleName}>
+
+              <Field
+                label="Middle Name"
+                error={errors?.middleName}
+              >
                 <input
                   name="middleName"
                   defaultValue={initialForm.middleName}
@@ -271,15 +308,23 @@ export default function PatientInfoForm({
                 />
               </Field>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Last Name" error={errors?.lastName}>
+              <Field
+                label="Last Name"
+                error={errors?.lastName}
+              >
                 <input
                   name="lastName"
                   defaultValue={initialForm.lastName}
                   className={inputClass}
                 />
               </Field>
-              <Field label="Suffix" error={errors?.suffix}>
+
+              <Field
+                label="Suffix"
+                error={errors?.suffix}
+              >
                 <input
                   name="suffix"
                   defaultValue={initialForm.suffix}
@@ -288,8 +333,12 @@ export default function PatientInfoForm({
                 />
               </Field>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Date of Birth" error={errors?.birthdate}>
+              <Field
+                label="Date of Birth"
+                error={errors?.birthdate}
+              >
                 <input
                   type="date"
                   name="birthdate"
@@ -297,6 +346,7 @@ export default function PatientInfoForm({
                   className={inputClass}
                 />
               </Field>
+
               <Field label="Sex">
                 <select
                   name="sex"
@@ -309,6 +359,7 @@ export default function PatientInfoForm({
                 </select>
               </Field>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Blood Type">
                 <input
@@ -317,6 +368,7 @@ export default function PatientInfoForm({
                   className={inputClass}
                 />
               </Field>
+
               <Field label="Religion">
                 <input
                   name="religion"
@@ -325,6 +377,7 @@ export default function PatientInfoForm({
                 />
               </Field>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Father's Name">
                 <input
@@ -333,6 +386,7 @@ export default function PatientInfoForm({
                   className={inputClass}
                 />
               </Field>
+
               <Field label="Mother's Name">
                 <input
                   name="mothersName"
@@ -350,14 +404,21 @@ export default function PatientInfoForm({
           className="lg:order-2"
         >
           <div className="space-y-4">
-            <Field label="Mobile Number" error={errors?.phoneNumber}>
+            <Field
+              label="Mobile Number"
+              error={errors?.phoneNumber}
+            >
               <input
                 name="phoneNumber"
                 defaultValue={initialForm.mobile}
                 className={inputClass}
               />
             </Field>
-            <Field label="Email Address" error={errors?.email}>
+
+            <Field
+              label="Email Address"
+              error={errors?.email}
+            >
               <input
                 type="email"
                 name="email"
@@ -368,16 +429,27 @@ export default function PatientInfoForm({
           </div>
         </SectionCard>
 
-        <SectionCard title="Address" icon={MapPin} className="lg:order-3">
+        <SectionCard
+          title="Address"
+          icon={MapPin}
+          className="lg:order-3"
+        >
           <div className="space-y-4">
-            <Field label="House No. / Street" error={errors?.houseNumber}>
+            <Field
+              label="House No. / Street"
+              error={errors?.houseNumber}
+            >
               <input
                 name="houseNumber"
                 defaultValue={initialForm.houseStreet}
                 className={inputClass}
               />
             </Field>
-            <Field label="Purok" error={errors?.purok}>
+
+            <Field
+              label="Purok"
+              error={errors?.purok}
+            >
               <div className="relative">
                 <select
                   name="purok"
@@ -387,18 +459,24 @@ export default function PatientInfoForm({
                   <option value="" disabled>
                     Select Purok
                   </option>
+
                   {purokOptions.map((option) => (
-                    <option key={option} value={option}>
+                    <option
+                      key={option}
+                      value={option}
+                    >
                       {option}
                     </option>
                   ))}
                 </select>
+
                 <ChevronDown
                   className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"
                   aria-hidden="true"
                 />
               </div>
             </Field>
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Barangay">
                 <input
@@ -408,6 +486,7 @@ export default function PatientInfoForm({
                   className={`${inputClass} cursor-not-allowed opacity-70`}
                 />
               </Field>
+
               <Field label="Municipality / City">
                 <input
                   name="city"
@@ -417,6 +496,7 @@ export default function PatientInfoForm({
                 />
               </Field>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Province">
                 <input
@@ -426,6 +506,7 @@ export default function PatientInfoForm({
                   className={`${inputClass} cursor-not-allowed opacity-70`}
                 />
               </Field>
+
               <Field label="ZIP Code">
                 <input
                   name="zipCode"
@@ -444,13 +525,17 @@ export default function PatientInfoForm({
           className="lg:order-4"
         >
           <div className="space-y-4">
-            <Field label="PhilHealth No." error={errors?.philHealthNo}>
+            <Field
+              label="PhilHealth No."
+              error={errors?.philHealthNo}
+            >
               <input
                 name="philHealthNo"
                 defaultValue={initialForm.philHealthNo}
                 className={inputClass}
               />
             </Field>
+
             <div className="grid grid-cols-2 gap-3">
               <SelectField
                 label="Membership Type"
@@ -465,168 +550,219 @@ export default function PatientInfoForm({
                 ]}
                 error={errors?.membershipType}
               />
+
               <SelectField
                 label="Status"
                 name="philHealthStatus"
                 defaultValue={initialForm.philHealthStatus}
-                options={['Active', 'Pending', 'Inactive']}
+                options={[
+                  'Active',
+                  'Pending',
+                  'Inactive',
+                ]}
                 error={errors?.philHealthStatus}
               />
             </div>
           </div>
         </SectionCard>
-
-        <SectionCard
-          title="Family Information"
-          icon={Users}
-          className="lg:order-5"
-        >
-          <div className="space-y-3">
-            {errors?.familyMembers && (
-              <p className="text-xs font-medium text-red-500">
-                {errors.familyMembers}
-              </p>
-            )}
-            {family.map((member) => (
-              <div
-                key={member.id}
-                className="relative bg-surface rounded-2xl p-3"
-              >
-                <input type="hidden" name="familyMemberId" value={member.id} />
-                <button
-                  type="button"
-                  aria-label={`Remove ${member.name || 'family member'}`}
-                  onClick={() => removeMember(member.id)}
-                  className="absolute top-2.5 right-2.5 p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" aria-hidden="true" />
-                </button>
-                <input
-                  name="familyName"
-                  placeholder="Full Name"
-                  defaultValue={member.name}
-                  className={`${rowInputClass} pr-9`}
-                />
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <input
-                    name="familyRelation"
-                    placeholder="Relation"
-                    defaultValue={member.relation}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyPhone"
-                    placeholder="Phone Number"
-                    defaultValue={member.phone}
-                    className={rowInputClass}
-                  />
-                </div>
-
-                <p className="mt-3 mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">
-                  Patient Info (auto-fills the ITR)
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    name="familyBirthdate"
-                    type="date"
-                    aria-label="Birthdate"
-                    defaultValue={member.birthdate}
-                    className={rowInputClass}
-                  />
-                  <select
-                    name="familySex"
-                    aria-label="Sex"
-                    defaultValue={member.sex}
-                    className={`${rowInputClass} cursor-pointer`}
-                  >
-                    <option value="">Sex</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <input
-                    name="familyHouseNumber"
-                    placeholder="House No. / Street"
-                    defaultValue={member.houseNumber}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyBarangay"
-                    placeholder="Barangay / Purok"
-                    defaultValue={member.barangay}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyCity"
-                    placeholder="Municipality / City"
-                    defaultValue={member.city}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyProvince"
-                    placeholder="Province"
-                    defaultValue={member.province}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyZipCode"
-                    placeholder="ZIP Code"
-                    defaultValue={member.zipCode}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyPurok"
-                    placeholder="Purok"
-                    defaultValue={member.purok}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyPhilHealthNo"
-                    placeholder="PhilHealth No."
-                    defaultValue={member.philHealthNo}
-                    className={rowInputClass}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <input
-                    name="familyBloodType"
-                    placeholder="Blood Type"
-                    defaultValue={member.bloodType}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyReligion"
-                    placeholder="Religion"
-                    defaultValue={member.religion}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyFathersName"
-                    placeholder="Father's Name"
-                    defaultValue={member.fathersName}
-                    className={rowInputClass}
-                  />
-                  <input
-                    name="familyMothersName"
-                    placeholder="Mother's Name"
-                    defaultValue={member.mothersName}
-                    className={rowInputClass}
-                  />
-                </div>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={addMember}
-              className="w-full border-2 border-dashed border-line rounded-xl py-2.5 text-sm font-medium text-brand hover:bg-brand-tint transition-colors inline-flex items-center justify-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              Add Family Member
-            </button>
-          </div>
-        </SectionCard>
       </fieldset>
+
+      <SectionCard
+        title="Family Information"
+        icon={Users}
+        className="lg:order-5 lg:col-span-2"
+      >
+        <div className="space-y-3">
+          {errors?.familyMembers && (
+            <p className="text-xs font-medium text-red-500">
+              {errors.familyMembers}
+            </p>
+          )}
+
+          {family.length === 0 && (
+            <div className="rounded-2xl bg-surface py-8 px-5 text-center">
+              <Users className="w-8 h-8 text-muted mx-auto mb-2" />
+
+              <p className="text-sm font-semibold text-body">
+                No family members added
+              </p>
+
+              <p className="text-xs text-muted mt-1">
+                Add a family member to keep their information
+                available for patient records.
+              </p>
+            </div>
+          )}
+
+          {family.map((member) => (
+            <div
+              key={member.id}
+              className="relative bg-surface rounded-2xl p-3"
+            >
+              <input
+                type="hidden"
+                name="familyMemberId"
+                value={member.id}
+              />
+
+              <button
+                type="button"
+                aria-label={`Remove ${
+                  member.name || 'family member'
+                }`}
+                onClick={() => removeMember(member.id)}
+                className="absolute top-2.5 right-2.5 p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2
+                  className="w-4 h-4"
+                  aria-hidden="true"
+                />
+              </button>
+
+              <input
+                name="familyName"
+                placeholder="Full Name"
+                defaultValue={member.name}
+                className={`${rowInputClass} pr-9`}
+              />
+
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <input
+                  name="familyRelation"
+                  placeholder="Relation"
+                  defaultValue={member.relation}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyPhone"
+                  placeholder="Phone Number"
+                  defaultValue={member.phone}
+                  className={rowInputClass}
+                />
+              </div>
+
+              <p className="mt-3 mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">
+                Patient Info (auto-fills the ITR)
+              </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  name="familyBirthdate"
+                  type="date"
+                  aria-label="Birthdate"
+                  defaultValue={member.birthdate}
+                  className={rowInputClass}
+                />
+
+                <select
+                  name="familySex"
+                  aria-label="Sex"
+                  defaultValue={member.sex}
+                  className={`${rowInputClass} cursor-pointer`}
+                >
+                  <option value="">Sex</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <input
+                  name="familyHouseNumber"
+                  placeholder="House No. / Street"
+                  defaultValue={member.houseNumber}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyBarangay"
+                  placeholder="Barangay / Purok"
+                  defaultValue={member.barangay}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyCity"
+                  placeholder="Municipality / City"
+                  defaultValue={member.city}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyProvince"
+                  placeholder="Province"
+                  defaultValue={member.province}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyZipCode"
+                  placeholder="ZIP Code"
+                  defaultValue={member.zipCode}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyPurok"
+                  placeholder="Purok"
+                  defaultValue={member.purok}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyPhilHealthNo"
+                  placeholder="PhilHealth No."
+                  defaultValue={member.philHealthNo}
+                  className={rowInputClass}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <input
+                  name="familyBloodType"
+                  placeholder="Blood Type"
+                  defaultValue={member.bloodType}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyReligion"
+                  placeholder="Religion"
+                  defaultValue={member.religion}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyFathersName"
+                  placeholder="Father's Name"
+                  defaultValue={member.fathersName}
+                  className={rowInputClass}
+                />
+
+                <input
+                  name="familyMothersName"
+                  placeholder="Mother's Name"
+                  defaultValue={member.mothersName}
+                  className={rowInputClass}
+                />
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addMember}
+            className="w-full border-2 border-dashed border-line rounded-xl py-2.5 text-sm font-medium text-brand hover:bg-brand-tint transition-colors inline-flex items-center justify-center gap-1.5"
+          >
+            <Plus
+              className="w-4 h-4"
+              aria-hidden="true"
+            />
+            Add Family Member
+          </button>
+        </div>
+      </SectionCard>
 
       {isEditing && (
         <div className="bg-card rounded-3xl shadow-card p-5 lg:order-6 lg:col-span-2 lg:bg-transparent lg:shadow-none lg:rounded-none lg:border-t lg:border-line lg:px-0 lg:pb-0 lg:pt-6">
@@ -639,6 +775,7 @@ export default function PatientInfoForm({
             >
               Cancel
             </button>
+
             <button
               type="submit"
               disabled={isPending}
@@ -654,7 +791,10 @@ export default function PatientInfoForm({
                 </>
               ) : (
                 <>
-                  <Check className="w-4 h-4" aria-hidden="true" />
+                  <Check
+                    className="w-4 h-4"
+                    aria-hidden="true"
+                  />
                   Save Changes
                 </>
               )}

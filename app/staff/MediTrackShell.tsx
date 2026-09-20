@@ -215,7 +215,7 @@ function SidebarContent({
           <h1
             className={`font-bebas text-[36px] lg:text-[50px] leading-none m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
           >
-            MEDITRACK
+            PRAMIS
           </h1>
           <p
             className={`font-asap text-[17px] tracking-[2px] leading-none -mt-1.5 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}

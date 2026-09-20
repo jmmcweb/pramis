@@ -10,7 +10,7 @@ import { todayISO } from '@/config/appointment'
 import AppointmentManagementClient from '@/components/staff/AppointmentManagementClient'
 
 export const metadata: Metadata = {
-  title: 'Appointment Management | Meditrack',
+  title: 'Appointment Management | PRAMIS',
   description: "Manage today's schedule, upcoming visits, archives and walk-ins",
 }
 

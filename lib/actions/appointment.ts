@@ -7,6 +7,7 @@ import { revalidateTag } from 'next/cache'
 import { requireUser, requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
 import { createNotification, notifyAllStaff } from '@/lib/actions/notifications'
+import { recordAudit } from '@/lib/actions/audit'
 import { getServices } from '@/lib/actions/service'
 import { APP_NAME } from '@/config/constants'
 import { sendMail } from '@/lib/mailer'
@@ -585,6 +586,21 @@ export async function cancelAppointment(
 
     revalidateTag('appointments', 'max')
 
+    await recordAudit({
+      action: 'STATUS_CHANGE',
+      entity: 'APPOINTMENT',
+      entityId: appointmentId,
+      description: `Cancelled appointment ${appointmentId} (${getSlotLabel(
+        `${String(appointment.appointmentAt.getUTCHours()).padStart(2, '0')}:00`,
+      )} on ${appointment.appointmentAt.toISOString().slice(0, 10)}).`,
+      metadata: {
+        appointmentId,
+        previousStatus: appointment.status,
+        status: 'CANCELLED',
+        userId: appointment.userId,
+      },
+    })
+
     if (appointment.userId === session.user.id) {
       await notifyAllStaff({
         category: 'Appointment',
@@ -768,6 +784,20 @@ export async function updateAppointmentStatus(
     revalidateTag('appointments', 'max')
     revalidateTag('patients', 'max')
 
+    await recordAudit({
+      action: 'STATUS_CHANGE',
+      entity: 'APPOINTMENT',
+      entityId: appointmentId,
+      description: `Marked appointment ${appointmentId} (${serviceName} for ${forName}) as ${status}.`,
+      metadata: {
+        appointmentId,
+        previousStatus: appointment.status,
+        status,
+        patientId: appointment.patientId ?? null,
+        userId: appointment.userId,
+      },
+    })
+
     const statusNotices: Record<
       string,
       { title: string; description: string }
@@ -889,6 +919,19 @@ export async function notifyAppointment(
         content,
       })
     }
+
+    await recordAudit({
+      action: 'NOTIFY',
+      entity: 'APPOINTMENT',
+      entityId: appointmentId,
+      description: `Sent an appointment reminder for ${patientName} (${serviceName} on ${dateLabel} at ${timeLabel}).`,
+      metadata: {
+        appointmentId,
+        patientName,
+        serviceName,
+        channel: notified && emailed ? 'IN_APP+EMAIL' : notified ? 'IN_APP' : 'EMAIL',
+      },
+    })
 
     return {
       success: true,

@@ -8,7 +8,7 @@ import StaffPatientsTable from '@/components/patient/StaffPatientsTable'
 
 // 
 export const metadata: Metadata = {
-  title: 'Patient Records | Meditrack',
+  title: 'Patient Records | PRAMIS',
   description: 'Manage patient records',
 }
 

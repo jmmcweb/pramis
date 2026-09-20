@@ -12,7 +12,7 @@ export default function SidebarFooter({
       <div className="flex items-center justify-center gap-1.5">
         <span className="text-gray-400 text-base font-medium">&copy;</span>
         <p className="font-poppins text-[15px] text-center text-gray-400">
-          Meditrack Developers
+          PRAMIS Developers
         </p>
       </div>
     </div>

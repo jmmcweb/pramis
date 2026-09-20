@@ -99,33 +99,6 @@ const defaultEvents = [
 ]
 
 async function main() {
-  const defaultEmail = 'admin@domain.com'
-  const passwordHash = await bcrypt.hash('defaultpass', 10)
-
-  const admin = await prisma.user.upsert({
-    where: { email: defaultEmail },
-    update: {},
-    create: {
-      id: 'ADM-1000',
-      email: defaultEmail,
-      password: passwordHash,
-      role: 'SUPERADMIN',
-    },
-  })
-
-  const staff = await prisma.user.upsert({
-    where: { email: 'staff@domain.com' },
-    update: {},
-    create: {
-      id: 'MS-1000',
-      email: 'staff@domain.com',
-      password: passwordHash,
-      role: 'MEDSTAFF',
-    },
-  })
-
-  console.log('✅ Seeded admin user:', admin.email)
-  console.log('✅ Seeded staff user:', staff.email)
 
   const existingServices = await prisma.service.findMany()
   if (existingServices.length === 0) {

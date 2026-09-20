@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { signOut } from 'next-auth/react'
 import { Clock3, LayoutDashboard, LogOut, ShieldAlert } from 'lucide-react'
+import AccountStatusWatcher from '@/components/patient/AccountStatusWatcher'
 
 export default function AccountStatusScreen({
   status,
@@ -16,6 +17,7 @@ export default function AccountStatusScreen({
 
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-4">
+      <AccountStatusWatcher initialStatus={status} />
       <div className="bg-white dark:bg-card rounded-3xl shadow-card p-8 w-full max-w-md text-center">
         <div
           className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center ${

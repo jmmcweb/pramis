@@ -3,6 +3,7 @@
 import prisma from '@/lib/prisma'
 import { revalidateTag } from 'next/cache'
 import { requireUser, requireAdmin } from '@/lib/actions/guard'
+import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
 
 export type EventItem = {
@@ -325,6 +326,20 @@ export async function createEvent(data: {
 
     revalidateTag('events', 'max')
 
+    await recordAudit({
+      action: 'CREATE',
+      entity: 'EVENT',
+      entityId: created.eventid,
+      description: `Created event "${created.name}" scheduled on ${created.startDate
+        ?.toISOString?.()
+        ?.slice(0, 10) ?? ''}.`,
+      metadata: {
+        name: created.name,
+        startDate: created.startDate ?? null,
+        status: eventStatus,
+      },
+    })
+
     return {
       success: true,
       message: 'Event created successfully in database.',
@@ -385,6 +400,18 @@ export async function updateEvent(data: {
 
     revalidateTag('events', 'max')
 
+    await recordAudit({
+      action: 'UPDATE',
+      entity: 'EVENT',
+      entityId: data.id,
+      description: `Updated event "${updated.name}"${data.status ? ` (status: ${data.status})` : ''}.`,
+      metadata: {
+        name: updated.name,
+        status: eventStatus,
+        startDate: updated.startDate ?? null,
+      },
+    })
+
     return {
       success: true,
       message: 'Event updated successfully.',
@@ -408,11 +435,23 @@ export async function deleteEvent(id: string) {
   }
 
   try {
+    const existing = await (prisma as any).event.findUnique({
+      where: { eventid: id },
+      select: { name: true },
+    })
     await (prisma as any).event.delete({
       where: { eventid: id },
     })
 
     revalidateTag('events', 'max')
+
+    await recordAudit({
+      action: 'DELETE',
+      entity: 'EVENT',
+      entityId: id,
+      description: `Deleted event "${existing?.name ?? id}".`,
+      metadata: { name: existing?.name ?? null },
+    })
 
     return { success: true, message: 'Event deleted successfully from database.' }
   } catch (error) {

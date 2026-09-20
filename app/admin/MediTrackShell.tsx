@@ -14,11 +14,11 @@ import { useNotifications } from '@/components/patient/useNotifications'
 import type { PatientNotification } from '@/components/patient/notificationData'
 
 const navItems = [
-  { href: '/admin', label: 'Dashboard', icon: '/dashboard.png', exact: true },
+  { href: '/admin', label: 'Dashboard', icon: '/Dashboard.png', exact: true },
   {
     href: '/admin/appointmentmanagement',
     label: 'Analytics',
-    icon: '/analytics.png',
+    icon: '/Analytics.png',
   },
   {
     href: '/admin/usermanagement',
@@ -41,6 +41,7 @@ const navItems = [
     label: 'Appointment Schedule',
     icon: '/calendar.png',
   },
+  { href: '/admin/auditlogs', label: 'Audit Logs', icon: '/record.png' },
 ]
 
 const notificationCategories = [
@@ -230,7 +231,7 @@ function SidebarContent({
           <h1
             className={`font-bebas text-[36px] lg:text-[50px] leading-none m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
           >
-            MEDITRACK
+            PRAMIS
           </h1>
           <p
             className={`font-asap text-[17px] tracking-[2px] leading-none -mt-1.5 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
@@ -241,9 +242,7 @@ function SidebarContent({
       </div>
 
       <nav className="flex-1 mt-4">
-        <p className="font-poppins text-[11px] font-bold text-gray-400 uppercase tracking-[1px] mb-3 pl-4">
-          Menu
-        </p>
+        <br />
         <ul className="list-none p-0 m-0 flex flex-col gap-1">
           {navItems.map((item) => {
             const isActive = item.exact

@@ -18,7 +18,7 @@ const LeftPanel = () => {
                 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl 2xl:text-9xl font-bold text-[#0F588B] leading-none"
                 style={{ fontFamily: "Bebas Neue" }}
               >
-                MEDITRACK
+                PRAMIS
               </h1>
 
               <p
@@ -37,7 +37,7 @@ const LeftPanel = () => {
           className="text-sm text-[#0F588B]/70 tracking-[0.2em] uppercase"
           style={{ fontFamily: "Asap Condensed" }}
         >
-          Ⓒ Meditrack Developers
+          Ⓒ PRAMIS Developers
         </span>
       </div>
     </div>

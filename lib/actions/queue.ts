@@ -4,6 +4,7 @@
 import prisma from '@/lib/prisma'
 import { revalidateTag } from 'next/cache'
 import { requireAdmin, requireStaff } from '@/lib/actions/guard'
+import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
 import { dayRange, todayISO } from '@/config/appointment'
 
@@ -229,6 +230,19 @@ export async function addToQueue(_prevState: any, formData: FormData) {
 
     revalidateTag('queues', 'max')
 
+    await recordAudit({
+      action: 'CREATE',
+      entity: 'QUEUE',
+      entityId: patient.patientid,
+      description: `Added patient ${patient.patientid} to the ${lane === 'PRIORITY' ? 'priority' : 'walk-in'} queue.`,
+      metadata: {
+        patientId: patient.patientid,
+        lane,
+        priority: lane === 'PRIORITY' ? priority : null,
+        serviceId: serviceId || null,
+      },
+    })
+
     return { success: true, message: 'Patient added to the queue.' }
   } catch (error) {
     console.error('[addToQueue | Prisma | Error]:', error)
@@ -294,6 +308,14 @@ export async function advanceQueueEntry(
     revalidateTag('queues', 'max')
     revalidateTag('appointments', 'max')
 
+    await recordAudit({
+      action: 'STATUS_CHANGE',
+      entity: 'QUEUE',
+      entityId: qid,
+      description: `Moved queue entry ${qid} from ${row.status} to ${next}.`,
+      metadata: { qid, previousStatus: row.status, status: next },
+    })
+
     return {
       success: true,
       message:
@@ -317,11 +339,29 @@ export async function markQueueDone(
   if (!qid) return { success: false, message: 'Queue entry ID is required.' }
 
   try {
+    const existing = await (prisma as any).walkInQueue.findUnique({
+      where: { qid },
+      select: { status: true, patientId: true },
+    })
     await (prisma as any).walkInQueue.update({
       where: { qid },
       data: { status: 'DONE' },
     })
     revalidateTag('queues', 'max')
+
+    await recordAudit({
+      action: 'STATUS_CHANGE',
+      entity: 'QUEUE',
+      entityId: qid,
+      description: `Marked queue entry ${qid} as DONE.`,
+      metadata: {
+        qid,
+        previousStatus: existing?.status ?? null,
+        status: 'DONE',
+        patientId: existing?.patientId ?? null,
+      },
+    })
+
     return { success: true, message: 'Visit marked as done.' }
   } catch (error) {
     console.error('[markQueueDone | Prisma | Error]:', error)
@@ -341,8 +381,26 @@ export async function removeQueueEntry(
   if (!qid) return { success: false, message: 'Queue entry ID is required.' }
 
   try {
+    const existing = await (prisma as any).walkInQueue.findUnique({
+      where: { qid },
+      select: { patientId: true, status: true, queueType: true },
+    })
     await (prisma as any).walkInQueue.delete({ where: { qid } })
     revalidateTag('queues', 'max')
+
+    await recordAudit({
+      action: 'DELETE',
+      entity: 'QUEUE',
+      entityId: qid,
+      description: `Removed queue entry ${qid} from the queue.`,
+      metadata: {
+        qid,
+        patientId: existing?.patientId ?? null,
+        queueType: existing?.queueType ?? null,
+        status: existing?.status ?? null,
+      },
+    })
+
     return { success: true, message: 'Removed from queue.' }
   } catch (error) {
     console.error('[removeQueueEntry | Prisma | Error]:', error)

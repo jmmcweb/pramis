@@ -77,7 +77,7 @@ export default function Homepage() {
           <p
             className={`text-base font-medium mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
           >
-            Welcome back to your Meditrack Admin Dashboard
+            Welcome back to your PRAMIS Admin Dashboard
           </p>
         </div>
 
@@ -133,22 +133,6 @@ export default function Homepage() {
         <div
           className={`flex items-center gap-4 max-sm:gap-3 ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
         >
-          <div
-            className={`w-14 h-14 max-sm:w-11 max-sm:h-11 rounded-xl ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#4E69D3"
-              strokeWidth="2"
-              className="w-7 h-7"
-            >
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
           <div className="flex flex-col">
             <span
               className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
@@ -165,24 +149,6 @@ export default function Homepage() {
         <div
           className={`flex items-center gap-4 max-sm:gap-3 ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
         >
-          <div
-            className={`w-14 h-14 max-sm:w-11 max-sm:h-11 rounded-xl ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#4E69D3"
-              strokeWidth="2"
-              className="w-7 h-7"
-            >
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              <rect x="2" y="11" width="6" height="10" rx="1" />
-              <path d="M8 15h8" />
-              <path d="M16 21h2a2 2 0 0 0 2-2" />
-              <path d="M2 15h6" />
-            </svg>
-          </div>
           <div className="flex flex-col">
             <span
               className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
@@ -199,22 +165,6 @@ export default function Homepage() {
         <div
           className={`flex items-center gap-4 max-sm:gap-3 ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
         >
-          <div
-            className={`w-14 h-14 max-sm:w-11 max-sm:h-11 rounded-xl ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#4E69D3"
-              strokeWidth="2"
-              className="w-7 h-7"
-            >
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-          </div>
           <div className="flex flex-col">
             <span
               className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
@@ -231,20 +181,6 @@ export default function Homepage() {
         <div
           className={`flex items-center gap-4 max-sm:gap-3 ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
         >
-          <div
-            className={`w-14 h-14 max-sm:w-11 max-sm:h-11 rounded-xl ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#4E69D3"
-              strokeWidth="2"
-              className="w-7 h-7"
-            >
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-          </div>
           <div className="flex flex-col">
             <span
               className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
@@ -306,18 +242,13 @@ export default function Homepage() {
                 <h3
                   className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-[#2A2E43]'}`}
                 >
-                  Census per Purok
+                  Total per Purok
                 </h3>
-                <p
-                  className={`text-sm mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
-                >
-                  Demographic breakdown by purok location
-                </p>
               </div>
               <div
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border ${darkMode ? 'bg-[#1e1438] border-purple-500/30 text-[#C4B5FD]' : 'bg-indigo-50 border-indigo-100 text-[#4E69D3]'}`}
               >
-                <span>Total Census:</span>
+                <span>Total:</span>
                 <span className="text-base font-extrabold">
                   {population.purokTotal.toLocaleString()}
                 </span>

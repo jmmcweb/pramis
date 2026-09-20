@@ -8,6 +8,7 @@ import { revalidateTag } from 'next/cache'
 import { requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
 import { createNotification } from '@/lib/actions/notifications'
+import { recordAudit } from '@/lib/actions/audit'
 import { isValidEmail } from '@/lib/helper'
 import {
   dayRange,
@@ -161,6 +162,19 @@ export async function notifyAppointment(
       category: 'Appointment',
       title: 'Appointment Reminder',
       description: `Reminder: the ${serviceName} appointment for ${forName} is scheduled on ${whenLabel}. Please arrive on time.`,
+    })
+
+    await recordAudit({
+      action: 'NOTIFY',
+      entity: 'APPOINTMENT',
+      entityId: appointmentId,
+      description: `Sent an appointment reminder for the ${serviceName} appointment on ${whenLabel}.`,
+      metadata: {
+        appointmentId,
+        serviceName,
+        when: whenLabel,
+        channel: 'IN_APP',
+      },
     })
 
     return { success: true, message: 'Patient notified.' }
@@ -441,6 +455,20 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
     revalidateTag('queues', 'max')
     revalidateTag('patients', 'max')
 
+    await recordAudit({
+      action: 'CREATE',
+      entity: 'APPOINTMENT',
+      entityId: created.appointmentid,
+      description: `Registered walk-in patient ${displayName} (${patient.patientid}) for ${service.name} and added them to the queue.`,
+      metadata: {
+        appointmentId: created.appointmentid,
+        patientId: patient.patientid,
+        serviceId,
+        source: 'WALKIN',
+        accountCreated: Boolean(accountEmail),
+      },
+    })
+
     if (patient.userId) {
       await createNotification({
         userId: patient.userId,
@@ -546,6 +574,19 @@ export async function getWalkInAppointmentView(qid: string): Promise<{
         include: BOARD_INCLUDE,
       })
       revalidateTag('appointments', 'max')
+
+      await recordAudit({
+        action: 'CREATE',
+        entity: 'APPOINTMENT',
+        entityId: appt.appointmentid,
+        description: `Opened a walk-in visit (${appt.appointmentid}) for patient ${entry.patientId} from queue entry ${qid}.`,
+        metadata: {
+          appointmentId: appt.appointmentid,
+          patientId: entry.patientId,
+          qid,
+          source: 'WALKIN',
+        },
+      })
     }
 
     return {

@@ -7,7 +7,7 @@ import type { PatientListItem } from '@/lib/actions/patients'
 import PatientsTable from '@/components/patient/PatientsTable'
 
 export const metadata: Metadata = {
-  title: 'Patient Lists | Meditrack',
+  title: 'Patient Lists | PRAMIS',
   description: 'Manage patient records',
 }
 

@@ -12,92 +12,92 @@ datasource db {
   provider = "postgresql"
 }
 
-enum AccountStatus { 
-ACTIVE   
-INACTIVE
-PENDING 
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
 }
 
 enum AppointmentStatus {
-PENDING
-APPROVED
-COMPLETED
-CANCELLED
-NO_SHOW
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
 }
 
 enum StaffRole {
-ADMIN
-MEDSTAFF
+  ADMIN
+  MEDSTAFF
 }
 
 enum UserRole {
-SUPERADMIN
-ADMIN
-MEDSTAFF
-USER
+  SUPERADMIN
+  ADMIN
+  MEDSTAFF
+  USER
 }
 
-model User{
-id            String            @id   
-email         String            @unique   
-password      String   
-status        AccountStatus     @default(PENDING) 
-role          UserRole          @default(USER)
-createdAt     DateTime          @default(now())   
-updatedAt     DateTime          @updatedAt
-profile       UserProfile?   
-patients      Patient[]   
-appointments  Appointment[]   
-familyMembers FamilyMember[]
-notifications Notification[]
-deletedAt     DateTime?
- 
-@@map("users") 
+model User {
+  id            String         @id
+  email         String         @unique
+  password      String
+  status        AccountStatus  @default(PENDING)
+  role          UserRole       @default(USER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  profile       UserProfile?
+  patients      Patient[]
+  appointments  Appointment[]
+  familyMembers FamilyMember[]
+  notifications Notification[]
+  deletedAt     DateTime?
+
+  @@map("users")
 }
 
 model VerificationCode {
-id        String   @id @default(uuid()) @db.Uuid
-email     String   @unique
-codeHash  String
-expiresAt DateTime
-createdAt DateTime @default(now())
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  codeHash  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
-model UserProfile {   
-userprofileid             String    @id   
-userId        String      @unique   
-firstName     String   
-middleName    String?   
-lastName      String   
-suffix        String?   
-birthdate     DateTime   
-sex           String?
-phoneNumber   String   
-houseNumber   String   
-barangay      String   
-city          String   
-province      String   
+model UserProfile {
+  userprofileid String   @id
+  userId        String   @unique
+  firstName     String
+  middleName    String?
+  lastName      String
+  suffix        String?
+  birthdate     DateTime
+  sex           String?
+  phoneNumber   String
+  houseNumber   String
+  barangay      String
+  city          String
+  province      String
   zipCode       String
   purok         String?
   bloodType     String?
   religion      String?
   fathersName   String?
   mothersName   String?
-validId       String?   
-validIdType    String?
+  validId       String?
+  validIdType   String?
 
-philHealthNo    String?   
-membershipType  String?   
-philHealthStatus String?   
-createdAt     DateTime    @default(now())   
-updatedAt     DateTime    @updatedAt   
-user User     @relation(fields: [userId], references: [id], onDelete: Cascade) 
+  philHealthNo     String?
+  membershipType   String?
+  philHealthStatus String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model FamilyMember {
-  familymemberid String   @id
-  userId         String  
+  familymemberid String        @id
+  userId         String
   name           String
   relation       String
   phone          String?
@@ -114,173 +114,174 @@ model FamilyMember {
   religion       String?
   fathersName    String?
   mothersName    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   patients       Patient[]
   appointments   Appointment[]
 }
 
 model Staff {
-staffid       String      @id   
-firstName     String   
-middleName    String?   
-lastName      String
-suffix        String?
-email         String      @unique   
-password      String   
-role          StaffRole   
-position      String?
-phone         String?
-address       String?
-department    String?
-education     String?
-license       String?
-joinDate      String?
-emergencyContact String?
+  staffid            String    @id
+  firstName          String
+  middleName         String?
+  lastName           String
+  suffix             String?
+  email              String    @unique
+  password           String
+  mustChangePassword Boolean   @default(false)
+  role               StaffRole
+  position           String?
+  phone            String?
+  address          String?
+  department       String?
+  education        String?
+  license          String?
+  joinDate         String?
+  emergencyContact String?
 
-createdAt     DateTime    @default(now())   
-updatedAt     DateTime    @updatedAt   
-medicalHistories MedicalHistory[]
-notifications Notification[]
-deletedAt     DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  medicalHistories MedicalHistory[]
+  notifications    Notification[]
+  deletedAt        DateTime?
 }
 
-model Service {   
-serviceid     String      @id   
-name          String   
-description   String
-availability  Boolean     @default(true)   
-createdAt     DateTime    @default(now())   
-updatedAt     DateTime    @updatedAt   
-appointments Appointment[] 
-walkInQueues WalkInQueue[] 
+model Service {
+  serviceid    String        @id
+  name         String
+  description  String
+  availability Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  appointments Appointment[]
+  walkInQueues WalkInQueue[]
 }
 
 model Event {
-eventid       String      @id   
-name          String   
-description   String   
-startDate     DateTime   
-endDate       DateTime   
-status        Boolean     @default(true)   
-createdAt     DateTime    @default(now())   
-updatedAt     DateTime    @updatedAt
+  eventid     String   @id
+  name        String
+  description String
+  startDate   DateTime
+  endDate     DateTime
+  status      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Patient {
-patientid     String      @id   
-userId        String?     
-familyMemberId String?    @unique   
-allergies     String?   
-name          String?   
-birthdate     DateTime?
-sex           String?
-phoneNumber   String?
-houseNumber   String?
-barangay      String?
-city          String?
-province      String?
-zipCode       String?
-purok         String?
-  bloodType     String?
-  religion      String?
-  fathersName   String?
-  mothersName   String?
-createdAt     DateTime    @default(now())   
-updatedAt     DateTime    @updatedAt   
- user User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
- familyMember FamilyMember? @relation(fields: [familyMemberId], references: [familymemberid])
- appointments Appointment[]
-medicalHistories MedicalHistory[]   
-walkInQueues WalkInQueue[] 
+  patientid        String           @id
+  userId           String?
+  familyMemberId   String?          @unique
+  allergies        String?
+  name             String?
+  birthdate        DateTime?
+  sex              String?
+  phoneNumber      String?
+  houseNumber      String?
+  barangay         String?
+  city             String?
+  province         String?
+  zipCode          String?
+  purok            String?
+  bloodType        String?
+  religion         String?
+  fathersName      String?
+  mothersName      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyMember     FamilyMember?    @relation(fields: [familyMemberId], references: [familymemberid])
+  appointments     Appointment[]
+  medicalHistories MedicalHistory[]
+  walkInQueues     WalkInQueue[]
 }
 
 model Appointment {
-appointmentid String      @id   
-patientId     String?     
-userId        String?     
-serviceId     String      
-source        String      @default("BOOKING")   
-familyMemberId String?     
-appointmentAt DateTime   
-status        AppointmentStatus @default(PENDING)   
-createdAt     DateTime    @default(now())   
-updatedAt     DateTime    @updatedAt   
- patient Patient?          @relation(fields: [patientId], references: [patientid])
- user User?                @relation(fields: [userId], references: [id])
- service Service           @relation(fields: [serviceId], references: [serviceid])
- familyMember FamilyMember? @relation(fields: [familyMemberId], references: [familymemberid])
-medicalHistory MedicalHistory?
+  appointmentid  String            @id
+  patientId      String?
+  userId         String?
+  serviceId      String
+  source         String            @default("BOOKING")
+  familyMemberId String?
+  appointmentAt  DateTime
+  status         AppointmentStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  patient        Patient?          @relation(fields: [patientId], references: [patientid])
+  user           User?             @relation(fields: [userId], references: [id])
+  service        Service           @relation(fields: [serviceId], references: [serviceid])
+  familyMember   FamilyMember?     @relation(fields: [familyMemberId], references: [familymemberid])
+  medicalHistory MedicalHistory?
 }
 
 model MedicalHistory {
-medhisid       String     @id   
-patientId      String     
-appointmentId  String     @unique   
-checkedById    String?    
-status         String   
-bloodPressure  String   
-heartRate      Decimal?   @db.Decimal(5,2)   
-respiratoryRate Decimal?  @db.Decimal(5,2)   
-temperature    Decimal?   @db.Decimal(4,2)   
-height         Decimal    @db.Decimal(5,2)   
-weight         Decimal    @db.Decimal(5,2)   
-oxygenLevel    Decimal?   @db.Decimal(5,2)   
-chiefComplaints String?  
-diagnosis      String   
-medications    String?   
-recommendation String?
-// Child immunization records (stored as dates)
-immBcg         DateTime?
-immHepab24     DateTime?
-immHepab24plus DateTime?
-immPenta1      DateTime?
-immPenta2      DateTime?
-immPenta3      DateTime?
-immOpv1        DateTime?
-immOpv2        DateTime?
-immOpv3        DateTime?
-immRota1       DateTime?
-immRota2       DateTime?
-immPcv1        DateTime?
-immPcv2        DateTime?
-immPcv3        DateTime?
-immMcv1        DateTime?
-immMcv2        DateTime?
-immHepab2      DateTime?
-immHepab3      DateTime?
-immHepaa       DateTime?
-immPneumonia   DateTime?
-immInfluenza   DateTime?
-immOthers      DateTime?
-// Child birth details
-placeDelivered String?
-placeDeliveredOthers String?
-typeOfDelivery String?
-birthLength    Decimal?   @db.Decimal(5,2)
-birthWeight    Decimal?   @db.Decimal(5,2)
-attendantAtBirth String?   
-itrData        Json?   
-checkedDate    DateTime   
-createdAt      DateTime   @default(now())   
-updatedAt      DateTime   @updatedAt  
- patient Patient           @relation(fields: [patientId], references: [patientid])
- appointment Appointment   @relation(fields: [appointmentId], references: [appointmentid])
- checkedBy Staff?          @relation(fields: [checkedById], references: [staffid])
+  medhisid             String      @id
+  patientId            String
+  appointmentId        String      @unique
+  checkedById          String?
+  status               String
+  bloodPressure        String
+  heartRate            Decimal?    @db.Decimal(5, 2)
+  respiratoryRate      Decimal?    @db.Decimal(5, 2)
+  temperature          Decimal?    @db.Decimal(4, 2)
+  height               Decimal     @db.Decimal(5, 2)
+  weight               Decimal     @db.Decimal(5, 2)
+  oxygenLevel          Decimal?    @db.Decimal(5, 2)
+  chiefComplaints      String?
+  diagnosis            String
+  medications          String?
+  recommendation       String?
+  // Child immunization records (stored as dates)
+  immBcg               DateTime?
+  immHepab24           DateTime?
+  immHepab24plus       DateTime?
+  immPenta1            DateTime?
+  immPenta2            DateTime?
+  immPenta3            DateTime?
+  immOpv1              DateTime?
+  immOpv2              DateTime?
+  immOpv3              DateTime?
+  immRota1             DateTime?
+  immRota2             DateTime?
+  immPcv1              DateTime?
+  immPcv2              DateTime?
+  immPcv3              DateTime?
+  immMcv1              DateTime?
+  immMcv2              DateTime?
+  immHepab2            DateTime?
+  immHepab3            DateTime?
+  immHepaa             DateTime?
+  immPneumonia         DateTime?
+  immInfluenza         DateTime?
+  immOthers            DateTime?
+  // Child birth details
+  placeDelivered       String?
+  placeDeliveredOthers String?
+  typeOfDelivery       String?
+  birthLength          Decimal?    @db.Decimal(5, 2)
+  birthWeight          Decimal?    @db.Decimal(5, 2)
+  attendantAtBirth     String?
+  itrData              Json?
+  checkedDate          DateTime
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  patient              Patient     @relation(fields: [patientId], references: [patientid])
+  appointment          Appointment @relation(fields: [appointmentId], references: [appointmentid])
+  checkedBy            Staff?      @relation(fields: [checkedById], references: [staffid])
 }
 
 model Notification {
-notificationid String     @id   
-userId         String?     
-staffId        String?     
-category       String     
-title          String     
-description    String     
-readAt         DateTime?  
-createdAt      DateTime   @default(now())   
- user User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
- staff Staff?              @relation(fields: [staffId], references: [staffid], onDelete: Cascade)
+  notificationid String    @id
+  userId         String?
+  staffId        String?
+  category       String
+  title          String
+  description    String
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staff          Staff?    @relation(fields: [staffId], references: [staffid], onDelete: Cascade)
 }
 
 model ResetPasswordToken {
@@ -294,17 +295,42 @@ model ResetPasswordToken {
   @@map("ResetPasswordToken")
 }
 
-model WalkInQueue { 
-qid            String     @id   
-patientId     String      
-queueType     String   
-priority       String?    
-serviceId      String?    
-status         String     @default("WAITING")   
-createdAt     DateTime    @default(now())   
-updatedAt     DateTime    @updatedAt   
- patient Patient           @relation(fields: [patientId], references: [patientid])
- service Service?          @relation(fields: [serviceId], references: [serviceid])
+model WalkInQueue {
+  qid       String   @id
+  patientId String
+  queueType String
+  priority  String?
+  serviceId String?
+  status    String   @default("WAITING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient  @relation(fields: [patientId], references: [patientid])
+  service   Service? @relation(fields: [serviceId], references: [serviceid])
 }
 
+// Audit trail for every action performed by an admin or medical staff member.
+// Records are append-only: never updated or deleted from the application.
+model AuditLog {
+  logid       String   @id
+  actorId     String?
+  actorName   String?
+  actorEmail  String?
+  actorRole   String
+  actorType   String   @default("USER") // USER | STAFF | SYSTEM
+  action      String // CREATE | UPDATE | DELETE | APPROVE | REJECT | STATUS_CHANGE | LOGIN | LOGIN_FAILED | LOGOUT | PASSWORD_CHANGE | PASSWORD_RESET | NOTIFY | VIEW
+  entity      String // ACCOUNT | USER | STAFF | PATIENT | APPOINTMENT | QUEUE | MEDICAL_RECORD | SERVICE | EVENT | AUTH | PROFILE
+  entityId    String?
+  description String
+  status      String   @default("SUCCESS") // SUCCESS | FAILURE
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
 
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([actorRole])
+  @@index([action])
+  @@index([entity])
+  @@map("audit_logs")
+}

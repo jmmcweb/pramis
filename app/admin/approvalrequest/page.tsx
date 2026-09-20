@@ -33,258 +33,6 @@ type PatientAccount = BaseAccount & {
   validIdType?: string | null
 }
 
-const initialStaff: StaffAccount[] = [
-  {
-    kind: 'staff',
-    id: 'MS-1001',
-    firstName: 'Ramon',
-    lastName: 'Dela Cruz',
-    email: 'ramon.delacruz@gmail.com',
-    position: 'Nurse',
-    dateApplied: '2025-11-03',
-    status: 'Approved',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1002',
-    firstName: 'Liza',
-    lastName: 'Mendoza',
-    email: 'liza.mendoza@gmail.com',
-    position: 'Midwife',
-    dateApplied: '2025-11-18',
-    status: 'Approved',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1003',
-    firstName: 'Jose',
-    lastName: 'Santos',
-    email: 'jose.santos@gmail.com',
-    position: 'Barangay Health Worker (BHW)',
-    dateApplied: '2025-12-05',
-    status: 'Approved',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1004',
-    firstName: 'Ana',
-    lastName: 'Reyes',
-    email: 'ana.reyes@gmail.com',
-    position: 'Nurse',
-    dateApplied: '2026-01-14',
-    status: 'Approved',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1005',
-    firstName: 'Pedro',
-    lastName: 'Gonzales',
-    email: 'pedro.gonzales@gmail.com',
-    position: 'Barangay Health Worker (BHW)',
-    dateApplied: '2026-02-02',
-    status: 'Rejected',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1006',
-    firstName: 'Maria',
-    lastName: 'Villanueva',
-    email: 'maria.villanueva@gmail.com',
-    position: 'Midwife',
-    dateApplied: '2026-03-21',
-    status: 'Approved',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1007',
-    firstName: 'Carlo',
-    lastName: 'Bautista',
-    email: 'carlo.bautista@gmail.com',
-    position: 'Nurse',
-    dateApplied: '2026-04-09',
-    status: 'Pending',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1008',
-    firstName: 'Sofia',
-    lastName: 'Aquino',
-    email: 'sofia.aquino@gmail.com',
-    position: 'Barangay Health Worker (BHW)',
-    dateApplied: '2026-05-27',
-    status: 'Pending',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1009',
-    firstName: 'Miguel',
-    lastName: 'Torres',
-    email: 'miguel.torres@gmail.com',
-    position: 'Midwife',
-    dateApplied: '2026-06-16',
-    status: 'Approved',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1010',
-    firstName: 'Bea',
-    lastName: 'Lim',
-    email: 'bea.lim@gmail.com',
-    position: 'Nurse',
-    dateApplied: '2026-07-04',
-    status: 'Pending',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1011',
-    firstName: 'Dante',
-    lastName: 'Ramos',
-    email: 'dante.ramos@gmail.com',
-    position: 'Barangay Health Worker (BHW)',
-    dateApplied: '2026-07-28',
-    status: 'Pending',
-  },
-  {
-    kind: 'staff',
-    id: 'MS-1012',
-    firstName: 'Clara',
-    lastName: 'Navarro',
-    email: 'clara.navarro@gmail.com',
-    position: 'Midwife',
-    dateApplied: '2026-08-10',
-    status: 'Pending',
-  },
-]
-
-const initialPatients: PatientAccount[] = [
-  {
-    kind: 'patient',
-    id: 'PTN-1001',
-    firstName: 'Juan',
-    lastName: 'Dela Cruz',
-    email: 'juan.delacruz@gmail.com',
-    dateApplied: '2025-11-20',
-    status: 'Approved',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1002',
-    firstName: 'Maria',
-    lastName: 'Santos',
-    email: 'maria.santos@gmail.com',
-    dateApplied: '2025-12-11',
-    status: 'Approved',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1003',
-    firstName: 'Jose',
-    lastName: 'Rizal',
-    email: 'jose.rizal@gmail.com',
-    dateApplied: '2026-01-08',
-    status: 'Approved',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1004',
-    firstName: 'Ana',
-    lastName: 'Lopez',
-    email: 'ana.lopez@gmail.com',
-    dateApplied: '2026-01-25',
-    status: 'Rejected',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1005',
-    firstName: 'Carlos',
-    lastName: 'Marcos',
-    email: 'carlos.marcos@gmail.com',
-    dateApplied: '2026-02-14',
-    status: 'Approved',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1006',
-    firstName: 'Elena',
-    lastName: 'Cruz',
-    email: 'elena.cruz@gmail.com',
-    dateApplied: '2026-03-03',
-    status: 'Approved',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1007',
-    firstName: 'Rico',
-    lastName: 'Salazar',
-    email: 'rico.salazar@gmail.com',
-    dateApplied: '2026-03-30',
-    status: 'Pending',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1008',
-    firstName: 'Gina',
-    lastName: 'Fernandez',
-    email: 'gina.fernandez@gmail.com',
-    dateApplied: '2026-04-18',
-    status: 'Approved',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1009',
-    firstName: 'Leo',
-    lastName: 'Dimaano',
-    email: 'leo.dimaano@gmail.com',
-    dateApplied: '2026-05-06',
-    status: 'Pending',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1010',
-    firstName: 'Nita',
-    lastName: 'Vergara',
-    email: 'nita.vergara@gmail.com',
-    dateApplied: '2026-05-29',
-    status: 'Rejected',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1011',
-    firstName: 'Oscar',
-    lastName: 'Rivera',
-    email: 'oscar.rivera@gmail.com',
-    dateApplied: '2026-06-22',
-    status: 'Approved',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1012',
-    firstName: 'Pam',
-    lastName: 'Garcia',
-    email: 'pam.garcia@gmail.com',
-    dateApplied: '2026-07-12',
-    status: 'Pending',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1013',
-    firstName: 'Ramil',
-    lastName: 'Castro',
-    email: 'ramil.castro@gmail.com',
-    dateApplied: '2026-07-30',
-    status: 'Pending',
-  },
-  {
-    kind: 'patient',
-    id: 'PTN-1014',
-    firstName: 'Teresa',
-    lastName: 'Manalo',
-    email: 'teresa.manalo@gmail.com',
-    dateApplied: '2026-08-09',
-    status: 'Pending',
-  },
-]
-
 const PER_PAGE = 8
 
 const STATUS_COLORS: Record<AccountStatus, { badge: string; dot: string }> = {
@@ -314,7 +62,7 @@ function addYear(iso: string) {
   })
 }
 
-// "Dela Cruz, Juan M. Jr." — middle name collapses to an initial when present.
+//middle name collapses to an initial when present.
 const fullName = (a: BaseAccount) => {
   const middle = a.middleName?.trim()
   const initial = middle ? `${middle[0].toUpperCase()}.` : ''
@@ -346,18 +94,17 @@ export default function UserManagementPage() {
       })
       .then((data) => {
         if (!active || !Array.isArray(data.accounts)) return
-        setPatients(
-          data.accounts
-            .filter(
-              (account: StaffAccount | PatientAccount) =>
-                account.kind === 'patient',
-            )
-            .map((account: PatientAccount) => ({
-              ...account,
-              databaseId: account.id,
-              id: account.id,
-            })),
-        )
+        const dbPatients = data.accounts
+          .filter(
+            (account: StaffAccount | PatientAccount) =>
+              account.kind === 'patient',
+          )
+          .map((account: PatientAccount) => ({
+            ...account,
+            databaseId: account.id,
+            id: account.id,
+          }))
+        setPatients(dbPatients)
       })
       .catch(() =>
         toast.error('Unable to load approval requests from the database'),
@@ -374,17 +121,62 @@ export default function UserManagementPage() {
     return staff.filter((item) => item.position === staffFilter)
   }, [staff, staffFilter])
   const allUsers = useMemo(() => {
-    return [...patients].sort(
+    return [...staff, ...patients].sort(
       (a, b) =>
-        a.dateApplied.localeCompare(b.dateApplied) || a.id.localeCompare(b.id),
+        b.dateApplied.localeCompare(a.dateApplied) || b.id.localeCompare(a.id),
+    )
+  }, [staff, patients])
+  const pendingUsers = useMemo(() => {
+    return [...patients.filter((p) => p.status === 'Pending')].sort(
+      (a, b) =>
+        b.dateApplied.localeCompare(a.dateApplied) || b.id.localeCompare(a.id),
     )
   }, [patients])
+
   const rejectedUsers = useMemo(() => {
     return [...patients.filter((p) => p.status === 'Rejected')].sort(
       (a, b) =>
-        a.dateApplied.localeCompare(b.dateApplied) || a.id.localeCompare(b.id),
+        b.dateApplied.localeCompare(a.dateApplied) || b.id.localeCompare(a.id),
     )
   }, [patients])
+
+  const [pendingLoading, setPendingLoading] = useState(false)
+
+  const handleApproveAll = async () => {
+    const pendingList = patients.filter((p) => p.status === 'Pending')
+    if (pendingList.length === 0) {
+      toast.info('No pending user approval requests found.')
+      return
+    }
+
+    setPendingLoading(true)
+    try {
+      const response = await fetch('/api/admin/approval', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approveAll' }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.message || 'Unable to complete bulk approval')
+        return
+      }
+
+      setPatients((prev) =>
+        prev.map((a) =>
+          a.status === 'Pending' ? { ...a, status: 'Approved' } : a,
+        ),
+      )
+      toast.success(
+        `Successfully approved all ${pendingList.length} pending user account(s)!`,
+      )
+    } catch {
+      toast.error('Failed to execute bulk approval.')
+    } finally {
+      setPendingLoading(false)
+    }
+  }
 
   const handleAction = async (
     account: StaffAccount | PatientAccount,
@@ -420,23 +212,17 @@ export default function UserManagementPage() {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
+      <div className="flex items-center justify-between gap-4 mb-5">
         <div>
           <h1
-            className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 mb-[6px] text-left`}
+            className={`text-2xl sm:text-3xl ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} m-0 text-left`}
           >
             Approval Request
           </h1>
-          <p
-            className={`text-[15px] m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
-          >
-            Review account requests and validate IDs &mdash; first come, first
-            served
-          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-[18px] mb-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard
           darkMode={darkMode}
           value={patients.length}
@@ -477,14 +263,97 @@ export default function UserManagementPage() {
         />
       </div>
 
+      {/* Dedicated Section Only for Pending User Approvals */}
       <div
-        className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'} border rounded-2xl p-4 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]`}
+        className={`mb-6 p-5 rounded-xl border ${
+          darkMode
+            ? 'bg-[#2d1b4e] border-amber-500/30'
+            : 'bg-amber-50/70 border-amber-200'
+        } shadow-sm`}
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-amber-200/70 dark:border-amber-500/20">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path d="M12 8v4l2.5 2.5" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </div>
+            <div>
+              <h2
+                className={`text-base font-semibold m-0 flex items-center gap-2.5 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+              >
+                Pending User Approvals
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500 text-white">
+                  {pendingUsers.length}
+                </span>
+              </h2>
+              <p
+                className={`text-xs m-0 mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}
+              >
+                Users awaiting health center verification to access appointment
+                booking
+              </p>
+            </div>
+          </div>
+          {pendingUsers.length > 0 && (
+            <button
+              onClick={handleApproveAll}
+              disabled={pendingLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-sm font-bold font-poppins rounded-xl border-none shadow-md transition-all cursor-pointer disabled:opacity-50"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              {pendingLoading
+                ? 'Approving All...'
+                : `Approve All (${pendingUsers.length})`}
+            </button>
+          )}
+        </div>
+
+        {pendingUsers.length === 0 ? (
+          <div
+            className={`p-6 text-center rounded-xl text-sm font-semibold ${darkMode ? 'bg-[#0f1438] text-gray-400' : 'bg-white text-gray-500'}`}
+          >
+            ✓ All user registration requests have been processed. No pending
+            approvals.
+          </div>
+        ) : (
+          <ApprovalTable
+            key="pending-section"
+            darkMode={darkMode}
+            rows={pendingUsers}
+            onView={setViewing}
+            onAction={handleAction}
+            title="Pending Approvals"
+            idPrefix="PTN"
+          />
+        )}
+      </div>
+
+      <div
+        className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'} border rounded-xl p-4 sm:p-5 shadow-sm`}
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between pb-4 border-b border-gray-100 dark:border-white/10">
           <div className="relative w-fit">
             <button
               onClick={() => setTabOpen((o) => !o)}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[15px] font-semibold font-poppins cursor-pointer border transition-colors ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium font-poppins cursor-pointer border transition-colors ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}
             >
               <svg
                 width="16"
@@ -631,7 +500,7 @@ export default function UserManagementPage() {
                 setTabOpen(false)
                 setViewing(null)
               }}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[15px] font-semibold font-poppins cursor-pointer border transition-all ${showRejected ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow' : `${darkMode ? 'bg-[#2d1b4e] text-red-400 border-[rgba(255,255,255,0.10)] hover:border-red-500' : 'bg-white text-red-500 border-red-300 hover:bg-red-50'}`}`}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium font-poppins cursor-pointer border transition-all ${showRejected ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow' : `${darkMode ? 'bg-[#2d1b4e] text-red-400 border-[rgba(255,255,255,0.10)] hover:border-red-500' : 'bg-white text-red-500 border-red-300 hover:bg-red-50'}`}`}
             >
               <svg
                 width="16"
@@ -739,10 +608,10 @@ function StatCard({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 max-sm:gap-3 ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
+      className={`flex items-center gap-4 max-sm:gap-3 ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-5 rounded-xl border`}
     >
       <div
-        className={`w-14 h-14 max-sm:w-11 max-sm:h-11 rounded-xl ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}
+        className={`w-11 h-11 rounded-lg ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}
       >
         <svg
           viewBox="0 0 24 24"
@@ -751,19 +620,19 @@ function StatCard({
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="w-7 h-7"
+          className="w-5 h-5"
         >
           {icon}
         </svg>
       </div>
       <div className="flex flex-col">
         <span
-          className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          className={`text-2xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
         >
           {value}
         </span>
         <span
-          className={`text-lg leading-tight ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          className={`text-sm leading-tight font-medium ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
         >
           {label}
         </span>
@@ -838,8 +707,8 @@ function ApprovalTable<T extends AnyAccount>({
   const firstShown = filtered.length === 0 ? 0 : (safePage - 1) * PER_PAGE + 1
   const lastShown = (safePage - 1) * PER_PAGE + pageRows.length
 
-  const inputClass = `pl-10 pr-3.5 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
-  const selectClass = `py-3 pl-3 pr-9 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] appearance-none cursor-pointer min-w-[140px] box-border`
+  const inputClass = `pl-10 pr-3.5 py-2.5 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-sm font-poppins outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
+  const selectClass = `py-3 pl-3 pr-9 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-sm font-poppins outline-none focus:border-[#4E69D3] appearance-none cursor-pointer min-w-[140px] box-border`
   const pageBtnClass = `min-w-[38px] h-[38px] px-2.5 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'}`
   const pageBtnActiveClass =
     'bg-[#4E69D3] text-white border-[#4E69D3] hover:bg-[#4A6BC4] hover:text-white'
@@ -932,40 +801,40 @@ function ApprovalTable<T extends AnyAccount>({
 
       <div className="overflow-x-auto rounded-xl">
         <table
-          className="w-full border-collapse text-[16px] min-w-[980px]"
+          className="w-full border-collapse text-sm min-w-[980px]"
           style={{ tableLayout: 'fixed' }}
         >
           <thead>
-            <tr className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}>
+            <tr className={`${darkMode ? 'bg-[#111827]' : 'bg-gray-50'}`}>
               <th
-                className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[28%]`}
+                className={`px-4 py-3 text-left font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-xs uppercase tracking-wide font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[28%]`}
               >
                 Name
               </th>
               {showTypeColumn && (
                 <th
-                  className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[17%]`}
+                  className={`px-4 py-3 text-left font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-xs uppercase tracking-wide font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[17%]`}
                 >
                   {allAccounts ? 'Account Type' : 'Position'}
                 </th>
               )}
               <th
-                className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[22%]`}
+                className={`px-4 py-3 text-left font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-xs uppercase tracking-wide font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[22%]`}
               >
                 Email
               </th>
               <th
-                className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
+                className={`px-4 py-3 text-left font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-xs uppercase tracking-wide font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
               >
                 Date Applied
               </th>
               <th
-                className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[12%]`}
+                className={`px-4 py-3 text-left font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-xs uppercase tracking-wide font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[12%]`}
               >
                 Status
               </th>
               <th
-                className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[20%]`}
+                className={`px-4 py-3 text-left font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-xs uppercase tracking-wide font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[20%]`}
               >
                 Actions
               </th>
@@ -976,7 +845,7 @@ function ApprovalTable<T extends AnyAccount>({
               <tr>
                 <td
                   colSpan={showTypeColumn ? 6 : 5}
-                  className={`px-5 py-14 text-center text-[16px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  className={`px-5 py-14 text-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                 >
                   <svg
                     className="mx-auto mb-3"
@@ -1005,20 +874,20 @@ function ApprovalTable<T extends AnyAccount>({
                 return (
                   <tr
                     key={r.id}
-                    className={`${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-[#E8EAF6]'} transition-colors`}
+                    className={`${darkMode ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'} transition-colors`}
                   >
                     <td
-                      className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                      className={`px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
                         <div
-                          className={`w-9 h-9 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'} flex items-center justify-center font-bold text-sm flex-shrink-0`}
+                          className={`w-8 h-8 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'} flex items-center justify-center font-bold text-sm flex-shrink-0`}
                         >
                           {r.firstName.charAt(0)}
                         </div>
                         <div className="min-w-0">
                           <span
-                            className="block text-[16px] font-poppins font-semibold flex-1 min-w-0 whitespace-nowrap truncate"
+                            className="block text-sm font-poppins font-semibold flex-1 min-w-0 whitespace-nowrap truncate"
                             title={fullName(r)}
                           >
                             {fullName(r)}
@@ -1033,7 +902,7 @@ function ApprovalTable<T extends AnyAccount>({
                     </td>
                     {showTypeColumn && (
                       <td
-                        className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                        className={`px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-sm ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                       >
                         <span
                           className={`inline-flex px-2.5 py-1 rounded-md text-[13px] font-semibold ${darkMode ? 'bg-[#0f1438] text-[#C4B5FD]' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
@@ -1047,17 +916,17 @@ function ApprovalTable<T extends AnyAccount>({
                       </td>
                     )}
                     <td
-                      className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-nowrap overflow-hidden text-ellipsis`}
+                      className={`px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-nowrap overflow-hidden text-ellipsis`}
                     >
                       {r.email}
                     </td>
                     <td
-                      className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                      className={`px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-sm ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                     >
                       {fmtDate(r.dateApplied)}
                     </td>
                     <td
-                      className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
+                      className={`px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
                     >
                       <span
                         className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ${darkMode ? STATUS_COLORS[r.status].badge.replace('text-amber-700', 'text-amber-300').replace('text-green-700', 'text-green-400').replace('text-red-600', 'text-red-400') + ' bg-opacity-20' : STATUS_COLORS[r.status].badge}`}
@@ -1069,12 +938,12 @@ function ApprovalTable<T extends AnyAccount>({
                       </span>
                     </td>
                     <td
-                      className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
+                      className={`px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
                     >
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
                           onClick={() => onView(r)}
-                          className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'bg-white text-[#4E69D3] border-[#4E69D3]'} border ${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-[#E8EAF6]'} transition-all`}
+                          className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold font-poppins cursor-pointer ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'bg-white text-[#4E69D3] border-[#4E69D3]'} border ${darkMode ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'} transition-all`}
                         >
                           <svg
                             width="14"
@@ -1113,7 +982,7 @@ function ApprovalTable<T extends AnyAccount>({
                             </button>
                             <button
                               onClick={() => onAction(r, 'reject')}
-                              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-red-400 border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-red-500 border-red-300 hover:bg-red-50'}`}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-red-400 border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-red-500 border-red-300 hover:bg-red-50'}`}
                             >
                               <svg
                                 width="14"
@@ -1142,37 +1011,103 @@ function ApprovalTable<T extends AnyAccount>({
         </table>
       </div>
 
-      <div className="flex justify-between items-center gap-3 pt-4 pb-1 flex-wrap">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 pb-1 border-t border-gray-100 dark:border-white/10 mt-4 flex-wrap">
         <span
-          className={`text-[13px] ${darkMode ? 'text-gray-400' : 'text-gray-400'}`}
+          className={`text-[13px] font-medium ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
         >
-          Showing {firstShown}-{lastShown} of {filtered.length}{' '}
+          Showing{' '}
+          <span className="font-bold text-slate-800 dark:text-slate-200">
+            {firstShown}
+          </span>
+          &ndash;
+          <span className="font-bold text-slate-800 dark:text-slate-200">
+            {lastShown}
+          </span>{' '}
+          of{' '}
+          <span className="font-bold text-slate-800 dark:text-slate-200">
+            {filtered.length}
+          </span>{' '}
           {title.toLowerCase()}
         </span>
         {totalPages > 1 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
-              className={pageBtnClass}
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
+                safePage === 1
+                  ? 'opacity-40 cursor-not-allowed text-gray-400 border-gray-200 dark:border-white/10 dark:text-gray-600'
+                  : darkMode
+                    ? 'bg-[#2d1b4e] text-white border-white/10 hover:border-[#4E69D3]'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
+              }`}
               disabled={safePage === 1}
               onClick={() => setCurrentPage(safePage - 1)}
             >
-              &lsaquo; Prev
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i + 1}
-                className={`${pageBtnClass}${safePage === i + 1 ? ' ' + pageBtnActiveClass : ''}`}
-                onClick={() => setCurrentPage(i + 1)}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
               >
-                {i + 1}
-              </button>
-            ))}
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Prev
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(
+                (p) =>
+                  p === 1 || p === totalPages || Math.abs(p - safePage) <= 1,
+              )
+              .map((p, idx, arr) => {
+                const prevPage = arr[idx - 1]
+                const showEllipsis = prevPage && p - prevPage > 1
+                return (
+                  <span key={p} className="flex items-center gap-1.5">
+                    {showEllipsis && (
+                      <span className="text-gray-400 px-1 text-xs">
+                        &hellip;
+                      </span>
+                    )}
+                    <button
+                      className={`min-w-[32px] h-[32px] px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        safePage === p
+                          ? 'bg-[#4E69D3] text-white shadow-sm border border-[#4E69D3]'
+                          : darkMode
+                            ? 'bg-[#2d1b4e] text-gray-300 border border-white/10 hover:border-[#4E69D3]'
+                            : 'bg-white text-gray-700 border border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
+                      }`}
+                      onClick={() => setCurrentPage(p)}
+                    >
+                      {p}
+                    </button>
+                  </span>
+                )
+              })}
+
             <button
-              className={pageBtnClass}
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
+                safePage === totalPages
+                  ? 'opacity-40 cursor-not-allowed text-gray-400 border-gray-200 dark:border-white/10 dark:text-gray-600'
+                  : darkMode
+                    ? 'bg-[#2d1b4e] text-white border-white/10 hover:border-[#4E69D3]'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
+              }`}
               disabled={safePage === totalPages}
               onClick={() => setCurrentPage(safePage + 1)}
             >
-              Next &rsaquo;
+              Next
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </button>
           </div>
         )}
@@ -1205,7 +1140,7 @@ function IdModal({
       onClick={onClose}
     >
       <div
-        className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white'} rounded-2xl w-full max-w-[880px] shadow-[0_20px_60px_rgba(0,0,0,0.25)] flex flex-col max-h-[92vh]`}
+        className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white'} rounded-xl w-full max-w-[900px] shadow-xl flex flex-col max-h-[92vh]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div
@@ -1231,7 +1166,7 @@ function IdModal({
             </div>
             <div>
               <h2
-                className={`font-poppins text-xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} m-0`}
+                className={`font-poppins text-lg font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} m-0`}
               >
                 Valid ID &mdash; {fullName(account)}
               </h2>
@@ -1251,11 +1186,11 @@ function IdModal({
         </div>
 
         <div className="px-5 sm:px-7 py-6 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5 items-start">
             <IdCard account={account} />
 
             <div
-              className={`${darkMode ? 'bg-[#0f1438]' : 'bg-gray-50'} rounded-xl p-5`}
+              className={`${darkMode ? 'bg-[#0f1438]' : 'bg-gray-50'} rounded-lg p-4`}
             >
               <h3
                 className={`text-[15px] font-bold font-poppins uppercase tracking-[0.5px] m-0 mb-4 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
@@ -1358,7 +1293,7 @@ function IdModal({
                 <button
                   onClick={() => onAction(account, 'approve')}
                   disabled={!isPending}
-                  className={`inline-flex items-center gap-2 px-6 py-3 bg-[#16A34A] text-white border-none rounded-lg text-[15px] font-bold font-poppins cursor-pointer hover:bg-[#15803D] transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
+                  className={`inline-flex items-center gap-2 px-5 py-2.5 bg-[#16A34A] text-white border-none rounded-lg text-sm font-bold font-poppins cursor-pointer hover:bg-[#15803D] transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
                   <svg
                     width="15"
@@ -1378,7 +1313,7 @@ function IdModal({
                   rejecting ? (
                     <button
                       onClick={() => onAction(account, 'reject')}
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white border-none rounded-lg text-[15px] font-bold font-poppins cursor-pointer hover:bg-red-700 transition-colors"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white border-none rounded-lg text-sm font-bold font-poppins cursor-pointer hover:bg-red-700 transition-colors"
                     >
                       <svg
                         width="15"
@@ -1398,7 +1333,7 @@ function IdModal({
                   ) : (
                     <button
                       onClick={() => setRejecting(true)}
-                      className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-red-400 border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-red-500 border-red-300 hover:bg-red-50'}`}
+                      className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-red-400 border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-red-500 border-red-300 hover:bg-red-50'}`}
                     >
                       <svg
                         width="15"
@@ -1419,7 +1354,7 @@ function IdModal({
                 ) : (
                   <button
                     onClick={onClose}
-                    className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                   >
                     Close
                   </button>

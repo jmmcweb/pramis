@@ -6,6 +6,7 @@ import { revalidateTag } from 'next/cache'
 import { requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
 import { createNotification } from '@/lib/actions/notifications'
+import { recordAudit } from '@/lib/actions/audit'
 import { getSlotLabel } from '@/config/appointment'
 import { RECORD_STATUSES } from '@/config/medical'
 
@@ -447,6 +448,21 @@ export async function saveMedicalRecord(_prevState: any, formData: FormData) {
       `${String(at.getUTCHours()).padStart(2, '0')}:00`,
     )}`
     const updated = Boolean(appointment.medicalHistory)
+
+    if (isStaffOrAdmin) {
+      await recordAudit({
+        action: updated ? 'UPDATE' : 'CREATE',
+        entity: 'MEDICAL_RECORD',
+        entityId: appointment.medicalHistory?.medhisid ?? appointmentId,
+        description: `${updated ? 'Updated' : 'Created'} the medical record for ${forName}'s ${serviceName} visit (${whenLabel}).`,
+        metadata: {
+          appointmentId,
+          patientId,
+          medhisid: appointment.medicalHistory?.medhisid ?? null,
+        },
+      })
+    }
+
     // Only notify when a staff/admin fills the record; a patient updating their
     // own ITR doesn't need a notification about their own action.
     if (isStaffOrAdmin) {

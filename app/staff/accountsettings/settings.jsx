@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import FontSizeSetting from '@/components/globals/FontSizeSetting'
+import { getMe, updateMe, updateMePassword } from '@/lib/actions/me'
 
 const sections = [
   { id: 'account', label: 'Account Management' },
@@ -250,19 +251,40 @@ function Toggle({ checked, onChange }) {
 
 function AccountSection({ darkMode }) {
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({
-    name: 'Elaine Arceo',
-    email: 'elaine@meditrack.com',
-    role: 'Nurse',
-    employeeId: 'MS-0001',
-  })
+  const [form, setForm] = useState({ name: '', email: '', role: '', employeeId: '' })
+  const [originalForm, setOriginalForm] = useState({ name: '', email: '', role: '', employeeId: '' })
+  const [loading, setLoading] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ current: '', newPass: '', confirm: '' })
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNewPass, setShowNewPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  const currentMatches = passwordForm.current !== '' && passwordForm.current === 'MedStaff@2026'
+  useEffect(() => {
+    const loadProfile = async () => {
+      const res = await getMe()
+      if (res?.success && res?.payload) {
+        setForm({
+          name: res.payload.name || res.payload.firstName ? `${res.payload.firstName || ''} ${res.payload.lastName || ''}`.trim() : 'Staff Member',
+          email: res.payload.email || '',
+          role: res.payload.role || 'Medical Staff',
+          employeeId: res.payload.employeeId || res.payload.staffid || '',
+        })
+        setOriginalForm({
+          name: res.payload.name || res.payload.firstName ? `${res.payload.firstName || ''} ${res.payload.lastName || ''}`.trim() : 'Staff Member',
+          email: res.payload.email || '',
+          role: res.payload.role || 'Medical Staff',
+          employeeId: res.payload.employeeId || res.payload.staffid || '',
+        })
+        setLoading(false)
+      } else {
+        setLoading(false)
+      }
+    }
+    loadProfile()
+  }, [])
+
+  const currentMatches = passwordForm.current !== '' && passwordForm.current === form.email
   const reqs = [
     { label: '12+ characters', met: passwordForm.newPass.length >= 12 },
     { label: 'A-Z', met: /[A-Z]/.test(passwordForm.newPass) },
@@ -283,42 +305,63 @@ function AccountSection({ darkMode }) {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleSave = () => {
-    setEditing(false)
-    toast.success('Account settings updated successfully')
+  const handleSave = async () => {
+    const formData = new FormData()
+    formData.append('name', form.name)
+    formData.append('email', form.email)
+    const result = await updateMe({ success: false, message: null }, formData)
+    if (result?.success) {
+      setOriginalForm(form)
+      setEditing(false)
+      toast.success(result.message || 'Account settings updated successfully')
+    } else {
+      toast.error(result?.message || result?.errors?.email || 'Failed to update account settings')
+    }
   }
   const handleCancel = () => {
-    setForm({ name: 'Elaine Arceo', email: 'elaine@meditrack.com', role: 'Nurse', employeeId: 'MS-0001' })
+    setForm(originalForm)
     setEditing(false)
+    toast.success('Changes cancelled')
   }
 
-  const handlePasswordSave = () => {
+  const handlePasswordSave = async () => {
     if (!passwordForm.current || !passwordForm.newPass || !passwordForm.confirm) {
       toast.error('Please fill in all password fields')
-      return
-    }
-    if (passwordForm.current !== 'MedStaff@2026') {
-      toast.error('Current password does not match')
       return
     }
     if (passwordForm.newPass === passwordForm.current) {
       toast.error('This is your current password. Try a different one.')
       return
     }
-    if (passwordForm.newPass.length < 12) {
-      toast.error('Password must be at least 12 characters')
+    if (passwordForm.newPass.length < 8) {
+      toast.error('Password must be at least 8 characters')
       return
     }
     if (passwordForm.newPass !== passwordForm.confirm) {
       toast.error('New password and confirm password do not match')
       return
     }
-    toast.success('Password changed successfully')
-    setPasswordForm({ current: '', newPass: '', confirm: '' })
-    setShowPassword(false)
-    setShowCurrent(false)
-    setShowNewPass(false)
-    setShowConfirm(false)
+
+    const formData = new FormData()
+    formData.append('current_password', passwordForm.current)
+    formData.append('new_password', passwordForm.newPass)
+    formData.append('confirm_password', passwordForm.confirm)
+
+    const result = await updateMePassword({ success: false, message: null, errors: null }, formData)
+    if (result?.success) {
+      toast.success('Password changed successfully')
+      setPasswordForm({ current: '', newPass: '', confirm: '' })
+      setShowPassword(false)
+      setShowCurrent(false)
+      setShowNewPass(false)
+      setShowConfirm(false)
+    } else {
+      if (result?.errors?.current_password) {
+        toast.error(result.errors.current_password)
+      } else {
+        toast.error(result?.message || 'Failed to change password')
+      }
+    }
   }
 
   const fieldClass = `w-full px-3 py-2 rounded-lg text-[16px] max-[900px]:text-[14px] font-semibold outline-none border ${

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { hash } from 'bcrypt'
 import prisma from '@/lib/prisma'
 import { nextReferenceId } from '@/lib/referenceId'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
+import { recordAudit } from '@/lib/actions/audit'
+import { sendMail } from '@/lib/mailer'
+import { APP_NAME, APP_BASE_URL } from '@/config/constants'
 
 const roles = ['SUPERADMIN', 'ADMIN', 'MEDSTAFF', 'USER'] as const
 
@@ -122,7 +126,18 @@ export async function POST(request: Request) {
   const firstName = body.firstName?.trim() || 'New'
   const lastName = body.lastName?.trim() || 'Account'
 
-  if (!email || !password || !roles.includes(role as (typeof roles)[number])) {
+  if (!email || !roles.includes(role as (typeof roles)[number])) {
+    return NextResponse.json(
+      { message: 'Email and a valid role are required.' },
+      { status: 400 },
+    )
+  }
+
+  // Staff accounts never receive an admin-set password — the staff member sets
+  // their own via an emailed one-time link. Patient/superadmin accounts still
+  // require a password at creation.
+  const isStaffRole = role === 'ADMIN' || role === 'MEDSTAFF'
+  if (!isStaffRole && !password) {
     return NextResponse.json(
       { message: 'Email, password, and a valid role are required.' },
       { status: 400 },
@@ -152,18 +167,71 @@ export async function POST(request: Request) {
 
     if (role === 'ADMIN' || role === 'MEDSTAFF') {
       const staffid = await nextReferenceId(role === 'ADMIN' ? 'ADM' : 'MS')
+      // Admins never set staff passwords: a random unusable password is stored
+      // and the staff member sets their own through an emailed one-time link.
       const staff = await (prisma as any).staff.create({
         data: {
           staffid,
           firstName,
           lastName,
           email,
-          password: await hash(password, 12),
+          password: await hash(crypto.randomUUID(), 12),
+          mustChangePassword: true,
           role,
           position:
             body.position && typeof body.position === 'string'
               ? body.position
               : 'Nurse',
+        },
+      })
+
+      // Generate a one-time set-password token and email the link (24h expiry).
+      let inviteSent = false
+      try {
+        const rawToken = crypto.randomBytes(32).toString('hex')
+        const expires = new Date()
+        expires.setHours(expires.getHours() + 24)
+        await (prisma as any).resetPasswordToken.deleteMany({
+          where: { email },
+        })
+        await (prisma as any).resetPasswordToken.create({
+          data: {
+            email,
+            token: crypto.createHash('sha256').update(rawToken).digest('hex'),
+            expires,
+          },
+        })
+        const setupLink = `${APP_BASE_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`
+        inviteSent = await sendMail({
+          to: email,
+          subject: `Set Your Password - ${APP_NAME}`,
+          content: `
+            <p>Hi ${firstName},</p>
+            <p>An account has been created for you on ${APP_NAME}. Click the link below to set your password:</p>
+            <a href="${setupLink}">Set Your Password</a>
+            <p>This link expires in 24 hours. After setting your password, you can sign in with this email address.</p>
+            <p>Thank you!</p>
+          `,
+        })
+      } catch (inviteError) {
+        console.error(
+          '[accounts POST] Failed to send set-password email:',
+          inviteError,
+        )
+      }
+
+      await recordAudit({
+        action: 'CREATE',
+        entity: 'ACCOUNT',
+        entityId: staff.staffid,
+        description: `Created ${role === 'ADMIN' ? 'admin' : 'medical staff'} account ${email} (${staff.staffid}). Password-setup link emailed to the staff member.`,
+        metadata: {
+          accountKind: 'staff',
+          referenceId: staff.staffid,
+          email,
+          role,
+          position: staff.position ?? null,
+          inviteSent,
         },
       })
 
@@ -173,6 +241,7 @@ export async function POST(request: Request) {
           userId: staff.staffid,
           referenceId: staff.staffid,
           role: staff.role,
+          inviteSent,
         },
         { status: 201 },
       )
@@ -191,6 +260,19 @@ export async function POST(request: Request) {
         id: userId,
         email,
         password: await hash(password, 12),
+        role,
+      },
+    })
+
+    await recordAudit({
+      action: 'CREATE',
+      entity: 'ACCOUNT',
+      entityId: user.id,
+      description: `Created ${role === 'USER' ? 'patient' : role} account ${email} (${user.id}).`,
+      metadata: {
+        accountKind: 'user',
+        referenceId: user.id,
+        email,
         role,
       },
     })
@@ -254,9 +336,29 @@ export async function PUT(request: Request) {
       }
       if (body.position && typeof body.position === 'string')
         data.position = body.position
-      if (body.password && body.password !== '********')
-        data.password = await hash(body.password, 12)
+      // Admins cannot change staff passwords — any password in the request is
+      // ignored. Staff set/change their own password via emailed links or the
+      // account security page.
+      const previous = await (prisma as any).staff.findUnique({
+        where: { staffid: id },
+        select: { email: true, role: true, position: true },
+      })
       await (prisma as any).staff.update({ where: { staffid: id }, data })
+
+      await recordAudit({
+        action: 'UPDATE',
+        entity: 'STAFF',
+        entityId: id,
+        description: `Updated ${role === 'ADMIN' ? 'admin' : 'medical staff'} account ${email}.`,
+        metadata: {
+          accountKind: 'staff',
+          email,
+          role,
+          previousEmail: previous?.email ?? null,
+          previousRole: previous?.role ?? null,
+          position: data.position ?? previous?.position ?? null,
+        },
+      })
     } else {
       // Patient/user accounts stay as USER role here.
       if (role !== 'USER') {
@@ -301,6 +403,25 @@ export async function PUT(request: Request) {
           },
         })
       }
+
+      await recordAudit({
+        action: 'UPDATE',
+        entity: 'USER',
+        entityId: id,
+        description: `Updated patient account ${email}.${
+          body.password && body.password !== '********'
+            ? ' Password was reset.'
+            : ''
+        }`,
+        metadata: {
+          accountKind: 'user',
+          email,
+          role,
+          passwordChanged: Boolean(
+            body.password && body.password !== '********',
+          ),
+        },
+      })
     }
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -332,9 +453,41 @@ export async function DELETE(request: Request) {
     )
 
   try {
-    if (kind === 'staff')
+    if (kind === 'staff') {
+      const target = await (prisma as any).staff.findUnique({
+        where: { staffid: id },
+        select: { email: true, role: true },
+      })
       await (prisma as any).staff.delete({ where: { staffid: id } })
-    else await (prisma as any).user.delete({ where: { id } })
+      await recordAudit({
+        action: 'DELETE',
+        entity: 'STAFF',
+        entityId: id,
+        description: `Deleted staff account ${target?.email ?? id} (${id}).`,
+        metadata: {
+          accountKind: 'staff',
+          email: target?.email ?? null,
+          role: target?.role ?? null,
+        },
+      })
+    } else {
+      const target = await (prisma as any).user.findUnique({
+        where: { id },
+        select: { email: true, role: true },
+      })
+      await (prisma as any).user.delete({ where: { id } })
+      await recordAudit({
+        action: 'DELETE',
+        entity: 'USER',
+        entityId: id,
+        description: `Deleted patient account ${target?.email ?? id} (${id}).`,
+        metadata: {
+          accountKind: 'user',
+          email: target?.email ?? null,
+          role: target?.role ?? null,
+        },
+      })
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Account deletion failed:', error)

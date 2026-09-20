@@ -14,6 +14,7 @@ const REFERENCE_TABLES = {
   MED: { table: 'MedicalHistory', column: 'medhisid' },
   WIQ: { table: 'WalkInQueue', column: 'qid' },
   NTF: { table: 'Notification', column: 'notificationid' },
+  AUD: { table: 'audit_logs', column: 'logid' },
 } as const
 
 export type ReferencePrefix = keyof typeof REFERENCE_TABLES
