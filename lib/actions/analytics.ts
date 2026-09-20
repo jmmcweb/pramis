@@ -502,7 +502,7 @@ export async function getAnalyticsStats(
     let pwdStats: AnalyticsStats['pwdStats'] = null
     try {
       const profiles = await (prisma as any).userProfile.findMany({
-        select: { validIdType: true, membershipType: true },
+        select: { validIdType: true, membershipType: true, isPwd: true },
       })
       const totalProfiles = profiles.length
       let pwdCount = 0
@@ -510,7 +510,14 @@ export async function getAnalyticsStats(
       for (const p of profiles) {
         const idType = String(p.validIdType ?? '').toLowerCase()
         const membership = String(p.membershipType ?? '').toLowerCase()
-        if (idType.includes('pwd') || membership.includes('pwd')) pwdCount++
+        // `isPwd` is the declaration captured during signup; the ID type /
+        // membership checks only keep older accounts counted.
+        if (
+          p.isPwd === true ||
+          idType.includes('pwd') ||
+          membership.includes('pwd')
+        )
+          pwdCount++
         if (idType.includes('senior') || membership.includes('senior'))
           seniorCount++
       }

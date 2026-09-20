@@ -15,6 +15,8 @@
     "db:deploy": "dotenv -e .env.local -- npx prisma migrate deploy",
     "db:seed": "dotenv -e .env.local -- npx prisma db seed",
     "db:studio": "dotenv -e .env.local -- npx prisma studio",
+    "smtp:check": "node scripts/smtp-diagnose.mjs",
+    "smtp:check:e2e": "dotenv -e .env.local -- npx tsx scripts/smtp-e2e-check.ts",
     "test": "jest"
   },
   "prisma": {

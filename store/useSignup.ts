@@ -20,6 +20,9 @@ type SignupState = {
   country: string
   idType: string
   idPhoto: string
+  // null = the patient has not answered the PWD question yet
+  isPwd: boolean | null
+  pwdIdImage: string
   setPersonal: (data: Partial<SignupState>) => void
   setResidence: (data: Partial<SignupState>) => void
   setIdentification: (data: Partial<SignupState>) => void
@@ -45,6 +48,8 @@ export const useSignup = create<SignupState>()((set) => ({
   country: 'Philippines',
   idType: '',
   idPhoto: '',
+  isPwd: null,
+  pwdIdImage: '',
   setPersonal: (data) => set((state) => ({ ...state, ...data })),
   setResidence: (data) => set((state) => ({ ...state, ...data })),
   setIdentification: (data) => set((state) => ({ ...state, ...data })),

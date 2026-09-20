@@ -8,8 +8,19 @@ NEXTAUTH_SECRET="gTD/R38203UiyGjHa7MuxnaGZs10chX+NdzpAz+O60o="
 NEXTAUTH_URL="http://localhost:3000"
 
 SMTP_HOST="smtp-relay.brevo.com"
-SMTP_USER="b6437f001@smtp-brevo.com"
-SMTP_KEY="xsmtpsib-e05da9475bc6d1b04e92a8ac7db349a096756feaf11fc1e33bc5ddb93a76d0e4-FZycb1grQ5dD5PVM"
+SMTP_USER="ba2f92001@smtp-brevo.com"
+SMTP_KEY="xsmtpsib-0c3d687b18fa1c21eac790145269401e502561318c7ec5c4cfb2972ce013440c-3lAXkB2YWHeU9Xtu"
+
+# Must be a sender verified in the Brevo account (Brevo -> Senders, Domains & Dedicated IPs)
+SMTP_FROM_EMAIL="info.pramis@gmail.com"
+
+
+IMPORTANT - email will not send until Brevo allows this machine:
+  Brevo -> Settings -> Security -> Authorized IPs
+  Option A: "Authorize IP address" and add your outbound IP
+  Option B: "Deactivate blocking" (use this for Vercel, its IPs rotate)
+
+  Then check with:  npm run smtp:check
 
 
 in terminal:

@@ -421,14 +421,6 @@ export default function AuditLogsClient({
                             {log.actorEmail && (
                               <span className="block">Email: {log.actorEmail}</span>
                             )}
-                            {log.ipAddress && (
-                              <span className="block">IP: {log.ipAddress}</span>
-                            )}
-                            {log.userAgent && (
-                              <span className="block break-all">
-                                Client: {log.userAgent}
-                              </span>
-                            )}
                           </span>
                         )}
                       </td>

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { hash } from 'bcrypt'
 import { APP_NAME } from '@/config/constants'
-import { sendMail } from '@/lib/mailer'
+import { isSmtpConfigured, sendMailDetailed } from '@/lib/mailer'
 import prisma from '@/lib/prisma'
 
 export async function POST(request: Request) {
@@ -21,9 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Email is required.' }, { status: 400 })
   }
 
-  const smtpConfigured =
-    process.env.SMTP_HOST && process.env.SMTP_KEY && process.env.SMTP_USER
-  if (!smtpConfigured) {
+  if (!isSmtpConfigured()) {
     return NextResponse.json(
       {
         message:
@@ -50,15 +48,24 @@ export async function POST(request: Request) {
       expiresAt,
     )
 
-    const sent = await sendMail({
+    const result = await sendMailDetailed({
       to: email,
       subject: `${APP_NAME} verification code`,
       content: `<p>Your verification code is:</p><p style="font-size: 28px; font-weight: bold; letter-spacing: 8px;">${code}</p><p>This code expires in 10 minutes.</p>`,
     })
 
-    if (!sent) {
+    if (!result.sent) {
+      console.error('[verification] Email delivery failed:', result)
       return NextResponse.json(
-        { message: 'We could not send the email. Check your SMTP settings.' },
+        {
+          message: 'We could not send the email. Check your SMTP settings.',
+          // Surface the provider response in development only.
+          ...(process.env.NODE_ENV !== 'production' && {
+            reason: result.message,
+            smtpCode: result.code,
+            smtpResponse: result.response,
+          }),
+        },
         { status: 502 },
       )
     }

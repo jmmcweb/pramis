@@ -194,6 +194,8 @@ const VerificationPage = () => {
     country,
     idType,
     idPhoto,
+    isPwd,
+    pwdIdImage,
   } = useSignup()
   const { push } = useRouter()
 
@@ -234,7 +236,12 @@ const VerificationPage = () => {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setMismatchError(data.message || 'Unable to send verification code.')
+        // In development the API also returns `reason` with the raw SMTP failure
+        // (e.g. "525 5.7.1 Unauthorized IP address") so the cause is visible here.
+        setMismatchError(
+          [data.message, data.reason].filter(Boolean).join(' ') ||
+            'Unable to send verification code.',
+        )
         return
       }
 
@@ -284,6 +291,8 @@ const VerificationPage = () => {
     country: string
     idType: string
     idPhoto: string
+    isPwd: boolean | null
+    pwdIdImage: string
   }) => {
     setIsVerifying(true)
     setMismatchError('')
@@ -370,6 +379,8 @@ const VerificationPage = () => {
       country,
       idType,
       idPhoto,
+      isPwd,
+      pwdIdImage,
     })
   }
 

@@ -19,23 +19,11 @@ import { useSignup } from '@/store/useSignup'
 
 const PHILIPPINE_IDS = [
   { name: 'National ID (PhilSys ID)', note: 'PhilSys' },
-  { name: 'UMID / Unified Multi-Purpose ID', note: 'SSS · GSIS' },
   { name: "Driver's License", note: 'LTO' },
-  { name: 'Passport', note: 'DFA' },
-  { name: 'SSS ID', note: 'Social Security System' },
-  { name: 'GSIS e-Card', note: 'Government Service Insurance System' },
-  { name: 'PhilHealth ID', note: 'Philippine Health Insurance' },
-  { name: 'PRC ID', note: 'Professional Regulation Commission' },
-  { name: 'Postal ID', note: 'PhilPost' },
   { name: "Voter's ID", note: 'COMELEC' },
-  { name: 'TIN ID', note: 'BIR' },
   { name: 'Senior Citizen ID', note: 'OSCA' },
   { name: 'PWD ID', note: 'Persons with Disability' },
-  { name: 'NBI Clearance', note: 'National Bureau of Investigation' },
-  { name: 'Police Clearance', note: 'Philippine National Police' },
   { name: 'Barangay ID', note: 'Barangay Clearance' },
-  { name: 'School ID', note: 'Student identification' },
-  { name: 'Company / Employee ID', note: 'Work identification' },
 ]
 
 type PhotoStatus = 'ok' | 'blurry' | 'small' | 'error'
@@ -122,6 +110,7 @@ const Identification = () => {
   const { push } = useRouter()
 
   const fileRef = useRef<HTMLInputElement>(null)
+  const pwdFileRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -140,6 +129,13 @@ const Identification = () => {
   const [photoError, setPhotoError] = useState('')
 
   const [submitError, setSubmitError] = useState('')
+
+  // PWD (Person with Disability) declaration: null = not answered yet.
+  const [isPwd, setIsPwd] = useState<boolean | null>(null)
+  const [pwdIdImage, setPwdIdImage] = useState('')
+  const [pwdAssessing, setPwdAssessing] = useState(false)
+  const [pwdError, setPwdError] = useState('')
+  const [pwdIdError, setPwdIdError] = useState('')
 
   useEffect(() => {
     return () => {
@@ -197,6 +193,28 @@ const Identification = () => {
     reader.readAsDataURL(file)
   }
 
+  // PWD ID photo upload - the same clarity check as the valid ID photo.
+  const handlePwdIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const src = String(reader.result)
+      setPwdAssessing(true)
+      const result = await evaluateImage(src)
+      setPwdAssessing(false)
+      if (!result.ok) {
+        setPwdIdImage('')
+        setPwdIdError(result.message)
+        return
+      }
+      setPwdIdImage(src)
+      setPwdIdError('')
+    }
+    reader.readAsDataURL(file)
+  }
+
   const assessPhoto = async (src: string) => {
     setAssessing(true)
     const result = await evaluateImage(src)
@@ -237,9 +255,29 @@ const Identification = () => {
     } else {
       setSubmitError('')
     }
+
+    if (isPwd === null) {
+      setPwdError('Select whether you are a Person with Disability (PWD).')
+      hasError = true
+    } else {
+      setPwdError('')
+    }
+
+    if (isPwd === true && !pwdIdImage) {
+      setPwdIdError('Upload a clear photo of your PWD ID.')
+      hasError = true
+    } else {
+      setPwdIdError('')
+    }
+
     if (hasError) return
 
-    setIdentification({ idType, idPhoto: photo })
+    setIdentification({
+      idType,
+      idPhoto: photo,
+      isPwd,
+      pwdIdImage: isPwd ? pwdIdImage : '',
+    })
     push('/verification')
   }
 
@@ -318,6 +356,12 @@ const Identification = () => {
                           setIdType(id.name)
                           setIdTypeError('')
                           setIdOpen(false)
+                          // Choosing a PWD ID as the valid ID implies the PWD
+                          // declaration, so pre-answer it when still unanswered.
+                          if (id.name === 'PWD ID' && isPwd === null) {
+                            setIsPwd(true)
+                            setPwdError('')
+                          }
                         }}
                         className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left cursor-pointer transition-colors ${
                           selected ? 'bg-brand/5' : 'hover:bg-mist/60'
@@ -497,6 +541,145 @@ const Identification = () => {
           )}
         </div>
         {photoError && <p className="error">{photoError}</p>}
+      </div>
+
+      <div className="flex flex-col gap-2.5 mt-6 mb-1">
+        <StepHeading number={3} label="Disability (PWD) status" required />
+
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] text-slate m-0">
+            Are you a Person with Disability (PWD)?
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {[
+              { value: true, label: 'Yes, I am a PWD' },
+              { value: false, label: 'No, I am not a PWD' },
+            ].map((option) => {
+              const selected = isPwd === option.value
+              return (
+                <button
+                  key={String(option.value)}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setIsPwd(option.value)
+                    setPwdError('')
+                    if (!option.value) {
+                      setPwdIdImage('')
+                      setPwdIdError('')
+                    }
+                  }}
+                  className={`flex items-center gap-2.5 px-3.5 py-3 rounded-lg border bg-white text-left text-[13.5px] cursor-pointer transition-colors ${
+                    selected
+                      ? 'border-brand text-brand font-semibold'
+                      : 'border-line text-ink hover:border-brand/50'
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      selected ? 'border-brand' : 'border-slate/40'
+                    }`}
+                  >
+                    {selected && (
+                      <span className="w-2 h-2 rounded-full bg-brand" />
+                    )}
+                  </span>
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {pwdError && <p className="error">{pwdError}</p>}
+
+        {isPwd === true && (
+          <div className="flex flex-col gap-2.5">
+            <input
+              ref={pwdFileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handlePwdIdChange}
+            />
+
+            <span className="auth-label">
+              PWD ID photo<span className="text-brand"> *</span>
+            </span>
+
+            {pwdAssessing && (
+              <div className="flex items-center justify-center gap-2.5 py-9 rounded-2xl bg-mist/50">
+                <Loader2 size={19} className="text-brand animate-spin" />
+                <span className="text-[13px] text-slate">
+                  Checking photo clarity…
+                </span>
+              </div>
+            )}
+
+            {!pwdAssessing && pwdIdImage && (
+              <div className="flex flex-col gap-2.5">
+                <div className="rounded-xl overflow-hidden border border-line bg-black/5 p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={pwdIdImage}
+                    alt="Preview of your PWD ID"
+                    className="w-full max-h-[220px] object-contain rounded-lg"
+                  />
+                </div>
+                <span className="inline-flex items-center gap-1.5 self-start px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[12px] font-semibold">
+                  <CheckCircle2 size={13} />
+                  PWD ID photo uploaded
+                </span>
+                <div className="flex gap-2.5">
+                  {secondaryAction(
+                    () => pwdFileRef.current?.click(),
+                    'Upload another',
+                    <ImagePlus size={15} />,
+                  )}
+                  {secondaryAction(
+                    () => {
+                      setPwdIdImage('')
+                      setPwdIdError('')
+                    },
+                    'Remove',
+                    <X size={15} />,
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!pwdAssessing && !pwdIdImage && (
+              <button
+                type="button"
+                onClick={() => pwdFileRef.current?.click()}
+                className="group w-full flex flex-col items-center gap-2.5 px-6 py-7 rounded-2xl border-2 border-dashed border-brand/30 bg-brand/5 cursor-pointer hover:border-brand/60 hover:bg-brand/10 transition-colors"
+              >
+                <span className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center text-brand group-hover:scale-105 transition-transform duration-200">
+                  <ImagePlus size={21} />
+                </span>
+                <span className="text-[14px] font-semibold text-ink">
+                  Upload a photo of your PWD ID
+                </span>
+                <span className="text-[12px] text-slate">
+                  Use your device camera or pick a saved image
+                </span>
+              </button>
+            )}
+
+            {pwdIdError && <p className="error">{pwdIdError}</p>}
+          </div>
+        )}
+
+        <div className="rounded-xl bg-mist/40 px-4 py-3">
+          <p className="text-[12px] text-slate m-0 leading-relaxed">
+            {isPwd === true
+              ? 'Your PWD ID photo is reviewed by health center staff and gives you access to the priority lane.'
+              : isPwd === false
+                ? 'You will be served as a regular walk-in patient.'
+                : 'Persons with Disability (PWD) and senior citizens are served through the priority lane.'}
+          </p>
+        </div>
       </div>
 
       {submitError && (

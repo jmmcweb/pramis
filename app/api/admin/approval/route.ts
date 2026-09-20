@@ -48,6 +48,8 @@ export async function GET() {
           status: statusLabel(account.status),
           validId: account.profile?.validId || null,
           validIdType: account.profile?.validIdType || null,
+          isPwd: account.profile?.isPwd ?? null,
+          pwdIdImage: account.profile?.pwdIdImage || null,
         })),
       ],
     })

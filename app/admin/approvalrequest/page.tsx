@@ -31,6 +31,8 @@ type PatientAccount = BaseAccount & {
   id: string
   validId?: string | null
   validIdType?: string | null
+  isPwd?: boolean | null
+  pwdIdImage?: string | null
 }
 
 const PER_PAGE = 8
@@ -1242,6 +1244,30 @@ function IdModal({
                   label="Account Type"
                   value={isStaff ? 'Medical Staff' : 'Patient / User'}
                 />
+                {!isStaff && (
+                  <DetailItem
+                    darkMode={darkMode}
+                    label="PWD Status"
+                    value={
+                      (account as PatientAccount).isPwd === true
+                        ? 'Person with Disability (PWD)'
+                        : (account as PatientAccount).isPwd === false
+                          ? 'Not a PWD'
+                          : 'Not declared'
+                    }
+                  />
+                )}
+                {!isStaff && (account as PatientAccount).isPwd === true && (
+                  <DetailItem
+                    darkMode={darkMode}
+                    label="PWD ID Photo"
+                    value={
+                      (account as PatientAccount).pwdIdImage
+                        ? 'Uploaded'
+                        : 'Not uploaded'
+                    }
+                  />
+                )}
                 <div className="col-span-2">
                   <span
                     className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`}
@@ -1403,6 +1429,7 @@ function DetailItem({
 function IdCard({ account }: { account: AnyAccount }) {
   const isStaff = account.kind === 'staff'
   const validId = (account as PatientAccount).validId
+  const pwdIdImage = (account as PatientAccount).pwdIdImage
 
   return (
     <div className="w-full max-w-[420px] mx-auto">
@@ -1444,6 +1471,37 @@ function IdCard({ account }: { account: AnyAccount }) {
           ? `Applicant's uploaded valid ID${(account as PatientAccount).validIdType ? ` — ${(account as PatientAccount).validIdType as string}` : ''}`
           : 'Sample / default ID photo — no valid ID uploaded yet'}
       </p>
+      {!isStaff && (account as PatientAccount).isPwd === true && (
+        <div className="mt-4">
+          <div className="rounded-2xl overflow-hidden border border-[#4E69D3]/40 shadow-[0_12px_32px_rgba(0,0,0,0.18)]">
+            <div className="relative w-full">
+              {pwdIdImage ? (
+                <Image
+                  src={pwdIdImage}
+                  alt={`${account.firstName} ${account.lastName} PWD ID`}
+                  width={420}
+                  height={265}
+                  className="w-full h-auto object-contain"
+                />
+              ) : (
+                <div className="w-full aspect-[1.586/1] bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center p-6">
+                  <span className="text-sm font-semibold text-gray-500">
+                    No PWD ID Uploaded
+                  </span>
+                  <span className="text-xs text-gray-400 mt-1">
+                    {account.firstName} {account.lastName}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-center text-[12px] mt-2 m-0 text-gray-400 italic">
+            {pwdIdImage
+              ? "Applicant's uploaded PWD ID"
+              : 'No PWD ID photo uploaded yet'}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

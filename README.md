@@ -208,8 +208,52 @@ All loaded from `.env.local` (pulled via `vercel env pull`):
 | `NEXTAUTH_SECRET` | JWT signing key |
 | `NEXTAUTH_URL` | Base URL for auth callbacks |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob API token |
-| `SMTP_HOST` | Brevo SMTP host |
-| `SMTP_KEY` | Brevo SMTP API key |
+| `SMTP_HOST` | Brevo SMTP host (`smtp-relay.brevo.com`) |
+| `SMTP_USER` | Brevo **SMTP login** (`xxxxx@smtp-brevo.com`) — not the account email |
+| `SMTP_KEY` | Brevo **SMTP key** — not the REST API key |
+| `SMTP_FROM_EMAIL` | `From` address; must be a **verified sender** in Brevo |
+| `SMTP_PORT` | Optional. Defaults to `587` (STARTTLS). Use `465` for implicit TLS or `2525` if 587 is blocked |
+| `SMTP_SECURE` | Optional. Defaults to `true` only when `SMTP_PORT=465` |
+
+> `SMTP_USER` is only a login credential and is **not** a valid sender address.
+> `SMTP_FROM_EMAIL` must be verified under *Brevo → Senders, Domains & Dedicated IPs*,
+> otherwise the relay rejects the message with `550 Sender not valid`.
+
+### Email troubleshooting
+
+Run the built-in check — it performs the same auth/TLS handshake as the app and
+prints the raw SMTP response plus a fix hint:
+
+```bash
+npm run smtp:check                  # send a test to SMTP_FROM_EMAIL
+npm run smtp:check -- you@mail.com  # send a test to a specific address
+```
+
+Admins can also hit `GET /api/health/email`, which verifies the relay without sending.
+
+To prove the mailer code itself works — independent of the Brevo account — run the
+end-to-end check. It spins up a throwaway [Ethereal](https://ethereal.email) test
+account, repoints the mailer at it, and exercises the real send path:
+
+```bash
+npm run smtp:check:e2e
+```
+
+If this passes but `npm run smtp:check` fails, the code is fine and the problem is
+entirely the Brevo account configuration.
+
+| Error | Cause | Fix |
+|---|---|---|
+| `525 5.7.1 Unauthorized IP address` | Brevo IP authorization is blocking this server | **Brevo → Settings → Security → Authorized IPs** → *Authorize IP address*, or click *Deactivate blocking* (required for Vercel, whose serverless IPs rotate) |
+| `535 5.7.8 Authentication failed` | Wrong `SMTP_USER`/`SMTP_KEY` | Use the SMTP login + SMTP key, never the account email or an API key |
+| `550 Sender not valid` | `SMTP_FROM_EMAIL` not verified in Brevo | Add the address under *Brevo → Senders, Domains & Dedicated IPs* |
+| `ETIMEDOUT` / `ESOCKET` | Port blocked or wrong host | Try `SMTP_PORT=2525` or `465` |
+
+The mailer is provider-agnostic: only `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` /
+`SMTP_USER` / `SMTP_KEY` / `SMTP_FROM_EMAIL` need to change to switch providers
+(Gmail, Resend, Mailtrap, Postmark, …). In particular, an active **Brevo free-plan
+cap of 300 emails/day** applies, and `info.pramis@gmail.com` must be a verified
+sender in whichever account you use.
 
 ---
 

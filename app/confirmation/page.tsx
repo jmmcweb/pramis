@@ -35,6 +35,8 @@ const Confirmation = () => {
     province,
     zip,
     country,
+    isPwd,
+    pwdIdImage,
   } = useSignup()
 
   return (
@@ -79,6 +81,30 @@ const Confirmation = () => {
           <Item label="Province" value={province} />
           <Item label="ZIP / Postal code" value={zip} />
           <Item label="Country" value={country} />
+        </div>
+
+        <dt className="auth-label mt-4 mb-1">Disability &amp; priority access</dt>
+        <p className="text-[12px] text-slate m-0 mb-1.5">
+          You will declare this in the Identification step, together with your
+          valid ID.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+          <Item
+            label="PWD status"
+            value={
+              isPwd === true
+                ? 'Yes — Person with Disability (PWD)'
+                : isPwd === false
+                  ? 'No'
+                  : ''
+            }
+          />
+          {isPwd === true && (
+            <Item
+              label="PWD ID photo"
+              value={pwdIdImage ? 'Uploaded' : ''}
+            />
+          )}
         </div>
       </dl>
 

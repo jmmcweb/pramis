@@ -10,6 +10,6 @@ export const SMTP_FROM_NAME = 'PRAMIS'
 // The "From" address for outgoing emails. Must be a sender verified in the Brevo
 // account (Brevo -> Senders, Domains & Dedicated IPs). SMTP_USER is only the SMTP
 // login credential and is NOT a valid sender address.
-export const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'lagazon.james.bsis@gmail.com'
+export const SMTP_FROM_EMAIL = 'info.pramis@gmail.com'
 
 export const USERS_PER_PAGE = 5

@@ -26,6 +26,8 @@ type SignupPayload = {
   country?: string
   idType?: string
   idPhoto?: string
+  isPwd?: boolean
+  pwdIdImage?: string
 }
 
 //
@@ -60,6 +62,8 @@ export async function POST(request: Request) {
   const country = FIXED_ADDRESS.country
   const idType = payload.idType?.trim()
   const idPhoto = payload.idPhoto?.trim()
+  const isPwd = payload.isPwd
+  const pwdIdImage = payload.pwdIdImage?.trim()
 
   // The captured/uploaded valid ID is a base64 data URL (e.g. data:image/jpeg;base64,...)
   if (idPhoto && !/^data:image\/(jpeg|png|webp);base64,/.test(idPhoto)) {
@@ -111,6 +115,40 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
+
+  if (typeof isPwd !== 'boolean') {
+    return NextResponse.json(
+      {
+        message:
+          'Please tell us whether you are a Person with Disability (PWD).',
+      },
+      { status: 400 },
+    )
+  }
+
+  // The uploaded PWD ID photo follows the same rules as the valid ID photo.
+  if (pwdIdImage && !/^data:image\/(jpeg|png|webp);base64,/.test(pwdIdImage)) {
+    return NextResponse.json(
+      { message: 'The PWD ID photo must be a JPEG, PNG, or WebP image.' },
+      { status: 400 },
+    )
+  }
+  if (pwdIdImage && pwdIdImage.length > 5_000_000) {
+    return NextResponse.json(
+      { message: 'The uploaded PWD ID photo is too large (max ~3.5MB).' },
+      { status: 400 },
+    )
+  }
+
+  if (isPwd && !pwdIdImage) {
+    return NextResponse.json(
+      { message: 'Please upload a photo of your PWD ID.' },
+      { status: 400 },
+    )
+  }
+
+  // Only keep the PWD ID photo when the applicant declared that they are a PWD.
+  const declaredPwdIdImage = isPwd ? (pwdIdImage ?? null) : null
 
   try {
     const verificationRows = await prisma.$queryRawUnsafe<
@@ -170,6 +208,8 @@ export async function POST(request: Request) {
           zipCode: zip,
           validId: idPhoto || null,
           validIdType: idType || null,
+          isPwd,
+          pwdIdImage: declaredPwdIdImage,
         },
       }),
     ])
