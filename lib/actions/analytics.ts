@@ -552,7 +552,6 @@ export async function getAnalyticsStats(
         peakHours,
         diseases,
         diseaseCases,
-        weeklyTrend,
         vitals,
         immunization,
         sexByService,
