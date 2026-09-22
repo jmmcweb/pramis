@@ -192,6 +192,8 @@ export type PatientLookup = {
   hasAccount: boolean
   birthdate: string | null
   isSenior: boolean
+  isPwd: boolean
+  age: number
 }
 
 // Searches for a patient by their ID (PTN-####). It verifies the format of the patient ID, retrieves the patient's record from the database, and returns relevant information such as name, barangay, account status, birthdate, and senior citizen status. The function returns a structured response containing the success status, message, and a PatientLookup object if the patient is found.
@@ -235,9 +237,12 @@ export async function searchPatientById(query: string): Promise<{
         : '') ||
       row.name ||
       ''
-    const birthdate = row.birthdate || profile?.birthdate || null
+    const birthdate =
+      row.familyMember?.birthdate || row.birthdate || profile?.birthdate || null
     const age = calculateAge(birthdate)
     const isSenior = age >= 60
+    const isPwd =
+      profile?.isPwd === true || (row.familyMember as any)?.isPwd === true
     return {
       success: true,
       message: 'Patient verified.',
@@ -248,6 +253,8 @@ export async function searchPatientById(query: string): Promise<{
         hasAccount: Boolean(row.userId),
         birthdate: birthdate ? new Date(birthdate).toISOString().split('T')[0] : null,
         isSenior,
+        isPwd,
+        age,
       },
     }
   } catch (error) {
@@ -290,6 +297,7 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
     let displayName = ''
     let accountEmail = ''
     let tempPassword: string | null = null
+    let newPatientBirthdate: Date | null = null
     if (patientIdInput) {
       const digits = patientIdInput.replace(/^PTN-/i, '').trim()
       if (!/^\d+$/.test(digits)) {
@@ -355,6 +363,7 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
       }
 
       displayName = `${lastName.toUpperCase()}, ${firstName}`
+      newPatientBirthdate = parsedBirthdate
 
       let userId: string | null = null
       if (email) {
@@ -441,11 +450,37 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
       },
     })
 
+    // Same rule as the queue page: DB-verified senior/PWD => PRIORITY.
+    const walkinBirthdate =
+      (patient as any)?.familyMember?.birthdate ||
+      (patient as any)?.birthdate ||
+      (patient as any)?.user?.profile?.birthdate ||
+      newPatientBirthdate ||
+      null
+    let walkinAge = 0
+    if (walkinBirthdate) {
+      const b = new Date(walkinBirthdate)
+      const t = new Date()
+      if (!Number.isNaN(b.getTime())) {
+        walkinAge = t.getFullYear() - b.getFullYear()
+        const m = t.getMonth() - b.getMonth()
+        if (m < 0 || (m === 0 && t.getDate() < b.getDate())) walkinAge--
+      }
+    }
+    const walkinPriority =
+      walkinAge >= 60
+        ? 'SENIOR'
+        : (patient as any)?.user?.profile?.isPwd === true
+          ? 'PWD'
+          : null
+    const walkinLane = walkinPriority ? 'PRIORITY' : 'WALKIN'
+
     await (prisma as any).walkInQueue.create({
       data: {
         qid: await nextReferenceId('WIQ'),
         patientId: patient.patientid,
-        queueType: 'WALKIN',
+        queueType: walkinLane,
+        priority: walkinPriority,
         serviceId,
         status: 'WAITING',
       },

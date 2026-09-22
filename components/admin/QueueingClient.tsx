@@ -85,6 +85,7 @@ export default function QueueingClient({
 
   const advanceQueued = (entry: QueueEntry) => {
     if (entry.status === 'WAITING') {
+      if (entry.id.startsWith('APT-')) { advanceScheduled(entry); return; }
       runAction(() => advanceQueueEntry(entry.id))
       return
     }
@@ -108,13 +109,17 @@ export default function QueueingClient({
       if (res.success && res.patient) {
         setPatient(res.patient)
         setSearchState('found')
-        // Auto-detect senior: automatically set to PRIORITY lane with SENIOR priority
+        // Auto-detect from DB: senior (60+) or PWD (profile.isPwd) go PRIORITY.
         if (res.patient.isSenior) {
           setLane('PRIORITY')
           setPriority('SENIOR')
           setIsPwd(false)
+        } else if ((res.patient as any).isPwd) {
+          setLane('PRIORITY')
+          setPriority('PWD')
+          setIsPwd(true)
         } else {
-          // Reset to walk-in if not senior
+          // Reset to walk-in if not senior/PWD
           setLane('WALKIN')
           setIsPwd(false)
         }
@@ -141,12 +146,12 @@ export default function QueueingClient({
     const fd = new FormData()
     fd.set('patientId', patient.patientId)
     
-    // Determine if patient qualifies for priority queue
-    const qualifiesForPriority = patient.isSenior || isPwd
+    // DB-verified senior/PWD always goes to priority (senior wins the tie).
+    const qualifiesForPriority =
+      patient.isSenior || (patient as any).isPwd || isPwd
     
     if (qualifiesForPriority) {
       fd.set('lane', 'PRIORITY')
-      // Senior is auto-detected, otherwise use PWD
       fd.set('priority', patient.isSenior ? 'SENIOR' : 'PWD')
     } else {
       fd.set('lane', lane)
@@ -189,10 +194,10 @@ export default function QueueingClient({
                 <QueueRow
                   key={q.id}
                   darkMode={darkMode}
-                  item={{ ...q, status: q.status }}
+                  item={{ ...q, status: q.id.startsWith('APT-') ? scheduledStatus(q) : q.status }}
                   busy={isPending}
                   onAdvance={() => advanceQueued(q)}
-                  onRemove={() => runAction(() => removeQueueEntry(q.id))}
+                  onRemove={() => runAction(() => q.id.startsWith('APT-') ? cancelAppointment(q.id) : removeQueueEntry(q.id))}
                 />
               ))
           )}
@@ -244,7 +249,7 @@ export default function QueueingClient({
                   item={q}
                   busy={isPending}
                   onAdvance={() => advanceQueued(q)}
-                  onRemove={() => runAction(() => removeQueueEntry(q.id))}
+                  onRemove={() => runAction(() => q.id.startsWith('APT-') ? cancelAppointment(q.id) : removeQueueEntry(q.id))}
                 />
               ))
             )}
@@ -324,6 +329,12 @@ export default function QueueingClient({
                     <div className={`rounded-xl border p-3 border-amber-500 bg-amber-500/10`}>
                       <span className={`text-[15px] font-bold text-amber-500`}>Senior Citizen (Auto-detected)</span>
                       <p className={`text-[12px] mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Patient is 60 years or older</p>
+                    </div>
+                  ) : (patient as any)?.isPwd ? (
+                    // Auto-detected PWD from DB (UserProfile.isPwd)
+                    <div className={`rounded-xl border p-3 border-amber-500 bg-amber-500/10`}>
+                      <span className={`text-[15px] font-bold text-amber-500`}>PWD (Auto-detected)</span>
+                      <p className={`text-[12px] mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Declared in account signup records</p>
                     </div>
                   ) : (
                     // Not senior - show PWD selection

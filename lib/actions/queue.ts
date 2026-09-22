@@ -33,6 +33,33 @@ function profileName(profile: any): string {
   }`.trim()
 }
 
+function calcAge(birthdate: Date | string | null | undefined): number {
+  if (!birthdate) return 0
+  const birth = new Date(birthdate)
+  if (Number.isNaN(birth.getTime())) return 0
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
+
+function resolveDbPriority(patient: any): 'SENIOR' | 'PWD' | null {
+  if (!patient) return null
+  const birthdate =
+    patient?.familyMember?.birthdate ||
+    patient?.birthdate ||
+    patient?.user?.profile?.birthdate ||
+    null
+  if (calcAge(birthdate) >= 60) return 'SENIOR'
+  if (
+    patient?.user?.profile?.isPwd === true ||
+    (patient?.familyMember as any)?.isPwd === true
+  )
+    return 'PWD'
+  return null
+}
+
 // Formats a Date object into a clock label string (e.g., "3:45 PM") in the UTC timezone.
 function clockLabel(at: Date): string {
   return at.toLocaleTimeString('en-US', {
@@ -94,24 +121,37 @@ export async function getTodayQueues(): Promise<{
       }),
     ])
 
-    const scheduled: QueueEntry[] = appointmentRows.map((row: any) => ({
-      id: row.appointmentid,
-      kind: 'scheduled' as const,
-      name: row.familyMember
-        ? row.familyMember.name
-        : profileName(row.user?.profile) || row.user?.email || 'Unknown',
-      time: clockLabel(new Date(row.appointmentAt)),
-      service: row.service?.name ?? 'Consultation',
-      status: row.status === 'COMPLETED' ? 'DONE' : 'WAITING',
-      uploadedId: row.user?.profile?.validId || null,
-    }))
+    const scheduled: QueueEntry[] = []
+    const priority: QueueEntry[] = []
+    for (const row of appointmentRows as any[]) {
+      const dbPriority = resolveDbPriority(row)
+      const entry: QueueEntry = {
+        id: row.appointmentid,
+        kind: 'scheduled' as const,
+        name: row.familyMember
+          ? row.familyMember.name
+          : profileName(row.user?.profile) || row.user?.email || 'Unknown',
+        time: clockLabel(new Date(row.appointmentAt)),
+        service: row.service?.name ?? 'Consultation',
+        status: row.status === 'COMPLETED' ? 'DONE' : 'WAITING',
+        priority: dbPriority ?? undefined,
+        uploadedId: row.user?.profile?.validId || null,
+      }
+      if (dbPriority) {
+        priority.push({ ...entry, kind: 'priority' as const })
+      } else {
+        scheduled.push(entry)
+      }
+    }
 
     const walkins: QueueEntry[] = []
-    const priority: QueueEntry[] = []
     for (const row of queueRows) {
+      const dbPriority = resolveDbPriority(row.patient)
+      const kind: QueueEntry['kind'] =
+        row.queueType === 'PRIORITY' || dbPriority ? 'priority' : 'walkin'
       const entry: QueueEntry = {
         id: row.qid,
-        kind: row.queueType === 'PRIORITY' ? 'priority' : 'walkin',
+        kind,
         name:
           row.patient?.familyMember?.name ||
           profileName(row.patient?.user?.profile) ||
@@ -122,17 +162,19 @@ export async function getTodayQueues(): Promise<{
         service: row.service?.name ?? 'Consultation',
         status: (row.status as QueueEntry['status']) ?? 'WAITING',
         priority:
-          row.priority === 'SENIOR'
+          dbPriority ??
+          (row.priority === 'SENIOR'
             ? 'SENIOR'
             : row.priority === 'PWD'
               ? 'PWD'
-              : undefined,
+              : undefined),
         uploadedId: row.patient?.user?.profile?.validId || null,
       }
-      // Priority queue: only include Senior Citizens & PWD patients
-      if (entry.kind === 'priority' && (entry.priority === 'SENIOR' || entry.priority === 'PWD')) {
+      // Priority queue: Senior Citizens & PWD patients, even for legacy rows
+      // stored as WALKIN before auto-priority existed.
+      if (kind === 'priority' && (entry.priority === 'SENIOR' || entry.priority === 'PWD')) {
         priority.push(entry)
-      } else if (entry.kind === 'walkin') {
+      } else if (kind === 'walkin') {
         walkins.push(entry)
       }
     }
@@ -182,10 +224,21 @@ export async function addToQueue(_prevState: any, formData: FormData) {
     }
     const patient = await (prisma as any).patient.findFirst({
       where: { patientid: `PTN-${digits}` },
-      select: { patientid: true },
+      include: {
+        familyMember: true,
+        user: { include: { profile: true } },
+      },
     })
     if (!patient) {
       return { success: false, message: 'Verified patient no longer exists.' }
+    }
+
+    const dbPriority = resolveDbPriority(patient)
+    let finalLane = lane
+    let finalPriority: string | null = lane === 'PRIORITY' ? priority : null
+    if (dbPriority) {
+      finalLane = 'PRIORITY'
+      finalPriority = dbPriority
     }
 
     if (serviceId) {
@@ -221,8 +274,8 @@ export async function addToQueue(_prevState: any, formData: FormData) {
       data: {
         qid: await nextReferenceId('WIQ'),
         patientId: patient.patientid,
-        queueType: lane,
-        priority: lane === 'PRIORITY' ? priority : null,
+        queueType: finalLane,
+        priority: finalLane === 'PRIORITY' ? finalPriority : null,
         serviceId: serviceId || null,
         status: 'WAITING',
       },
@@ -234,16 +287,22 @@ export async function addToQueue(_prevState: any, formData: FormData) {
       action: 'CREATE',
       entity: 'QUEUE',
       entityId: patient.patientid,
-      description: `Added patient ${patient.patientid} to the ${lane === 'PRIORITY' ? 'priority' : 'walk-in'} queue.`,
+      description: `Added patient ${patient.patientid} to the ${finalLane === 'PRIORITY' ? 'priority' : 'walk-in'} queue.`,
       metadata: {
         patientId: patient.patientid,
-        lane,
-        priority: lane === 'PRIORITY' ? priority : null,
+        lane: finalLane,
+        priority: finalLane === 'PRIORITY' ? finalPriority : null,
         serviceId: serviceId || null,
       },
     })
 
-    return { success: true, message: 'Patient added to the queue.' }
+    return {
+      success: true,
+      message:
+        finalLane === 'PRIORITY'
+          ? `Patient added to the priority queue (${finalPriority}).`
+          : 'Patient added to the queue.',
+    }
   } catch (error) {
     console.error('[addToQueue | Prisma | Error]:', error)
     return {
