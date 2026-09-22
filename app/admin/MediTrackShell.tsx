@@ -17,7 +17,7 @@ import type { PatientNotification } from '@/components/patient/notificationData'
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: '/Dashboard.png', exact: true },
   {
-    href: '/admin/appointmentmanagement',
+    href: '/admin/analytics',
     label: 'Analytics',
     icon: '/Analytics.png',
   },
@@ -27,7 +27,7 @@ const navItems = [
     icon: '/user-management.png',
   },
   {
-    href: '/admin/services',
+    href: '/admin/patientlist',
     label: 'Patient Lists',
     icon: '/medical-record.png',
   },

@@ -188,7 +188,12 @@ export default function UserManagementPage() {
   const [deleting, setDeleting] = useState<AnyUser | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [adding, setAdding] = useState(false)
-  const [showArchived, setShowArchived] = useState(false)
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [archivedStaff, setArchivedStaff] = useState<StaffUser[]>([])
+  const [archiveLoading, setArchiveLoading] = useState(false)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [archiveSearch, setArchiveSearch] = useState('')
+  const [archivePage, setArchivePage] = useState(1)
   const [archivePending, setArchivePending] = useState(false)
   const [addForm, setAddForm] = useState<AddAccountForm>({
     firstName: '',
@@ -210,10 +215,7 @@ export default function UserManagementPage() {
         const timeout = setTimeout(() => controller.abort(), 10000)
         let response: Response
         try {
-          const url = showArchived
-            ? '/api/admin/accounts?archived=1'
-            : '/api/admin/accounts'
-          response = await fetch(url, {
+          response = await fetch('/api/admin/accounts', {
             credentials: 'same-origin',
             cache: 'no-store',
             signal: controller.signal,
@@ -290,39 +292,23 @@ export default function UserManagementPage() {
                 null,
             }),
           )
-          // When browsing archived accounts, don't pad the list with demo/
-          // fallback data — those are never archived and would wrongly
-          // appear in the archived view.
-          setUsers(showArchived ? dbUsers : mergeWithFallback(dbUsers))
+          setUsers(mergeWithFallback(dbUsers))
           setError(null)
         } else if (data.message) {
-          // API returned an error message
           throw new Error(data.message)
         } else if (data.users && Array.isArray(data.users)) {
-          // API succeeded but DB is empty.
-          if (showArchived) {
-            // No archived accounts — show an empty archived list rather
-            // than silently falling back to (non-archived) demo data.
-            setUsers([])
-          } else {
-            console.warn('API returned 0 accounts, using demo data')
-            if (!active) return
-            setUsers((prev) =>
-              prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
-            )
-          }
+          console.warn('API returned 0 accounts, using demo data')
+          if (!active) return
+          setUsers((prev) =>
+            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
+          )
           setError(null)
         } else {
-          // Unexpected response format - keep fallback data
           console.warn('Unexpected API response format, using demo data')
           if (!active) return
-          if (showArchived) {
-            setUsers([])
-          } else {
-            setUsers((prev) =>
-              prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
-            )
-          }
+          setUsers((prev) =>
+            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
+          )
           setError(null)
         }
       } catch (err) {
@@ -357,7 +343,7 @@ export default function UserManagementPage() {
     return () => {
       active = false
     }
-  }, [showArchived])
+  }, [])
 
   const staffCount = users.filter((u) => u.kind === 'staff').length
   const patientCount = users.filter((u) => u.kind === 'patient').length
@@ -409,6 +395,37 @@ export default function UserManagementPage() {
 
   const staffTable = paginate(filteredStaff, staffPage)
   const patientTable = paginate(filteredPatients, patientPage)
+
+  const filteredArchivedStaff = useMemo(() => {
+    const q = archiveSearch.trim().toLowerCase()
+    const qDigits = q.replace(/\D/g, '')
+
+    const list = q
+      ? archivedStaff.filter((u) => {
+          const name = fullName(u).toLowerCase()
+          const id = u.id.toLowerCase()
+          const idDigits = id.replace(/\D/g, '')
+
+          return (
+            name.includes(q) ||
+            id === q ||
+            id.includes(q) ||
+            (qDigits && idDigits === qDigits) ||
+            u.email.toLowerCase().includes(q) ||
+            u.username.toLowerCase().includes(q)
+          )
+        })
+      : archivedStaff
+
+    return [...list].sort(
+      (a, b) =>
+        dateKey(a.archivedAt || a.dateJoined).localeCompare(
+          dateKey(b.archivedAt || b.dateJoined),
+        ) || a.id.localeCompare(b.id),
+    )
+  }, [archivedStaff, archiveSearch])
+
+  const archivedTable = paginate(filteredArchivedStaff, archivePage)
   const openEdit = (user: AnyUser) => {
     setEditForm({
       firstName: user.firstName,
@@ -531,6 +548,89 @@ export default function UserManagementPage() {
     }
   }
 
+  const loadArchivedStaff = async () => {
+    setArchiveLoading(true)
+    setArchiveError(null)
+
+    try {
+      const response = await fetch('/api/admin/accounts?archived=1', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Unable to load archived staff accounts',
+        )
+      }
+
+      const toDateString = (value: unknown): string => {
+        if (!value) return new Date().toISOString().slice(0, 10)
+        if (typeof value === 'string') return value.slice(0, 10)
+
+        const parsed = new Date(value as string)
+
+        return isNaN(parsed.getTime())
+          ? new Date().toISOString().slice(0, 10)
+          : parsed.toISOString().slice(0, 10)
+      }
+
+      const rows: StaffUser[] = Array.isArray(data.users)
+        ? data.users
+            .filter((user: AnyUser) => user.kind === 'staff')
+            .map((user: AnyUser & { dateJoined: string }) => ({
+              ...user,
+              databaseId: user.id,
+              firstName: user.firstName || 'User',
+              lastName: user.lastName || '',
+              username:
+                user.username ||
+                user.email?.split('@')[0] ||
+                user.id,
+              email: user.email || '',
+              dateJoined: toDateString(user.dateJoined),
+              middleName:
+                user.middleName ??
+                ((user as any).profile?.middleName as
+                  | string
+                  | null
+                  | undefined) ??
+                null,
+              suffix:
+                user.suffix ??
+                ((user as any).profile?.suffix as
+                  | string
+                  | null
+                  | undefined) ??
+                null,
+              archivedAt: user.archivedAt || null,
+            }))
+        : []
+
+      setArchivedStaff(rows)
+      setArchivePage(1)
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Unable to load archived staff accounts'
+
+      setArchiveError(message)
+      toast.error(message)
+    } finally {
+      setArchiveLoading(false)
+    }
+  }
+
+  const openArchiveModal = () => {
+    setShowArchiveModal(true)
+    setArchiveSearch('')
+    setArchivePage(1)
+    loadArchivedStaff()
+  }
+
   const confirmDelete = async () => {
     if (!deleting) return
     const isStaff = deleting.kind === 'staff'
@@ -556,13 +656,13 @@ export default function UserManagementPage() {
         // The restored account no longer belongs in the archived view —
         // remove it here instead of just flipping archivedAt, otherwise
         // it keeps showing up under "Archived staff" until the next fetch.
-        setUsers((prev) =>
-          showArchived
-            ? prev.filter((u) => u.id !== deleting.id)
-            : prev.map((u) =>
-                u.id === deleting.id ? { ...u, archivedAt: null } : u,
-              ),
+        setArchivedStaff((prev) =>
+          prev.filter((u) => u.id !== deleting.id),
         )
+        setUsers((prev) => [
+          ...prev,
+          { ...(deleting as StaffUser), archivedAt: null },
+        ])
         toast.success(`${fullName(deleting)} has been restored`)
       } finally {
         setArchivePending(false)
@@ -703,24 +803,17 @@ export default function UserManagementPage() {
               <p
                 className={`text-[15px] m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
               >
-                {showArchived
-                  ? 'Viewing archived staff accounts'
-                  : 'View all registered users — accounts, credentials, and roles'}
+                View all registered users — accounts, credentials, and roles
               </p>
             </div>
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
               <button
                 type="button"
-                onClick={() => {
-                  setShowArchived((prev) => !prev)
-                  setStaffPage(1)
-                }}
+                onClick={openArchiveModal}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold font-poppins border transition-colors ${
-                  showArchived
-                    ? 'bg-[#4E69D3] text-white border-[#4E69D3] hover:bg-[#4A6BC4]'
-                    : darkMode
-                      ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
+                  darkMode
+                    ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
                 }`}
               >
                 <svg
@@ -737,18 +830,16 @@ export default function UserManagementPage() {
                   <rect x="1" y="3" width="22" height="5" />
                   <line x1="10" y1="12" x2="14" y2="12" />
                 </svg>
-                {showArchived ? 'Back to active accounts' : 'View archived staff'}
+                Archived staff
               </button>
-              {!showArchived && (
-                <button
-                  type="button"
-                  onClick={() => setAdding(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4E69D3] text-white text-[13px] font-semibold font-poppins border border-[#4E69D3] hover:bg-[#4A6BC4] transition-colors"
-                >
-                  <span className="text-lg leading-none">+</span>
-                  Add account
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4E69D3] text-white text-[13px] font-semibold font-poppins border border-[#4E69D3] hover:bg-[#4A6BC4] transition-colors"
+              >
+                <span className="text-lg leading-none">+</span>
+                Add account
+              </button>
               <span
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold font-poppins border ${darkMode ? 'bg-[#2d1b4e] text-[#C4B5FD] border-[rgba(255,255,255,0.10)]' : 'bg-white text-[#4E69D3] border-[#4E69D3]/30'}`}
               >
@@ -767,15 +858,12 @@ export default function UserManagementPage() {
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
-                {showArchived
-                  ? `${users.length} archived`
-                  : `${users.length} total users`}
+                {users.length} total users
               </span>
             </div>
           </div>
 
-          {!showArchived && (
-            <div className="grid grid-cols-4 gap-[18px] mb-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
+          <div className="grid grid-cols-4 gap-[18px] mb-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
               <StatCard
                 darkMode={darkMode}
                 value={users.length}
@@ -839,7 +927,6 @@ export default function UserManagementPage() {
                 }
               />
             </div>
-          )}
 
           <div
             className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'} border rounded-2xl p-4 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]`}
@@ -904,12 +991,11 @@ export default function UserManagementPage() {
 
           {(() => {
             const showStaff =
-              showArchived || cardFilter === 'all' || cardFilter === 'staff'
+              cardFilter === 'all' || cardFilter === 'staff'
             const showPatients =
-              !showArchived &&
-              (cardFilter === 'all' ||
-                cardFilter === 'patient' ||
-                cardFilter === 'records')
+              cardFilter === 'all' ||
+              cardFilter === 'patient' ||
+              cardFilter === 'records'
             const patientRows =
               cardFilter === 'records'
                 ? filteredPatients.filter((u) => (u as PatientUser).hasRecord)
@@ -919,9 +1005,7 @@ export default function UserManagementPage() {
                 ? [
                     {
                       key: 'staff',
-                      title: showArchived
-                        ? 'Archived Staff Accounts'
-                        : 'Medical Staff Accounts',
+                      title: 'Medical Staff Accounts',
                       table: staffTable,
                       page: staffPage,
                       setPage: setStaffPage,
@@ -985,7 +1069,7 @@ export default function UserManagementPage() {
                         <th
                           className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[10%]`}
                         >
-                          {showArchived ? 'Archived On' : 'Date Joined'}
+                          Date Joined
                         </th>
                         <th
                           className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
@@ -1015,9 +1099,7 @@ export default function UserManagementPage() {
                               <circle cx="11" cy="11" r="8" />
                               <path d="M21 21l-4.35-4.35" />
                             </svg>
-                            {showArchived
-                              ? 'No archived staff accounts'
-                              : 'No users found for this search'}
+                            No users found for this search
                           </td>
                         </tr>
                       ) : (
@@ -1072,26 +1154,37 @@ export default function UserManagementPage() {
                               <td
                                 className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                               >
-                                {fmtDate(
-                                  showArchived && u.kind === 'staff'
-                                    ? (u as StaffUser).archivedAt || u.dateJoined
-                                    : u.dateJoined,
-                                )}
+                                {fmtDate(u.dateJoined)}
                               </td>
                               <td
                                 className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
                               >
                                 <div className="flex items-center gap-2">
                                   {u.kind === 'staff' ? (
-                                    showArchived ? (
+                                    <>
+                                      <button
+                                        onClick={() => openEdit(u)}
+                                        title="Edit user"
+                                        className={iconBtnClass()}
+                                      >
+                                        <svg
+                                          width="15"
+                                          height="15"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        >
+                                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                        </svg>
+                                      </button>
                                       <button
                                         onClick={() => setDeleting(u)}
-                                        title="Restore user"
-                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                                          darkMode
-                                            ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20'
-                                            : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
-                                        }`}
+                                        title="Archive user"
+                                        className={iconBtnClass(true)}
                                       >
                                         <svg
                                           width="14"
@@ -1103,65 +1196,12 @@ export default function UserManagementPage() {
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
                                         >
-                                          <polyline points="1 4 1 10 7 10" />
-                                          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                                          <polyline points="21 8 21 21 3 21 3 8" />
+                                          <rect x="1" y="3" width="22" height="5" />
+                                          <line x1="10" y1="12" x2="14" y2="12" />
                                         </svg>
-                                        Restore
                                       </button>
-                                    ) : (
-                                      <>
-                                        <button
-                                          onClick={() => openEdit(u)}
-                                          title="Edit user"
-                                          className={iconBtnClass()}
-                                        >
-                                          <svg
-                                            width="15"
-                                            height="15"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          >
-                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                          </svg>
-                                        </button>
-                                        <button
-                                          onClick={() => setDeleting(u)}
-                                          title="Archive user"
-                                          className={iconBtnClass(true)}
-                                        >
-                                          <svg
-                                            width="15"
-                                            height="15"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          >
-                                            <polyline points="3 6 5 6 21 6" />
-                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                            <line
-                                              x1="10"
-                                              y1="11"
-                                              x2="10"
-                                              y2="17"
-                                            />
-                                            <line
-                                              x1="14"
-                                              y1="11"
-                                              x2="14"
-                                              y2="17"
-                                            />
-                                          </svg>
-                                        </button>
-                                      </>
-                                    )
+                                    </>
                                   ) : (
                                     <button
                                       onClick={() =>
@@ -1239,6 +1279,299 @@ export default function UserManagementPage() {
               </div>
             ))
           })()}
+
+
+          {showArchiveModal && (
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1000] p-3 sm:p-4"
+              onClick={() => setShowArchiveModal(false)}
+            >
+              <div
+                className={`${darkMode ? 'bg-[#2d1b4e] text-white border-white/10' : 'bg-white text-slate-800 border-slate-200'} rounded-2xl w-full max-w-[1100px] max-h-[90vh] shadow-[0_25px_60px_rgba(0,0,0,0.3)] overflow-hidden border flex flex-col`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  className={`flex items-center justify-between gap-4 px-5 sm:px-7 py-5 border-b ${darkMode ? 'border-white/10' : 'border-slate-200'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center ${darkMode ? 'bg-[#0f1438] text-[#C4B5FD]' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="21 8 21 21 3 21 3 8" />
+                        <rect x="1" y="3" width="22" height="5" />
+                        <line x1="10" y1="12" x2="14" y2="12" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                        Archived Staff Accounts
+                      </h2>
+                      <p className={`text-[13px] mt-1 m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        View and restore archived medical staff accounts.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowArchiveModal(false)}
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center border-none cursor-pointer text-lg ${darkMode ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="px-5 sm:px-7 py-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="relative w-full sm:max-w-[380px]">
+                      <svg
+                        className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="M21 21l-4.35-4.35" />
+                      </svg>
+                      <input
+                        type="text"
+                        value={archiveSearch}
+                        onChange={(e) => {
+                          setArchiveSearch(e.target.value)
+                          setArchivePage(1)
+                        }}
+                        placeholder="Search archived staff..."
+                        className={`w-full ${searchInputClass}`}
+                      />
+                    </div>
+                    <span
+                      className={`inline-flex items-center justify-center px-3 py-2 rounded-lg text-[13px] font-semibold ${darkMode ? 'bg-[#0f1438] text-[#C4B5FD]' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
+                    >
+                      {filteredArchivedStaff.length} archived
+                    </span>
+                  </div>
+                </div>
+
+                <div className="px-5 sm:px-7 pb-5 overflow-auto flex-1">
+                  {archiveLoading ? (
+                    <div className="flex flex-col items-center justify-center py-16">
+                      <div className="w-8 h-8 border-4 border-[#4E69D3] border-t-transparent rounded-full animate-spin mb-3" />
+                      <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-[#2A2E43]'}`}>
+                        Loading archived accounts...
+                      </p>
+                    </div>
+                  ) : archiveError ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl font-bold mb-3">
+                        !
+                      </div>
+                      <p className={`text-base font-bold ${darkMode ? 'text-white' : 'text-[#2A2E43]'}`}>
+                        Unable to load archived accounts
+                      </p>
+                      <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {archiveError}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={loadArchivedStaff}
+                        className="mt-4 px-4 py-2 rounded-lg bg-[#4E69D3] text-white text-sm font-semibold border-none cursor-pointer"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : archivedTable.total === 0 ? (
+                    <div
+                      className={`flex flex-col items-center justify-center py-16 rounded-xl ${darkMode ? 'bg-[#0f1438]' : 'bg-gray-50'}`}
+                    >
+                      <svg
+                        width="42"
+                        height="42"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke={darkMode ? '#6B7280' : '#9CA3AF'}
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mb-3"
+                      >
+                        <polyline points="21 8 21 21 3 21 3 8" />
+                        <rect x="1" y="3" width="22" height="5" />
+                        <line x1="10" y1="12" x2="14" y2="12" />
+                      </svg>
+                      <p className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {archiveSearch ? 'No archived staff found' : 'No archived staff accounts'}
+                      </p>
+                      {archiveSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setArchiveSearch('')
+                            setArchivePage(1)
+                          }}
+                          className="mt-2 text-sm text-[#4E69D3] font-semibold border-none bg-transparent cursor-pointer"
+                        >
+                          Clear search
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto rounded-xl">
+                        <table
+                          className="w-full border-collapse text-[14px] min-w-[850px]"
+                          style={{ tableLayout: 'fixed' }}
+                        >
+                          <thead>
+                            <tr className={darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}>
+                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                                Staff
+                              </th>
+                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                                Email
+                              </th>
+                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                                Position
+                              </th>
+                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                                Archived On
+                              </th>
+                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {archivedTable.pageRows.map((u) => {
+                              const staff = u as StaffUser
+
+                              return (
+                                <tr
+                                  key={staff.id}
+                                  className={`${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-[#E8EAF6]'} transition-colors`}
+                                >
+                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB]' : 'border-[#E2E8F0] text-[#2A2E43]'}`}>
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-9 h-9 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'} flex items-center justify-center font-bold text-sm flex-shrink-0`}>
+                                        {staff.firstName.charAt(0)}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="block font-semibold truncate" title={fullName(staff)}>
+                                          {fullName(staff)}
+                                        </span>
+                                        <span className={`block text-xs font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}>
+                                          {staff.id}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className={`px-4 py-4 border-b truncate ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}>
+                                    {staff.email}
+                                  </td>
+                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}>
+                                    {staff.position}
+                                  </td>
+                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}>
+                                    {fmtDate(staff.archivedAt || staff.dateJoined)}
+                                  </td>
+                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'}`}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleting(staff)}
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${darkMode ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20' : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'}`}
+                                    >
+                                      <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <polyline points="1 4 1 10 7 10" />
+                                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                                      </svg>
+                                      Restore
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex justify-between items-center gap-3 pt-4 pb-1 flex-wrap">
+                        <span className={`text-[13px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Showing {(archivedTable.safePage - 1) * PER_PAGE + 1}-
+                          {(archivedTable.safePage - 1) * PER_PAGE + archivedTable.pageRows.length} of {archivedTable.total}
+                        </span>
+
+                        {archivedTable.totalPages > 1 && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              className={pageBtnClass}
+                              disabled={archivedTable.safePage === 1}
+                              onClick={() => setArchivePage(archivedTable.safePage - 1)}
+                            >
+                              &lsaquo; Prev
+                            </button>
+
+                            {Array.from(
+                              { length: archivedTable.totalPages },
+                              (_, i) => i + 1,
+                            ).map((page) => (
+                              <button
+                                type="button"
+                                key={page}
+                                className={`${pageBtnClass}${archivedTable.safePage === page ? ` ${pageBtnActiveClass}` : ''}`}
+                                onClick={() => setArchivePage(page)}
+                              >
+                                {page}
+                              </button>
+                            ))}
+
+                            <button
+                              type="button"
+                              className={pageBtnClass}
+                              disabled={archivedTable.safePage === archivedTable.totalPages}
+                              onClick={() => setArchivePage(archivedTable.safePage + 1)}
+                            >
+                              Next &rsaquo;
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className={`px-5 sm:px-7 py-4 border-t flex justify-end ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setShowArchiveModal(false)}
+                    className="px-5 py-2.5 rounded-lg bg-[#4E69D3] text-white text-sm font-semibold border-none cursor-pointer hover:bg-[#4A6BC4]"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {adding && (
             <div
@@ -1493,16 +1826,6 @@ export default function UserManagementPage() {
                     </FieldGroup>
                   </div>
                   <div className="grid grid-cols-2 gap-3.5 mb-3.5 max-[520px]:grid-cols-1">
-                    <FieldGroup darkMode={darkMode} label="Password" required>
-                      <input
-                        type="text"
-                        value={editForm.password}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, password: e.target.value })
-                        }
-                        className={inputClass}
-                      />
-                    </FieldGroup>
                     <FieldGroup darkMode={darkMode} label="Role" required>
                       <select
                         value={editForm.role}
@@ -1516,12 +1839,6 @@ export default function UserManagementPage() {
                       >
                         <option value="Admin">Admin</option>
                         <option value="Medical Staff">Medical Staff</option>
-                        <option
-                          value="Patient"
-                          disabled={editing?.kind === 'staff'}
-                        >
-                          Patient
-                        </option>
                       </select>
                     </FieldGroup>
                   </div>
@@ -1577,7 +1894,7 @@ export default function UserManagementPage() {
 
           {deleting && (
             <div
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-[1000] p-3 sm:p-4"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-[1100] p-3 sm:p-4"
               onClick={() => setDeleting(null)}
             >
               <div
