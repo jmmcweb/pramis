@@ -240,14 +240,6 @@ export default function RecordDetailModal({
         <div className="flex gap-3 px-6 py-4 border-t border-line">
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex-1 bg-card border border-line text-brand hover:bg-brand-tint py-2.5 rounded-xl font-medium text-sm inline-flex items-center justify-center gap-1.5"
-          >
-            <Printer className="w-4 h-4" />
-            Print
-          </button>
-          <button
-            type="button"
             onClick={onClose}
             className="flex-1 bg-brand hover:bg-brand-dark text-white py-2.5 rounded-xl font-medium text-sm inline-flex items-center justify-center gap-1.5"
           >

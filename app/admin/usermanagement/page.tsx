@@ -795,16 +795,11 @@ export default function UserManagementPage() {
         <>
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
             <div>
-              <h1
+              <h2
                 className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 mb-[6px] text-left`}
               >
                 User Management
-              </h1>
-              <p
-                className={`text-[15px] m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
-              >
-                View all registered users — accounts, credentials, and roles
-              </p>
+              </h2>
             </div>
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
               <button

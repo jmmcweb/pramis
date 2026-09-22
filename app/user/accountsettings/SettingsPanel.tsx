@@ -17,15 +17,11 @@ type SettingsUser = {
 }
 
 const sections = [
-  { id: 'account', label: 'Account Management' },
-  { id: 'notifications', label: 'Notifications' },
+  { id: 'account', label: 'Change Password' },
   { id: 'darkmode', label: 'Dark Mode' },
-  { id: 'privacy', label: 'Privacy and Security' },
   { id: 'display', label: 'Display Settings' },
   { id: 'contact', label: 'Contact' },
-  { id: 'feedback', label: 'Feedback' },
   { id: 'terms', label: 'Terms and Conditions' },
-  { id: 'help', label: 'Help and Support' },
   { id: 'about', label: 'About Us' },
 ]
 
@@ -234,15 +230,12 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
             <p
               className={`text-[15px] leading-relaxed m-0 mb-4 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#555]'}`}
             >
-              Get in touch with the MediTrack team for any inquiries or support
+              Get in touch with the PRAMIS team for any inquiries or support
               needs.
             </p>
             <div className="grid grid-cols-2 gap-4 max-[600px]:grid-cols-1">
               {[
-                ['Email', 'support@meditrack.com'],
-                ['Phone', '+63 2 1234 5678'],
-                ['Address', '123 Health Street, Barangay San Isidro, Manila'],
-                ['Office Hours', 'Monday to Friday, 8:00 AM - 5:00 PM'],
+                ['Email', 'info.pramis@gmail.com'],
               ].map(([label, value]) => (
                 <div key={label}>
                   <p
@@ -271,7 +264,7 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
             <p
               className={`text-[15px] leading-relaxed m-0 mb-3 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#555]'}`}
             >
-              We value your feedback! Help us improve MediTrack by sharing your
+              We value your feedback! Help us improve PRAMIS by sharing your
               thoughts and suggestions.
             </p>
             <p
@@ -294,7 +287,7 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
             <p
               className={`text-[15px] leading-relaxed m-0 mb-3 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#555]'}`}
             >
-              By using MediTrack, you agree to the following terms and
+              By using PRAMIS, you agree to the following terms and
               conditions. Please read them carefully.
             </p>
             <p
@@ -307,7 +300,7 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
             <p
               className={`text-[15px] leading-relaxed m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#555]'}`}
             >
-              MediTrack reserves the right to update these terms at any time.
+              PRAMIS reserves the right to update these terms at any time.
               Users will be notified of any material changes via email or in-app
               notification.
             </p>
@@ -367,15 +360,15 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
             <p
               className={`text-[15px] leading-relaxed m-0 mb-4 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#555]'}`}
             >
-              MediTrack is a comprehensive healthcare management system designed
+              PRAMIS is a comprehensive healthcare management system designed
               to streamline patient record keeping, appointment scheduling, and
               event management for healthcare professionals.
             </p>
             <div className="grid grid-cols-2 gap-4 max-[600px]:grid-cols-1">
               {[
                 ['Version', '1.0.0'],
-                ['Platform', 'Web & Mobile'],
-                ['Developer', 'MediTrack Development Team'],
+                ['Platform', 'Web'],
+                ['Developer', 'PRAMIS Development Team'],
               ].map(([label, value]) => (
                 <div key={label}>
                   <p
@@ -665,121 +658,6 @@ function AccountSection({
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h2
-          className={`text-[22px] font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}
-        >
-          Account Management
-        </h2>
-        {!editing ? (
-          <button
-            className="flex items-center gap-2 bg-[#4E69D3] text-white px-4 py-2 rounded-md text-sm font-semibold border-none cursor-pointer hover:bg-[#3D56B8] transition-colors"
-            onClick={() => setEditing(true)}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="w-4 h-4"
-            >
-              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-            Edit
-          </button>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="bg-transparent text-[#4E69D3] border border-[#4E69D3] px-4 py-2 rounded-md text-sm font-semibold cursor-pointer hover:bg-[#EEF0FB] transition-colors"
-              onClick={handleCancel}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="account-settings-form"
-              disabled={isPending}
-              className="bg-[#4E69D3] text-white px-4 py-2 rounded-md text-sm font-semibold border-none cursor-pointer hover:bg-[#3D56B8] transition-colors disabled:opacity-60"
-            >
-              {isPending ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        )}
-      </div>
-      <p
-        className={`text-[15px] leading-relaxed m-0 mb-4 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#555]'}`}
-      >
-        Manage your account name and email.
-      </p>
-
-      <form id="account-settings-form" action={handleSubmit}>
-        <div className="grid grid-cols-2 gap-4 max-[600px]:grid-cols-1">
-          <div key="name">
-            <p
-              className={`text-[11px] font-bold uppercase tracking-[0.5px] m-0 mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
-            >
-              Name
-            </p>
-            {editing ? (
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={(e) => handleChange('name', e.target.value)}
-                className={fieldClass}
-              />
-            ) : (
-              <p
-                className={`text-[16px] font-semibold m-0 max-[900px]:text-[13px] max-[900px]:truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
-              >
-                {form.name}
-              </p>
-            )}
-            {state?.errors?.name && (
-              <p className="mt-1 text-[12px] m-0 text-rose-500">
-                {state.errors.name}
-              </p>
-            )}
-          </div>
-          <div key="email">
-            <p
-              className={`text-[11px] font-bold uppercase tracking-[0.5px] m-0 mb-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
-            >
-              Email
-            </p>
-            {editing ? (
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={(e) => handleChange('email', e.target.value)}
-                className={fieldClass}
-              />
-            ) : (
-              <p
-                className={`text-[16px] font-semibold m-0 max-[900px]:text-[13px] max-[900px]:truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
-              >
-                {form.email}
-              </p>
-            )}
-            {state?.errors?.email && (
-              <p className="mt-1 text-[12px] m-0 text-rose-500">
-                {state.errors.email}
-              </p>
-            )}
-          </div>
-        </div>
-        {state?.message && !state.success && (
-          <p
-            className={`text-[14px] font-semibold m-0 mt-3 ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}
-          >
-            {state.message}
-          </p>
-        )}
-      </form>
-
       <div
         className={`mt-6 pt-5 border-t ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'}`}
       >
