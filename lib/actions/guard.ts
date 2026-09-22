@@ -63,7 +63,8 @@ export async function getAccountAccess(): Promise<{
       where: { id: session.user.id },
       select: { status: true },
     })
-    const status = (user?.status as string) ?? 'PENDING'
+    const rawStatus = (user?.status as string) ?? 'PENDING'
+    const status = rawStatus === 'INACTIVE' ? 'REJECTED' : rawStatus
     return { status, approved: status === 'ACTIVE', admin }
   } catch {
     return { status: 'PENDING', approved: false, admin }

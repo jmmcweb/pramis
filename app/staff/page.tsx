@@ -25,7 +25,7 @@ export default async function StaffHome() {
   const [totalUsers, staffCount, patientRecords, todaySchedule, pendingRequests] =
     await Promise.all([
       prisma.user.count(),
-      (prisma as any).staff.count(),
+      (prisma as any).staff.count({ where: { deletedAt: null } }),
       (prisma as any).patient.count(),
       (prisma as any).appointment.count({
         where: {

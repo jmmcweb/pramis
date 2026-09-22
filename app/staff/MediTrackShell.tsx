@@ -11,6 +11,7 @@ import {
 } from '@/app/staff/ProfilePhotoContext'
 import SidebarFooter from '@/components/globals/SidebarFooter'
 import { useNotifications } from '@/components/patient/useNotifications'
+import StaffStatusWatcher from '@/components/staff/StaffStatusWatcher'
 import type { PatientNotification } from '@/components/patient/notificationData'
 
 const navItems = [
@@ -77,6 +78,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     <div
       className={`flex min-h-screen ${darkMode ? 'bg-gradient-to-b from-[#050617] to-[#050617]' : 'bg-gradient-to-b from-violet-300 to-white'}`}
     >
+      <StaffStatusWatcher />
       <style>{`
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #e0e0e0; border-radius: 3px; }

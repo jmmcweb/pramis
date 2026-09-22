@@ -22,37 +22,53 @@ async function requireAdminSession() {
   return session
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await requireAdminSession())) {
     return NextResponse.json({ message: 'Not authorized.' }, { status: 403 })
   }
 
+  const archivedOnly =
+    new URL(request.url).searchParams.get('archived') === '1'
+
   try {
     const [users, staff] = await Promise.all([
-      (prisma as any).user.findMany({
-        orderBy: { createdAt: 'desc' },
-        include: { profile: true, patients: true },
-      }),
-      (prisma as any).staff.findMany({ orderBy: { createdAt: 'desc' } }),
+      archivedOnly
+        ? Promise.resolve([])
+        : (prisma as any).user.findMany({
+            orderBy: { createdAt: 'desc' },
+            include: { profile: true, patients: true },
+          }),
+      (prisma as any).staff.findMany(
+        archivedOnly
+          ? { where: { deletedAt: { not: null } }, orderBy: { updatedAt: 'desc' } }
+          : { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } },
+      ),
     ])
+
+    const staffRows = staff.map((account: any) => ({
+      kind: 'staff',
+      id: account.staffid,
+      referenceId: account.staffid,
+      firstName: account.firstName,
+      middleName: account.middleName || null,
+      lastName: account.lastName,
+      suffix: account.suffix || null,
+      username: account.email.split('@')[0],
+      email: account.email,
+      password: '********',
+      role: account.role === 'ADMIN' ? 'Admin' : 'Medical Staff',
+      position: account.position || 'Nurse',
+      dateJoined: account.createdAt,
+      archivedAt: account.deletedAt ?? null,
+    }))
+
+    if (archivedOnly) {
+      return NextResponse.json({ users: staffRows })
+    }
 
     return NextResponse.json({
       users: [
-        ...staff.map((account: any) => ({
-          kind: 'staff',
-          id: account.staffid,
-          referenceId: account.staffid,
-          firstName: account.firstName,
-          middleName: account.middleName || null,
-          lastName: account.lastName,
-          suffix: account.suffix || null,
-          username: account.email.split('@')[0],
-          email: account.email,
-          password: '********',
-          role: account.role === 'ADMIN' ? 'Admin' : 'Medical Staff',
-          position: account.position || 'Nurse',
-          dateJoined: account.createdAt,
-        })),
+        ...staffRows,
         ...users.map((account: any) => ({
           kind: 'patient',
           id: account.id,
@@ -448,22 +464,28 @@ export async function DELETE(request: Request) {
     )
   if (id === session.user.id)
     return NextResponse.json(
-      { message: 'You cannot delete your own account.' },
+      { message: 'You cannot archive or delete your own account.' },
       { status: 400 },
     )
 
   try {
     if (kind === 'staff') {
+      // Medical staff accounts are never hard-deleted. Archiving sets
+      // `deletedAt`, which removes the account from every active list, blocks
+      // further sign-ins and automatically signs out any active session.
       const target = await (prisma as any).staff.findUnique({
         where: { staffid: id },
         select: { email: true, role: true },
       })
-      await (prisma as any).staff.delete({ where: { staffid: id } })
+      await (prisma as any).staff.update({
+        where: { staffid: id },
+        data: { deletedAt: new Date() },
+      })
       await recordAudit({
-        action: 'DELETE',
+        action: 'ARCHIVE',
         entity: 'STAFF',
         entityId: id,
-        description: `Deleted staff account ${target?.email ?? id} (${id}).`,
+        description: `Archived staff account ${target?.email ?? id} (${id}). The account is signed out and can no longer sign in.`,
         metadata: {
           accountKind: 'staff',
           email: target?.email ?? null,
@@ -493,6 +515,63 @@ export async function DELETE(request: Request) {
     console.error('Account deletion failed:', error)
     return NextResponse.json(
       { message: 'Unable to delete account.' },
+      { status: 500 },
+    )
+  }
+}
+
+// Restores an archived staff account by clearing its `deletedAt` timestamp.
+// The account becomes active again: it reappears in the accounts list, the
+// staff directory and it can sign in once more.
+export async function PATCH(request: Request) {
+  const session = await requireAdminSession()
+  if (!session)
+    return NextResponse.json({ message: 'Not authorized.' }, { status: 403 })
+
+  const body = await request.json()
+  const id = body.id?.toString()
+  const kind = body.kind?.toString()
+  if (!id || kind !== 'staff')
+    return NextResponse.json(
+      { message: 'Only archived staff accounts can be restored.' },
+      { status: 400 },
+    )
+
+  try {
+    const target = await (prisma as any).staff.findUnique({
+      where: { staffid: id },
+      select: { email: true, role: true, deletedAt: true },
+    })
+    if (!target)
+      return NextResponse.json({ message: 'Account not found.' }, { status: 404 })
+    if (!target.deletedAt)
+      return NextResponse.json(
+        { message: 'This account is not archived.' },
+        { status: 400 },
+      )
+
+    await (prisma as any).staff.update({
+      where: { staffid: id },
+      data: { deletedAt: null },
+    })
+
+    await recordAudit({
+      action: 'RESTORE',
+      entity: 'STAFF',
+      entityId: id,
+      description: `Restored archived staff account ${target.email ?? id} (${id}).`,
+      metadata: {
+        accountKind: 'staff',
+        email: target.email ?? null,
+        role: target.role ?? null,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Account restore failed:', error)
+    return NextResponse.json(
+      { message: 'Unable to restore account.' },
       { status: 500 },
     )
   }

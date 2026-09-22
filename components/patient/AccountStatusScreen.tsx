@@ -13,7 +13,9 @@ export default function AccountStatusScreen({
   showSignOut?: boolean
 }) {
   const isPending = status === 'PENDING'
-  const isRejected = status === 'REJECTED'
+  // Rejection is stored as `INACTIVE` in the database and normalized to
+  // `REJECTED` by the guard/status APIs; accept both for safety.
+  const isRejected = status === 'REJECTED' || status === 'INACTIVE'
 
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-4">
@@ -32,7 +34,7 @@ export default function AccountStatusScreen({
         </div>
 
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-5">
-          {isRejected ? 'Account Verification Failed' : 'Account Pending Approval'}
+          {isRejected ? 'Account Rejected' : 'Account Pending Approval'}
         </h1>
 
         {isPending ? (
@@ -42,6 +44,18 @@ export default function AccountStatusScreen({
             <br />
             <br />
             Once approved, you will be able to:
+          </p>
+        ) : isRejected ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
+            Your account application has been{' '}
+            <span className="font-semibold text-red-600 dark:text-red-400">
+              rejected
+            </span>{' '}
+            by the Barangay Sumapang Matanda Health Center.
+            <br />
+            <br />
+            Please contact the health center for more information or to appeal
+            this decision.
           </p>
         ) : (
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">

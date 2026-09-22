@@ -17,6 +17,7 @@ export async function getStaffDirectory(): Promise<{
 }> {
   try {
     const rows = await (prisma as any).staff.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: 'asc' },
     })
     return {

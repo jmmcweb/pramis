@@ -26,6 +26,7 @@ type StaffUser = BaseUser & {
   firstName: string
   lastName: string
   position: StaffPosition
+  archivedAt: string | null
 }
 
 type PatientProfile = {
@@ -187,6 +188,8 @@ export default function UserManagementPage() {
   const [deleting, setDeleting] = useState<AnyUser | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [adding, setAdding] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivePending, setArchivePending] = useState(false)
   const [addForm, setAddForm] = useState<AddAccountForm>({
     firstName: '',
     lastName: '',
@@ -207,7 +210,10 @@ export default function UserManagementPage() {
         const timeout = setTimeout(() => controller.abort(), 10000)
         let response: Response
         try {
-          response = await fetch('/api/admin/accounts', {
+          const url = showArchived
+            ? '/api/admin/accounts?archived=1'
+            : '/api/admin/accounts'
+          response = await fetch(url, {
             credentials: 'same-origin',
             cache: 'no-store',
             signal: controller.signal,
@@ -217,8 +223,6 @@ export default function UserManagementPage() {
         }
 
         if (response.status === 401 || response.status === 403) {
-          // Not logged in as admin (e.g. previewing without a session).
-          // Keep fallback data instead of a hard error so "all users" is visible.
           console.warn('Not authorized for /api/admin/accounts, using demo data')
           if (!active) return
           setUsers((prev) =>
@@ -509,22 +513,81 @@ export default function UserManagementPage() {
 
   const confirmDelete = async () => {
     if (!deleting) return
-    const response = await fetch('/api/admin/accounts', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: deleting.databaseId || deleting.id,
-        kind: deleting.kind,
-      }),
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      toast.error(data.message || 'Unable to delete account')
-      return
+    const isStaff = deleting.kind === 'staff'
+    const isArchived = deleting.archivedAt !== null
+
+    if (isStaff && isArchived) {
+      // Restore an archived staff account via PATCH
+      setArchivePending(true)
+      try {
+        const response = await fetch('/api/admin/accounts', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: deleting.databaseId || deleting.id,
+            kind: 'staff',
+          }),
+        })
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          toast.error(data.message || 'Unable to restore account')
+          return
+        }
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === deleting.id ? { ...u, archivedAt: null } : u,
+          ),
+        )
+        toast.success(`${fullName(deleting)} has been restored`)
+      } finally {
+        setArchivePending(false)
+      }
+    } else if (isStaff) {
+      // Archive a staff account via DELETE
+      setArchivePending(true)
+      try {
+        const response = await fetch('/api/admin/accounts', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: deleting.databaseId || deleting.id,
+            kind: 'staff',
+          }),
+        })
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          toast.error(data.message || 'Unable to archive account')
+          return
+        }
+        setUsers((prev) => prev.filter((u) => u.id !== deleting.id))
+        toast.success(`${fullName(deleting)} has been archived`)
+      } finally {
+        setArchivePending(false)
+      }
+    } else {
+      // Delete a patient account
+      setArchivePending(true)
+      try {
+        const response = await fetch('/api/admin/accounts', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: deleting.databaseId || deleting.id,
+            kind: 'patient',
+          }),
+        })
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          toast.error(data.message || 'Unable to delete account')
+          return
+        }
+        const name = fullName(deleting)
+        setUsers((prev) => prev.filter((u) => u.id !== deleting.id))
+        toast.success(`${name} has been deleted`)
+      } finally {
+        setArchivePending(false)
+      }
     }
-    const name = fullName(deleting)
-    setUsers((prev) => prev.filter((u) => u.id !== deleting.id))
-    toast.success(`${name} has been deleted`)
     setDeleting(null)
   }
 

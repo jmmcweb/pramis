@@ -38,6 +38,11 @@ export const authOptions: NextAuthOptions = {
           },
         })
 
+        // Soft-deleted (archived) user accounts can no longer sign in.
+        if (user?.deletedAt) {
+          return null
+        }
+
         if (user) {
           const isPasswordValid = await compare( // Compare the provided password with the hashed password stored in the database
             credentials.password,
@@ -77,6 +82,10 @@ export const authOptions: NextAuthOptions = {
         const staff = await (prisma as any).staff.findUnique({
           where: { email: credentials.email },
         })
+        // Archived staff accounts (deletedAt set) can no longer sign in.
+        if (staff?.deletedAt) {
+          return null
+        }
         if (!staff || !(await compare(credentials.password, staff.password))) {
           if (staff && isAuditedRole(staff.role)) {
             await writeAuditLog({
