@@ -9,6 +9,22 @@ import { createNotification } from '@/lib/actions/notifications'
 import { recordAudit } from '@/lib/actions/audit'
 import { getSlotLabel } from '@/config/appointment'
 import { RECORD_STATUSES } from '@/config/medical'
+import {
+  ADDRESS_FIELDS,
+  CONSENT_FIELDS,
+  CONSULTATION_DETAIL_FIELDS,
+  HISTORY_FIELDS,
+  IMMUNIZATION_FIELDS,
+  joinMultiValue,
+  MATERNAL_HISTORY_FIELDS,
+  MULTI_VALUE_FIELDS,
+  NCD_FIELDS,
+  OTHER_INFO_FIELDS,
+  PERSONAL_INFO_FIELDS,
+  PHILHEALTH_FIELDS,
+  PREGNANCY_FIELDS,
+  SOCIAL_HISTORY_FIELDS,
+} from '@/src/data/itrAdult'
 
 // Resolves the staff ID of the user who checked the medical record based on their session information. It first attempts to find the staff ID using the user's session ID, and if not found, it tries to find it using the user's email address. If neither method succeeds, it returns null.
 async function resolveCheckedByStaffId(session: {
@@ -81,42 +97,19 @@ export async function saveMedicalRecord(_prevState: any, formData: FormData) {
   const recordStatus =
     formData.get('recordStatus')?.toString().trim() || 'Stable'
 
-  // Adult ITR (Individual Treatment Record) snapshot fields — all optional.
   const ITR_FIELDS = [
-    'lastName',
-    'firstName',
-    'middleName',
-    'suffix',
-    'civilStatus',
-    'maidenName',
-    'philHealthNo',
-    'memberName',
-    'memberBirthday',
-    'memberDependent',
-    'familyMemberRole',
-    'birthday',
-    'age',
-    'sex',
-    'birthplace',
-    'bloodType',
-    'fathersName',
-    'mothersName',
-    'contactNumber',
-    'religion',
-    'spouseName',
-    'address',
-    'educationalAttainment',
-    'ageOfMenarche',
-    'gravidity',
-    'parityFullTerm',
-    'parityPreterm',
-    'parityAbortion',
-    'parityLivebirth',
-    'lmp',
-    'edc',
-    'consentPatientName',
-    'consentDate',
-    'consentRepresentative',
+    ...PERSONAL_INFO_FIELDS,
+    ...ADDRESS_FIELDS,
+    ...OTHER_INFO_FIELDS,
+    ...PHILHEALTH_FIELDS,
+    ...CONSULTATION_DETAIL_FIELDS,
+    ...HISTORY_FIELDS,
+    ...IMMUNIZATION_FIELDS,
+    ...MATERNAL_HISTORY_FIELDS,
+    ...PREGNANCY_FIELDS,
+    ...NCD_FIELDS,
+    ...SOCIAL_HISTORY_FIELDS,
+    ...CONSENT_FIELDS,
     // Child ITR fields
     'placeDelivered',
     'placeDeliveredOthers',
@@ -149,13 +142,27 @@ export async function saveMedicalRecord(_prevState: any, formData: FormData) {
   ] as const
   const itrData: Record<string, string> = {}
   for (const field of ITR_FIELDS) {
-    const value = formData.get(field)?.toString().trim() || ''
-    if (value) itrData[field] = value
+    const values = formData
+      .getAll(field)
+      .map((v) => v?.toString().trim())
+      .filter(Boolean) as string[]
+    if (!values.length) continue
+    itrData[field] = values.length > 1 ? joinMultiValue(values) : values[0]
   }
 
-  // Echo the user's input back on validation errors so the ITR forms can
-  // re-mount pre-filled instead of losing everything that was typed when refreshed.
-  const submittedValues = Object.fromEntries(formData) as Record<string, string>
+  const submittedValues: Record<string, string> = {}
+  for (const [key, value] of formData.entries()) {
+    const text = value?.toString() ?? ''
+    if (MULTI_VALUE_FIELDS.includes(key)) {
+      const v = text.trim()
+      if (!v) continue
+      submittedValues[key] = submittedValues[key]
+        ? `${submittedValues[key]}; ${v}`
+        : v
+    } else {
+      submittedValues[key] = text
+    }
+  }
   const fail = (message: string) => ({
     success: false as const,
     message,

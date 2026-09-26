@@ -60,6 +60,7 @@ export type MedicalRecord = {
   consentPatientName?: string
   consentDate?: string
   consentRepresentative?: string
+  itr?: Record<string, string>
   // Child-specific fields
   birthLength?: string
   birthWeight?: string

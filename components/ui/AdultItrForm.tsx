@@ -1,7 +1,8 @@
 'use client'
 
-// Adult ITR Form (Individual Treatment Record) for patients 18 years and older. This form is used to collect and record medical information for adult patients during their consultation at the City Health Unit (CHU) or Rural Health Unit (RHU). The form includes sections for patient information, PhilHealth and membership details, female patient health (if applicable), consent and signature, and consultation record. It is designed to be filled out by healthcare providers during the patient's visit, ensuring that all relevant medical data is accurately captured and stored in the iClinicSys system for future reference and continuity of care.
-import { useActionState, useEffect, useMemo, useState } from 'react'
+
+
+import { useActionState, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { saveMedicalRecord } from '@/lib/actions/medical'
@@ -10,8 +11,11 @@ import {
   type ScheduleAppointmentView,
 } from '@/config/appointment'
 import {
+  CheckboxField,
+  CheckboxGroupField,
+  CheckboxSpecifyField,
   computeAge,
-  FIELD,
+  computeAgeParts,
   FIELD_READONLY,
   ItrConsultationSection,
   ItrFooter,
@@ -23,9 +27,87 @@ import {
   RadioField,
   ReadOnlyField,
   SECTION_TITLE,
+  SelectField,
+  SUBTITLE,
   SubmittedValuesContext,
   TextField,
 } from '@/components/ui/ItrFields'
+import {
+  CIVIL_STATUS_OPTIONS,
+  DELIVERY_TYPE_OPTIONS,
+  DISABILITY_TYPES,
+  EMPLOYMENT_STATUS_OPTIONS,
+  FAMILY_MEMBER_OPTIONS,
+  HISTORY_CONDITIONS,
+  NCD_QUESTIONS,
+  NATURE_OF_VISIT_OPTIONS,
+  PHILHEALTH_CATEGORIES,
+  PHILHEALTH_STATUS_OPTIONS,
+  PREFIX_OPTIONS,
+  RELATIONSHIP_TO_MEMBER_OPTIONS,
+  SEX_OPTIONS,
+  SOCIAL_HISTORY_OPTIONS,
+  YES_NO_OPTIONS,
+  historyField,
+  historySpecifyField,
+} from '@/src/data/itrAdult'
+
+// Wizard pages of the printed ITR template.
+const STEPS = [
+  'Personal Information',
+  'Address & Contact',
+  'Other Info & PhilHealth',
+  'Consultation Details & History',
+  'Immunization & Female Health',
+  'NCD & Social History',
+  'Consent & Signature',
+  'Consultation Record',
+]
+
+// Adult / elderly immunization boxes printed under the ITR's
+// ">> IMMUNIZATION <<" section.
+const ADULT_IMMUNIZATION: { name: string; label: string }[] = [
+  { name: 'immAdultHpv', label: 'HPV' },
+  { name: 'immAdultMmr', label: 'MMR' },
+  { name: 'immAdultNone', label: 'None' },
+]
+
+const ELDERLY_IMMUNIZATION: { name: string; label: string }[] = [
+  { name: 'immElderlyPneumococcal', label: 'Pneumococcal Vaccine' },
+  { name: 'immElderlyFlu', label: 'Flu Vaccine' },
+  { name: 'immElderlyOthers', label: 'Others' },
+]
+
+const LEGACY_FAMILY_ROLE: Record<string, string> = {
+  HEAD: 'Head of Family',
+  SPOUSE: 'Spouse',
+  CHILD: 'Child',
+  OTHERS: 'Others',
+}
+
+function normalizeFamilyRole(value: string, patientSex: string): string {
+  if (!value) return ''
+  if (LEGACY_FAMILY_ROLE[value]) {
+    if (value === 'SPOUSE')
+      return patientSex === 'Female' ? 'Wife' : 'Husband'
+    if (value === 'CHILD') return patientSex === 'Female' ? 'Daughter' : 'Son'
+    return LEGACY_FAMILY_ROLE[value]
+  }
+  return value
+}
+
+function normalizeCivilStatus(value: string): string {
+  const v = (value || '').trim().toLowerCase()
+  if (!v) return ''
+  if (v.includes('widow')) return 'Widow/er'
+  if (v.includes('annul')) return 'Separated'
+  if (v.includes('separat')) return 'Separated'
+  if (v.includes('co-') || v.includes('cohabit') || v.includes('live'))
+    return 'Co-Habitation'
+  if (v.startsWith('single')) return 'Single'
+  if (v.startsWith('married')) return 'Married'
+  return value
+}
 
 export default function AdultItrForm({
   appointment,
@@ -78,6 +160,11 @@ export default function AdultItrForm({
     sex: '',
     contactNumber: '',
     address: '',
+    purok: '',
+    houseNumber: '',
+    barangay: '',
+    city: '',
+    email: '',
     philHealthNo: '',
     bloodType: '',
     religion: '',
@@ -86,31 +173,17 @@ export default function AdultItrForm({
   }
 
   const [page, setPage] = useState(0)
-  const [sex, setSex] = useState(normalizeSex(itr.sex || info.sex))
-  const [birthday, setBirthday] = useState(itr.birthday || info.birthdate || '')
-  const [age, setAge] = useState(
-    itr.age || (info.birthdate ? computeAge(info.birthdate) : ''),
-  )
+  const sex = normalizeSex(itr.sex || info.sex)
+  const birthday = itr.birthday || info.birthdate || ''
+  const age = itr.age || (info.birthdate ? computeAge(info.birthdate) : '')
+  const ageParts = computeAgeParts(birthday)
+  const isFemale = sex === 'Female'
 
   const recordDate =
     appointment.dateISO || new Date().toISOString().slice(0, 10)
 
-  // Wizard pages; the female-health page only applies to female patients.
-  const steps = useMemo(() => {
-    const s = [
-      'Patient Information',
-      'PhilHealth & Membership',
-      ...(sex === 'Female' ? ['Female Patient Health'] : []),
-      'Consent & Signature',
-      'Consultation Record',
-    ]
-    return s
-  }, [sex])
-
-  // Keep the current page in range when the female page appears/disappears.
-  useEffect(() => {
-    setPage((p) => Math.min(p, steps.length - 1))
-  }, [steps.length])
+  // Tick marks are stored as "<field>: 'Yes'" → checked state for checklists.
+  const ticked = (name: string) => Boolean(itr[name])
 
   return (
     <form key={errorKey} action={formAction} className="px-4 sm:px-6 py-5">
@@ -132,27 +205,51 @@ export default function AdultItrForm({
           name="recommendation"
           value={record?.recommendation ?? ''}
         />
+        {/* Legacy single-line contact kept for older ITR snapshots */}
+        <input
+          type="hidden"
+          name="contactNumber"
+          value={itr.contactNumber ?? ''}
+        />
+        <input
+          type="hidden"
+          name="memberDependent"
+          value={itr.memberDependent ?? ''}
+        />
+        <input
+          type="hidden"
+          name="mothersName"
+          value={itr.mothersName ?? ''}
+        />
 
         {/*  Document header  */}
         <ItrHeader title="City Health Unit VII — Adult Individual Treatment Record (ITR)" />
 
         {/*  Stepper (pagination)  */}
         <ItrStepper
-          steps={steps}
+          steps={STEPS}
           page={page}
           setPage={setPage}
           isPending={isPending}
         />
 
-        {/*  Page 1: Patient Information  */}
+        {/*  Page 1: Personal Information  */}
         <div className={`${PANEL} ${page !== 0 ? 'hidden' : ''}`}>
-          <h3 className={SECTION_TITLE}>Patient Information</h3>
+          <h3 className={SECTION_TITLE}>Personal Information</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Personal information is auto-populated from the patient's saved
-            profile. For family members, update their patient information in the
-            account profile.
+            Name, birth date and sex are auto-populated from the patient&apos;s
+            saved profile. For family members, update their patient information
+            in the account profile.
           </p>
           <div className="grid sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <RadioField
+                name="prefix"
+                label="Prefix"
+                options={PREFIX_OPTIONS}
+                defaultValue={itr.prefix}
+              />
+            </div>
             <div className="grid grid-cols-[1fr_100px] gap-4">
               <ReadOnlyField
                 name="lastName"
@@ -175,15 +272,9 @@ export default function AdultItrForm({
               label="Middle Name"
               defaultValue={itr.middleName || info.middleName}
             />
-            <TextField
-              name="civilStatus"
-              label="Civil Status"
-              defaultValue={itr.civilStatus}
-              placeholder="Single / Married / Widowed / Separated"
-            />
             <div>
               <label htmlFor="itr-birthday" className={LBL}>
-                Birthday
+                Birth Date (mm/dd/yyyy)
               </label>
               <input
                 id="itr-birthday"
@@ -210,28 +301,64 @@ export default function AdultItrForm({
               />
               <input type="hidden" name="age" value={age} />
             </div>
-            <div>
-              <label htmlFor="itr-sex" className={LBL}>
-                Sex
-              </label>
-              <select
-                id="itr-sex"
-                name="sex"
-                value={sex}
-                disabled
-                className={`${FIELD_READONLY} cursor-not-allowed`}
-                tabIndex={-1}
-              >
-                <option value="">— Select —</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
+            <div className="sm:col-span-2">
+              <span className={LBL}>Sex</span>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                {SEX_OPTIONS.map((o) => (
+                  <label
+                    key={o.value}
+                    className="flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-[#F9FAFB]"
+                  >
+                    <input
+                      type="radio"
+                      name="sexDisplay"
+                      value={o.value}
+                      defaultChecked={sex === o.value}
+                      disabled
+                      tabIndex={-1}
+                      className="accent-[#4E69D3] w-4 h-4"
+                    />
+                    {o.text}
+                  </label>
+                ))}
+              </div>
               <input type="hidden" name="sex" value={sex} />
             </div>
+
+            <h4 className={`${SUBTITLE} sm:col-span-2 mt-2`}>
+              &gt;&gt; Other Personal Information &lt;&lt;
+            </h4>
             <TextField
               name="birthplace"
-              label="Birthplace"
+              label="Birth Place"
               defaultValue={itr.birthplace}
+            />
+            <TextField
+              name="religion"
+              label="Religion"
+              defaultValue={itr.religion || info.religion}
+            />
+            <div className="sm:col-span-2">
+              <RadioField
+                name="civilStatus"
+                label="Civil Status"
+                options={CIVIL_STATUS_OPTIONS}
+                defaultValue={normalizeCivilStatus(itr.civilStatus)}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <RadioField
+                name="employmentStatus"
+                label="Employment Status"
+                options={EMPLOYMENT_STATUS_OPTIONS}
+                defaultValue={itr.employmentStatus}
+              />
+            </div>
+            <TextField
+              name="educationalAttainment"
+              label="Educational Attainment"
+              defaultValue={itr.educationalAttainment}
+              placeholder="e.g. High School Graduate"
             />
             <TextField
               name="bloodType"
@@ -239,25 +366,37 @@ export default function AdultItrForm({
               defaultValue={itr.bloodType || info.bloodType}
               placeholder="A+ / B / O- …"
             />
+            <RadioField
+              name="indigenous"
+              label="Indigenous"
+              options={YES_NO_OPTIONS}
+              defaultValue={itr.indigenous}
+            />
             <TextField
               name="fathersName"
               label="Father's Name"
               defaultValue={itr.fathersName || info.fathersName}
             />
             <TextField
-              name="mothersName"
-              label="Mother's Name"
-              defaultValue={itr.mothersName || info.mothersName}
-            />
-            <ReadOnlyField
-              name="contactNumber"
-              label="Contact Number"
-              defaultValue={itr.contactNumber || info.contactNumber}
+              name="mothersFirstName"
+              label="Mother's First Name"
+              defaultValue={itr.mothersFirstName}
             />
             <TextField
-              name="religion"
-              label="Religion"
-              defaultValue={itr.religion || info.religion}
+              name="mothersLastName"
+              label="Mother's Last Name"
+              defaultValue={itr.mothersLastName}
+            />
+            <TextField
+              name="mothersMiddleName"
+              label="Mother's Middle Name"
+              defaultValue={itr.mothersMiddleName}
+            />
+            <TextField
+              name="mothersBirthdate"
+              label="Mother's Birthdate"
+              type="date"
+              defaultValue={itr.mothersBirthdate}
             />
             <TextField
               name="spouseName"
@@ -268,32 +407,151 @@ export default function AdultItrForm({
               name="maidenName"
               label="Maiden Name"
               defaultValue={itr.maidenName}
-              placeholder="For married women / Pangalan sa Pagkadala"
-            />
-            <div className="sm:col-span-2">
-              <ItrTextarea
-                name="address"
-                label="Complete Residential Address"
-                rows={2}
-                defaultValue={itr.address || info.address}
-              />
-            </div>
-            <TextField
-              name="educationalAttainment"
-              label="Educational Attainment"
-              defaultValue={itr.educationalAttainment}
+              placeholder="For married women"
             />
           </div>
         </div>
 
-        {/* Page 2: PhilHealth & Membership */}
+        {/*  Page 2: Address & Contact Information  */}
         <div className={`${PANEL} ${page !== 1 ? 'hidden' : ''}`}>
-          <h3 className={SECTION_TITLE}>PhilHealth &amp; Membership</h3>
+          <h3 className={SECTION_TITLE}>Address &amp; Contact Information</h3>
           <div className="grid sm:grid-cols-2 gap-4">
             <TextField
+              name="cityMun"
+              label="City / Municipality"
+              defaultValue={itr.cityMun || info.city}
+              placeholder="City of Malolos"
+            />
+            <TextField
+              name="barangay"
+              label="Barangay"
+              defaultValue={itr.barangay || info.barangay}
+            />
+            <TextField
+              name="streetNumber"
+              label="Number / Street"
+              defaultValue={itr.streetNumber || info.houseNumber}
+            />
+            <TextField
+              name="purok"
+              label="Name / Purok"
+              defaultValue={itr.purok || info.purok}
+            />
+            <TextField
+              name="email"
+              label="Email"
+              type="email"
+              defaultValue={itr.email || info.email}
+            />
+            <TextField
+              name="mobileNumber"
+              label="Mobile Number"
+              defaultValue={itr.mobileNumber || info.contactNumber}
+              placeholder="09XX XXX XXXX"
+            />
+            <TextField
+              name="landlineNumber"
+              label="Landline Number"
+              defaultValue={itr.landlineNumber}
+            />
+            <div className="sm:col-span-2">
+              <ItrTextarea
+                name="address"
+                label="Complete Residential Address (summary)"
+                rows={2}
+                defaultValue={itr.address || info.address || ''}
+                placeholder="Combined address printed on the ITR — prefilled from the fields above and the patient profile"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/*  Page 3: Other Info & PhilHealth  */}
+        <div className={`${PANEL} ${page !== 2 ? 'hidden' : ''}`}>
+          <h3 className={SECTION_TITLE}>Other Info &amp; PhilHealth</h3>
+
+          <h4 className={SUBTITLE}>&gt;&gt; Other Info &lt;&lt;</h4>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <RadioField
+                name="familyMemberRole"
+                label="Family Member"
+                options={FAMILY_MEMBER_OPTIONS}
+                defaultValue={normalizeFamilyRole(
+                  itr.familyMemberRole || '',
+                  sex,
+                )}
+              />
+            </div>
+            <RadioField
+              name="dswd4psMember"
+              label="DSWD 4Ps Member"
+              options={YES_NO_OPTIONS}
+              defaultValue={itr.dswd4psMember}
+            />
+            <RadioField
+              name="pwdMember"
+              label="Person with Disability?"
+              options={YES_NO_OPTIONS}
+              defaultValue={itr.pwdMember}
+            />
+            <div className="sm:col-span-2">
+              <CheckboxGroupField
+                name="disabilityTypes"
+                label="If yes? (choose)"
+                options={DISABILITY_TYPES}
+                defaultValue={itr.disabilityTypes}
+              />
+            </div>
+            <TextField
+              name="psaNationalId"
+              label="PSA National ID #"
+              defaultValue={itr.psaNationalId}
+            />
+          </div>
+
+          <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; PhilHealth Info &lt;&lt;</h4>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <RadioField
+              name="philHealthMember"
+              label="PhilHealth Member"
+              options={YES_NO_OPTIONS}
+              defaultValue={itr.philHealthMember}
+            />
+            <TextField
               name="philHealthNo"
-              label="PhilHealth No."
+              label="PhilHealth Number"
               defaultValue={itr.philHealthNo || info.philHealthNo}
+            />
+            <div className="sm:col-span-2">
+              <RadioField
+                name="philHealthStatusType"
+                label="PhilHealth Status Type"
+                options={PHILHEALTH_STATUS_OPTIONS}
+                defaultValue={
+                  itr.philHealthStatusType ||
+                  (itr.memberDependent === 'Y'
+                    ? 'Dependent'
+                    : itr.memberDependent === 'N'
+                      ? 'Member'
+                      : '')
+                }
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <RadioField
+                name="relationshipToMember"
+                label="Relationship to Member"
+                options={RELATIONSHIP_TO_MEMBER_OPTIONS}
+                defaultValue={itr.relationshipToMember}
+              />
+            </div>
+            <SelectField
+              name="philHealthCategory"
+              label="PhilHealth Category"
+              options={PHILHEALTH_CATEGORIES}
+              defaultValue={itr.philHealthCategory}
+              className="sm:col-span-2"
             />
             <TextField
               name="memberName"
@@ -307,92 +565,326 @@ export default function AdultItrForm({
               type="date"
               defaultValue={itr.memberBirthday}
             />
-            <RadioField
-              name="memberDependent"
-              label="Member or Dependent (Y/N)"
-              defaultValue={itr.memberDependent}
-              options={[
-                { value: 'Y', text: 'Y' },
-                { value: 'N', text: 'N' },
-              ]}
-            />
             <div className="sm:col-span-2">
               <RadioField
-                name="familyMemberRole"
-                label="Family Member"
-                defaultValue={itr.familyMemberRole}
-                options={[
-                  { value: 'HEAD', text: 'Head' },
-                  { value: 'SPOUSE', text: 'Spouse' },
-                  { value: 'CHILD', text: 'Child' },
-                  { value: 'OTHERS', text: 'Others' },
-                ]}
+                name="yakapRegistered"
+                label="Yakap Registered?"
+                options={YES_NO_OPTIONS}
+                defaultValue={itr.yakapRegistered}
               />
             </div>
           </div>
         </div>
 
-        {/*  Page 3: Female Patient Health (female patients only) */}
-        {sex === 'Female' && (
-          <div
-            className={`${PANEL} ${page !== steps.indexOf('Female Patient Health') ? 'hidden' : ''}`}
-          >
-            <h3 className={SECTION_TITLE}>Female Patient Health</h3>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <TextField
-                name="ageOfMenarche"
-                label="Age of Menarche Started"
-                defaultValue={itr.ageOfMenarche}
+        {/*  Page 4: Consultation Details & Medical History  */}
+        <div className={`${PANEL} ${page !== 3 ? 'hidden' : ''}`}>
+          <h3 className={SECTION_TITLE}>
+            Consultation Details &amp; Medical History
+          </h3>
+
+          <h4 className={SUBTITLE}>&gt;&gt; Consultation Details &lt;&lt;</h4>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <RadioField
+                name="natureOfVisit"
+                label="Nature of Visit"
+                options={NATURE_OF_VISIT_OPTIONS}
+                defaultValue={itr.natureOfVisit}
               />
-              <TextField
-                name="lmp"
-                label="LMP (Last Menstrual Period)"
-                type="date"
-                defaultValue={itr.lmp}
+            </div>
+            <div className="sm:col-span-2">
+              <span className={LBL}>Patient Age</span>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <TextField
+                  name="patientAgeYears"
+                  label="In years"
+                  type="number"
+                  defaultValue={itr.patientAgeYears || ageParts.years}
+                />
+                <TextField
+                  name="patientAgeMonths"
+                  label="In months"
+                  type="number"
+                  defaultValue={itr.patientAgeMonths || ageParts.months}
+                />
+                <TextField
+                  name="patientAgeDays"
+                  label="In days"
+                  type="number"
+                  defaultValue={itr.patientAgeDays || ageParts.days}
+                />
+              </div>
+            </div>
+          </div>
+
+          <h4 className={`${SUBTITLE} mt-5`}>
+            &gt;&gt; Past Medical History &lt;&lt;
+          </h4>
+          <HistoryChecklist prefix="pastMed" itr={itr} />
+          <div className="grid sm:grid-cols-2 gap-4 mt-3">
+            <TextField
+              name="pastSurgicalHistory"
+              label="Past Surgical History Done"
+              defaultValue={itr.pastSurgicalHistory}
+            />
+            <TextField
+              name="pastSurgicalDate"
+              label="Date Done"
+              type="date"
+              defaultValue={itr.pastSurgicalDate}
+            />
+          </div>
+
+          <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Family History &lt;&lt;</h4>
+          <HistoryChecklist prefix="famHist" itr={itr} />
+          <div className="grid sm:grid-cols-2 gap-4 mt-3">
+            <TextField
+              name="famHistSurgical"
+              label="Past Surgical History Done"
+              defaultValue={itr.famHistSurgical}
+            />
+            <TextField
+              name="famHistSurgicalDate"
+              label="Date Done"
+              type="date"
+              defaultValue={itr.famHistSurgicalDate}
+            />
+          </div>
+        </div>
+
+        {/*  Page 5: Immunization, Family Planning & Female Health  */}
+        <div className={`${PANEL} ${page !== 4 ? 'hidden' : ''}`}>
+          <h3 className={SECTION_TITLE}>
+            Immunization, Family Planning &amp; Female Health
+          </h3>
+
+          <h4 className={SUBTITLE}>&gt;&gt; Immunization &lt;&lt;</h4>
+          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 m-0 mb-2">
+            *For Adult:
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
+            {ADULT_IMMUNIZATION.map((o) => (
+              <CheckboxField
+                key={o.name}
+                name={o.name}
+                label={o.label}
+                defaultChecked={ticked(o.name)}
               />
-              <TextField
-                name="gravidity"
-                label="Gravidity"
-                defaultValue={itr.gravidity}
+            ))}
+          </div>
+          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 m-0 mb-2">
+            *For Elderly:
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
+            {ELDERLY_IMMUNIZATION.map((o) => (
+              <CheckboxField
+                key={o.name}
+                name={o.name}
+                label={o.label}
+                defaultChecked={ticked(o.name)}
               />
-              <TextField
-                name="edc"
-                label="EDC (if pregnant)"
-                type="date"
-                defaultValue={itr.edc}
-              />
-              <div className="sm:col-span-2">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            ))}
+          </div>
+
+          <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Family Planning &lt;&lt;</h4>
+          <RadioField
+            name="familyPlanningCounseling"
+            label="With access to family planning counselling?"
+            options={YES_NO_OPTIONS}
+            defaultValue={itr.familyPlanningCounseling}
+          />
+
+          {isFemale && (
+            <>
+              <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Menstrual History &lt;&lt;</h4>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <TextField
+                  name="ageOfMenarche"
+                  label="Menarche (years old)"
+                  type="number"
+                  defaultValue={itr.ageOfMenarche}
+                />
+                <TextField
+                  name="onsetSexualIntercourse"
+                  label="Onset of Sexual Intercourse (years old)"
+                  type="number"
+                  defaultValue={itr.onsetSexualIntercourse}
+                />
+                <TextField
+                  name="lmp"
+                  label="Last Menstrual Period"
+                  type="date"
+                  defaultValue={itr.lmp}
+                />
+                <TextField
+                  name="periodDuration"
+                  label="Period Duration (days)"
+                  type="number"
+                  defaultValue={itr.periodDuration}
+                />
+                <TextField
+                  name="padsPerDay"
+                  label="No. of pads per day"
+                  type="number"
+                  defaultValue={itr.padsPerDay}
+                />
+                <TextField
+                  name="intervalCycle"
+                  label="Interval Cycle (days)"
+                  type="number"
+                  defaultValue={itr.intervalCycle}
+                />
+                <TextField
+                  name="birthControlMethod"
+                  label="Birth Control Method Used"
+                  defaultValue={itr.birthControlMethod}
+                />
+                <RadioField
+                  name="menopause"
+                  label="Menopause"
+                  options={YES_NO_OPTIONS}
+                  defaultValue={itr.menopause}
+                />
+                <TextField
+                  name="ageMenopause"
+                  label="Age of menopausal (years old)"
+                  type="number"
+                  defaultValue={itr.ageMenopause}
+                />
+              </div>
+
+              <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Pregnancy History &lt;&lt;</h4>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <TextField
+                    name="gravidity"
+                    label="G"
+                    type="number"
+                    defaultValue={itr.gravidity}
+                  />
                   <TextField
                     name="parityFullTerm"
-                    label="Parity — Full Term"
+                    label="T (Full Term)"
+                    type="number"
                     defaultValue={itr.parityFullTerm}
                   />
                   <TextField
                     name="parityPreterm"
-                    label="Preterm"
+                    label="P (Preterm)"
+                    type="number"
                     defaultValue={itr.parityPreterm}
                   />
                   <TextField
                     name="parityAbortion"
-                    label="Abortion"
+                    label="A (Abortion)"
+                    type="number"
                     defaultValue={itr.parityAbortion}
                   />
-                  <TextField
-                    name="parityLivebirth"
-                    label="Livebirth"
-                    defaultValue={itr.parityLivebirth}
-                  />
                 </div>
+                <TextField
+                  name="parityLivebirth"
+                  label="L (Living Birth)"
+                  type="number"
+                  defaultValue={itr.parityLivebirth}
+                />
+                <RadioField
+                  name="pregnancyTypeOfDelivery"
+                  label="Type of Delivery"
+                  options={DELIVERY_TYPE_OPTIONS}
+                  defaultValue={itr.pregnancyTypeOfDelivery || itr.typeOfDelivery}
+                />
+                <RadioField
+                  name="pregnancyInducedHypertension"
+                  label="Pregnancy Induced Hypertension"
+                  options={YES_NO_OPTIONS}
+                  defaultValue={itr.pregnancyInducedHypertension}
+                />
+                <TextField
+                  name="edc"
+                  label="EDC (if pregnant)"
+                  type="date"
+                  defaultValue={itr.edc}
+                />
               </div>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
-        {/*  Page: Consent & Signature  */}
-        <div
-          className={`${PANEL} ${page !== steps.indexOf('Consent & Signature') ? 'hidden' : ''}`}
-        >
+        {/*  Page 6: NCD Questionnaire & Personal / Social History  */}
+        <div className={`${PANEL} ${page !== 5 ? 'hidden' : ''}`}>
+          <h3 className={SECTION_TITLE}>
+            NCD Questionnaire &amp; Personal / Social History
+          </h3>
+
+          <h4 className={SUBTITLE}>
+            &gt;&gt; Patient Answer to NCD Questionnaires — For Patient Aged 25
+            Years Old and Above &lt;&lt;
+          </h4>
+          <div className="grid gap-0 mb-5">
+            {NCD_QUESTIONS.map((q) => (
+              <div
+                key={q.name}
+                className="py-2 border-b border-gray-100 dark:border-white/5"
+              >
+                <RadioField
+                  name={q.name}
+                  label={q.label}
+                  options={YES_NO_OPTIONS}
+                  defaultValue={itr[q.name]}
+                />
+              </div>
+            ))}
+          </div>
+
+          <h4 className={SUBTITLE}>&gt;&gt; Personal / Social History &lt;&lt;</h4>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <RadioField
+              name="smoking"
+              label="Smoking"
+              options={SOCIAL_HISTORY_OPTIONS}
+              defaultValue={itr.smoking}
+            />
+            <TextField
+              name="smokingPacksPerDay"
+              label="No. of packs a day"
+              type="number"
+              defaultValue={itr.smokingPacksPerDay}
+            />
+            <RadioField
+              name="alcohol"
+              label="Alcohol"
+              options={SOCIAL_HISTORY_OPTIONS}
+              defaultValue={itr.alcohol}
+            />
+            <TextField
+              name="alcoholBottlesPerDay"
+              label="No. of bottles a day"
+              type="number"
+              defaultValue={itr.alcoholBottlesPerDay}
+            />
+            <RadioField
+              name="illicitDrugs"
+              label="Illicit Drugs"
+              options={SOCIAL_HISTORY_OPTIONS}
+              defaultValue={itr.illicitDrugs}
+            />
+            <RadioField
+              name="sexuallyActive"
+              label="Sexually Active"
+              options={YES_NO_OPTIONS}
+              defaultValue={itr.sexuallyActive}
+            />
+            <TextField
+              name="sexualPartners"
+              label="No. of partners"
+              type="number"
+              defaultValue={itr.sexualPartners}
+            />
+          </div>
+        </div>
+
+        {/*  Page 7: Consent & Signature  */}
+        <div className={`${PANEL} ${page !== 6 ? 'hidden' : ''}`}>
           <h3 className={SECTION_TITLE}>Consent &amp; Signature</h3>
           <div className="grid md:grid-cols-2 gap-5">
             <div className="text-xs leading-relaxed text-gray-700 dark:text-gray-300">
@@ -459,17 +951,15 @@ export default function AdultItrForm({
           </div>
         </div>
 
-        {/*  Page: Consultation Record  */}
-        <div
-          className={`${PANEL} ${page !== steps.indexOf('Consultation Record') ? 'hidden' : ''}`}
-        >
+        {/*  Page 8: Consultation Record (vitals / complaints / diagnosis)  */}
+        <div className={`${PANEL} ${page !== 7 ? 'hidden' : ''}`}>
           <h3 className={SECTION_TITLE}>Consultation Record</h3>
           <ItrConsultationSection record={record} recordDate={recordDate} />
         </div>
 
         {/*  Pagination footer  */}
         <ItrFooter
-          steps={steps}
+          steps={STEPS}
           page={page}
           setPage={setPage}
           isPending={isPending}
@@ -478,5 +968,39 @@ export default function AdultItrForm({
         />
       </SubmittedValuesContext.Provider>
     </form>
+  )
+}
+
+// Checklist block shared by the PAST MEDICAL HISTORY and FAMILY HISTORY
+// sections of the printed ITR.
+function HistoryChecklist({
+  prefix,
+  itr,
+}: {
+  prefix: string
+  itr: Record<string, string>
+}) {
+  return (
+    <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+      {HISTORY_CONDITIONS.map((c) =>
+        c.specify ? (
+          <CheckboxSpecifyField
+            key={c.key}
+            name={historyField(prefix, c)}
+            specifyName={historySpecifyField(prefix, c)}
+            label={c.label}
+            defaultChecked={Boolean(itr[historyField(prefix, c)])}
+            defaultSpecify={itr[historySpecifyField(prefix, c)]}
+          />
+        ) : (
+          <CheckboxField
+            key={c.key}
+            name={historyField(prefix, c)}
+            label={c.label}
+            defaultChecked={Boolean(itr[historyField(prefix, c)])}
+          />
+        ),
+      )}
+    </div>
   )
 }

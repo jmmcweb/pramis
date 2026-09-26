@@ -2,6 +2,13 @@
 
 import { jsPDF } from 'jspdf'
 import type { MedicalRecord } from '@/src/data/records'
+import {
+  HISTORY_CONDITIONS,
+  NCD_QUESTIONS,
+  historyField,
+  historySpecifyField,
+  splitMultiValue,
+} from '@/src/data/itrAdult'
 
 const PAGE_W = 210 // A4 portrait
 const PAGE_H = 297
@@ -47,13 +54,44 @@ export const generateItrPdf = (record: MedicalRecord) => {
   }
 
 
+  //  Adult ITR template snapshot helpers (MedicalRecord.itr holds the values
+  //  keyed by the on-screen ITR form field names).
+  const V = (k: string) => record.itr?.[k] ?? ''
+  const T = (k: string) => Boolean(V(k))
+  // Ticked conditions of a PAST MEDICAL HISTORY / FAMILY HISTORY checklist.
+  const historyList = (prefix: string) =>
+    HISTORY_CONDITIONS.filter((c) => T(historyField(prefix, c)))
+      .map((c) =>
+        c.specify && V(historySpecifyField(prefix, c))
+          ? `${c.label} (${V(historySpecifyField(prefix, c))})`
+          : c.label,
+      )
+      .join(' · ')
+  // Child ITR records carry birth details / immunization dates.
+  const isChild = Boolean(
+    record.placeDelivered ||
+      record.typeOfDelivery ||
+      record.attendantAtBirth ||
+      record.birthLength ||
+      record.birthWeight ||
+      record.immBcg ||
+      record.immPenta1
+  )
+
   //  OFFICIAL DOH / CHU HEADER
   text('REPUBLIC OF THE PHILIPPINES', M, y + 2, { style: 'bold', size: 9 })
   text('DEPARTMENT OF HEALTH', M + INNER, y + 2, { style: 'bold', size: 9, align: 'right' })
   text('PROVINCE OF BULACAN', M, y + 8, { size: 9 })
   text('CITY OF MALOLOS', M + INNER, y + 8, { size: 9, align: 'right' })
   text('CITY HEALTH UNIT VII', PAGE_W / 2, y + 16, { style: 'bold', size: 11, align: 'center' })
-  text('INDIVIDUAL TREATMENT RECORD (ITR)', PAGE_W / 2, y + 24, { style: 'bold', size: 15, align: 'center' })
+  text(
+    isChild
+      ? 'INDIVIDUAL CHILD TREATMENT RECORD (ITR)'
+      : 'INDIVIDUAL ADULT TREATMENT RECORD FOR iCLINICSYS & YAKAP',
+    PAGE_W / 2,
+    y + 24,
+    { style: 'bold', size: isChild ? 15 : 12.5, align: 'center' }
+  )
   text(`Record No. ${record.id.slice(0, 6).toUpperCase()}`, M + INNER, y + 24, { size: 8, align: 'right' })
   doc.setDrawColor(0, 0, 0)
   doc.setLineWidth(0.6)
@@ -79,6 +117,11 @@ export const generateItrPdf = (record: MedicalRecord) => {
       lines = Math.max(lines, ln.length)
     })
     const h = Math.max(12, 4 + lines * lh(9) + 3.5)
+    if (cy + h > PAGE_H - 16) {
+      doc.addPage()
+      cy = M
+      boxPageBroke = true
+    }
     let cx = M
     cells.forEach((c) => {
       doc.setFillColor(255, 255, 255)
@@ -99,6 +142,9 @@ export const generateItrPdf = (record: MedicalRecord) => {
     })
     return cy + h
   }
+
+
+  let boxPageBroke = false
 
   let rowY = boxTop + 7
 // Row 1 — Name
@@ -186,16 +232,100 @@ export const generateItrPdf = (record: MedicalRecord) => {
     )
   }
 
+  // Row 7b — Adult ITR template extras (Other Info / PhilHealth / Address)
+  if (record.itr) {
+    rowY = drawInfoRow(
+      [
+        { label: 'PREFIX', value: V('prefix'), w: 24 },
+        { label: 'EMPLOYMENT STATUS', value: V('employmentStatus'), w: 44 },
+        { label: 'INDIGENOUS', value: V('indigenous'), w: 34 },
+        { label: "MOTHER'S BIRTHDATE", value: F(V('mothersBirthdate')), w: 40 },
+        { label: 'PSA NATIONAL ID #', value: V('psaNationalId'), w: 44 },
+      ],
+      rowY
+    )
+    if (V('mothersFirstName') || V('mothersLastName') || V('mothersMiddleName')) {
+      rowY = drawInfoRow(
+        [
+          { label: "MOTHER'S FIRST NAME", value: V('mothersFirstName'), w: 62 },
+          { label: "MOTHER'S LAST NAME", value: V('mothersLastName'), w: 62 },
+          { label: "MOTHER'S MIDDLE NAME", value: V('mothersMiddleName'), w: 62 },
+        ],
+        rowY
+      )
+    }
+    if (V('email') || V('mobileNumber') || V('landlineNumber')) {
+      rowY = drawInfoRow(
+        [
+          { label: 'EMAIL', value: V('email'), w: 66 },
+          { label: 'MOBILE NUMBER', value: V('mobileNumber'), w: 60 },
+          { label: 'LANDLINE NUMBER', value: V('landlineNumber'), w: 60 },
+        ],
+        rowY
+      )
+    }
+    if (
+      V('dswd4psMember') ||
+      V('pwdMember') ||
+      V('disabilityTypes') ||
+      V('yakapRegistered')
+    ) {
+      rowY = drawInfoRow(
+        [
+          { label: 'DSWD 4Ps MEMBER', value: V('dswd4psMember'), w: 46 },
+          { label: 'PERSON WITH DISABILITY?', value: V('pwdMember'), w: 44 },
+          {
+            label: 'DISABILITY TYPE (IF YES)',
+            value: splitMultiValue(V('disabilityTypes')).join(', '),
+            w: 52,
+          },
+          { label: 'YAKAP REGISTERED?', value: V('yakapRegistered'), w: 44 },
+        ],
+        rowY
+      )
+    }
+    if (
+      V('philHealthMember') ||
+      V('philHealthStatusType') ||
+      V('relationshipToMember') ||
+      V('philHealthCategory')
+    ) {
+      rowY = drawInfoRow(
+        [
+          { label: 'PHILHEALTH MEMBER (Y/N)', value: V('philHealthMember'), w: 40 },
+          { label: 'STATUS TYPE', value: V('philHealthStatusType'), w: 34 },
+          {
+            label: 'RELATIONSHIP TO MEMBER',
+            value: V('relationshipToMember'),
+            w: 40,
+          },
+          { label: 'PHILHEALTH CATEGORY', value: V('philHealthCategory'), w: 72 },
+        ],
+        rowY
+      )
+    }
+    if (V('natureOfVisit') || V('patientAgeYears') || V('familyPlanningCounseling')) {
+      const ageYMD = [
+        `${V('patientAgeYears') || '—'} yrs`,
+        `${V('patientAgeMonths') || '—'} mos`,
+        `${V('patientAgeDays') || '—'} days`,
+      ].join(' ')
+      rowY = drawInfoRow(
+        [
+          { label: 'NATURE OF VISIT', value: V('natureOfVisit'), w: 56 },
+          { label: 'PATIENT AGE (Y/M/D)', value: ageYMD, w: 50 },
+          {
+            label: 'ACCESS TO FAMILY PLANNING COUNSELLING',
+            value: V('familyPlanningCounseling'),
+            w: 80,
+          },
+        ],
+        rowY
+      )
+    }
+  }
+
   // Row 8 — Child birth details (child ITR only)
-  const isChild = Boolean(
-    record.placeDelivered ||
-      record.typeOfDelivery ||
-      record.attendantAtBirth ||
-      record.birthLength ||
-      record.birthWeight ||
-      record.immBcg ||
-      record.immPenta1
-  )
   if (isChild) {
     rowY = drawInfoRow(
       [
@@ -213,10 +343,11 @@ export const generateItrPdf = (record: MedicalRecord) => {
     )
   }
 
-  // Enclosing box for the patient info grid
-  doc.setDrawColor(50, 50, 50)
-  doc.setLineWidth(0.25)
-  doc.rect(M, boxTop, INNER, rowY - boxTop, 'S')
+  if (!boxPageBroke) {
+    doc.setDrawColor(50, 50, 50)
+    doc.setLineWidth(0.25)
+    doc.rect(M, boxTop, INNER, rowY - boxTop, 'S')
+  }
   y = rowY + 7
 
 
@@ -273,6 +404,216 @@ export const generateItrPdf = (record: MedicalRecord) => {
       yy += h
     })
     return yy
+  }
+
+  //  ADULT ITR TEMPLATE — PAST MEDICAL HISTORY / FAMILY HISTORY
+  const pastMed = historyList('pastMed')
+  const famHist = historyList('famHist')
+  const pastSurg = [V('pastSurgicalHistory'), F(V('pastSurgicalDate'))]
+    .filter(Boolean)
+    .join(' — ')
+  const famSurg = [V('famHistSurgical'), F(V('famHistSurgicalDate'))]
+    .filter(Boolean)
+    .join(' — ')
+  if (pastMed || famHist || pastSurg || famSurg) {
+    text('PAST MEDICAL HISTORY / FAMILY HISTORY', M, y, {
+      style: 'bold',
+      size: 9.5,
+    })
+    y += 4.5
+    const histEnd = drawTable(
+      ['PAST MEDICAL HISTORY', 'FAMILY HISTORY'],
+      [
+        [pastMed, famHist],
+        [
+          pastSurg ? `Past Surgical History Done: ${pastSurg}` : '',
+          famSurg ? `Past Surgical History Done: ${famSurg}` : '',
+        ],
+      ],
+      [93, 93],
+      { cellSize: 7.5 }
+    )
+    y = histEnd + 6
+  }
+
+  //  ADULT ITR TEMPLATE — IMMUNIZATION & FAMILY PLANNING
+  const adultImms = (
+    [
+      ['HPV', 'immAdultHpv'],
+      ['MMR', 'immAdultMmr'],
+      ['None', 'immAdultNone'],
+    ] as [string, string][]
+  )
+    .filter(([, k]) => T(k))
+    .map(([l]) => l)
+  const elderlyImms = (
+    [
+      ['Pneumococcal Vaccine', 'immElderlyPneumococcal'],
+      ['Flu Vaccine', 'immElderlyFlu'],
+      ['Others', 'immElderlyOthers'],
+    ] as [string, string][]
+  )
+    .filter(([, k]) => T(k))
+    .map(([l]) => l)
+  if (adultImms.length || elderlyImms.length || V('familyPlanningCounseling')) {
+    text('IMMUNIZATION', M, y, { style: 'bold', size: 9.5 })
+    y += 4.5
+    const immEnd = drawTable(
+      ['FOR ADULT', 'FOR ELDERLY', 'ACCESS TO FAMILY PLANNING COUNSELLING'],
+      [
+        [
+          adultImms.join(', ') || 'None',
+          elderlyImms.join(', '),
+          V('familyPlanningCounseling'),
+        ],
+      ],
+      [56, 56, 74]
+    )
+    y = immEnd + 6
+  }
+
+  //  ADULT ITR TEMPLATE — MENSTRUAL & PREGNANCY HISTORY (female patients)
+  const femalePatient =
+    record.sex === 'Female' ||
+    Boolean(
+      V('ageOfMenarche') ||
+        V('lmp') ||
+        V('gravidity') ||
+        V('onsetSexualIntercourse')
+    )
+  if (femalePatient) {
+    text('MENSTRUAL HISTORY', M, y, { style: 'bold', size: 9.5 })
+    y += 4.5
+    const mEnd = drawTable(
+      [
+        'MENARCHE (YRS)',
+        'ONSET OF SEXUAL INTERCOURSE (YRS)',
+        'LAST MENSTRUAL PERIOD',
+        'PERIOD DURATION (DAYS)',
+      ],
+      [
+        [
+          V('ageOfMenarche'),
+          V('onsetSexualIntercourse'),
+          F(V('lmp')),
+          V('periodDuration'),
+        ],
+      ],
+      [40, 56, 46, 44]
+    )
+    y = mEnd
+    const mEnd2 = drawTable(
+      [
+        'NO. OF PADS PER DAY',
+        'INTERVAL CYCLE (DAYS)',
+        'BIRTH CONTROL METHOD USED',
+        'MENOPAUSE',
+        'AGE OF MENOPAUSE (YRS)',
+      ],
+      [
+        [
+          V('padsPerDay'),
+          V('intervalCycle'),
+          V('birthControlMethod'),
+          V('menopause'),
+          V('ageMenopause'),
+        ],
+      ],
+      [34, 34, 54, 28, 36]
+    )
+    y = Math.max(mEnd, mEnd2) + 6
+
+    text('PREGNANCY HISTORY', M, y, { style: 'bold', size: 9.5 })
+    y += 4.5
+    const pEnd = drawTable(
+      ['G', 'T', 'P', 'A', 'L', 'TYPE OF DELIVERY', 'PREGNANCY INDUCED HTN', 'EDC'],
+      [
+        [
+          V('gravidity'),
+          V('parityFullTerm'),
+          V('parityPreterm'),
+          V('parityAbortion'),
+          V('parityLivebirth'),
+          V('pregnancyTypeOfDelivery') || V('typeOfDelivery'),
+          V('pregnancyInducedHypertension'),
+          F(V('edc')),
+        ],
+      ],
+      [16, 16, 16, 16, 16, 40, 36, 30]
+    )
+    y = pEnd + 6
+  }
+
+  //  ADULT ITR TEMPLATE — NCD QUESTIONNAIRE (25 years old and above)
+  const ncdRows = NCD_QUESTIONS.map((q) => [q.label, V(q.name)]).filter(
+    ([, answer]) => answer
+  )
+  if (ncdRows.length) {
+    text(
+      'PATIENT ANSWER TO NCD QUESTIONNAIRES — 25 YEARS OLD AND ABOVE',
+      M,
+      y,
+      { style: 'bold', size: 9.5 }
+    )
+    y += 4.5
+    const ncdEnd = drawTable(['QUESTION', 'ANSWER'], ncdRows, [150, 36], {
+      cellSize: 7.5,
+    })
+    y = ncdEnd + 6
+  }
+
+  //  ADULT ITR TEMPLATE — PERSONAL / SOCIAL HISTORY
+  if (V('smoking') || V('alcohol') || V('illicitDrugs') || V('sexuallyActive')) {
+    text('PERSONAL / SOCIAL HISTORY', M, y, { style: 'bold', size: 9.5 })
+    y += 4.5
+    const socialEnd = drawTable(
+      ['SMOKING', 'ALCOHOL', 'ILLICIT DRUGS', 'SEXUALLY ACTIVE'],
+      [
+        [
+          [V('smoking'), V('smokingPacksPerDay') && `${V('smokingPacksPerDay')} pack(s) / day`]
+            .filter(Boolean)
+            .join(' — '),
+          [
+            V('alcohol'),
+            V('alcoholBottlesPerDay') &&
+              `${V('alcoholBottlesPerDay')} bottle(s) / day`,
+          ]
+            .filter(Boolean)
+            .join(' — '),
+          V('illicitDrugs'),
+          [
+            V('sexuallyActive'),
+            V('sexualPartners') && `${V('sexualPartners')} partner(s)`,
+          ]
+            .filter(Boolean)
+            .join(' — '),
+        ],
+      ],
+      [50, 50, 43, 43]
+    )
+    y = socialEnd + 6
+  }
+
+  //  ADULT ITR TEMPLATE — CONSENT
+  if (
+    record.consentPatientName ||
+    record.consentDate ||
+    record.consentRepresentative
+  ) {
+    text('CONSENT', M, y, { style: 'bold', size: 9.5 })
+    y += 4.5
+    const consentEnd = drawTable(
+      ['SIGNATURE OVER PRINTED NAME (PATIENT)', 'DATE', 'CHU/RHU REPRESENTATIVE'],
+      [
+        [
+          record.consentPatientName || '',
+          F(record.consentDate),
+          record.consentRepresentative || '',
+        ],
+      ],
+      [70, 40, 76]
+    )
+    y = consentEnd + 6
   }
 //  Vital signs table 
   text('VITAL SIGNS', M, y, { style: 'bold', size: 9.5 })

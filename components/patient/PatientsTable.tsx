@@ -3,8 +3,19 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Edit3, Eye, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Plus,
+  Edit3,
+  Eye,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+} from 'lucide-react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
+import ItrViewerModal from '@/components/ui/ItrViewerModal'
+import { patientAddressLines } from '@/src/data/patientAddress'
+import type { MedicalRecord } from '@/src/data/records'
 import {
   createPatientRecord,
   updatePatientRecord,
@@ -19,6 +30,7 @@ type PatientForm = {
   birthdate: string
   phoneNumber: string
   houseNumber: string
+  purok: string
   barangay: string
   city: string
   province: string
@@ -31,6 +43,7 @@ const emptyForm: PatientForm = {
   birthdate: '',
   phoneNumber: '',
   houseNumber: '',
+  purok: '',
   barangay: '',
   city: '',
   province: '',
@@ -115,9 +128,11 @@ function StatCard({
 function VisitCard({
   v,
   darkMode,
+  onViewItr,
 }: {
   v: PatientListItem['visits'][number]
   darkMode: boolean
+  onViewItr?: (record: MedicalRecord) => void
 }) {
   return (
     <div
@@ -206,6 +221,23 @@ function VisitCard({
           Checked by {v.checkedBy}
         </p>
       )}
+
+      {/* Admins and medical staff can view (and print) the ITR of this visit
+          in the printed template layout, straight from the patient list. */}
+      {v.record && onViewItr && (
+        <button
+          type="button"
+          onClick={() => onViewItr(v.record as MedicalRecord)}
+          className={`mt-3 w-full py-2.5 rounded-xl font-poppins text-[14px] font-medium text-white transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer ${
+            darkMode
+              ? 'bg-[#4E69D3] hover:bg-[#4A6BC4]'
+              : 'bg-emerald-500 hover:bg-emerald-600'
+          }`}
+        >
+          <FileText className="w-4 h-4" aria-hidden="true" />
+          View ITR
+        </button>
+      )}
     </div>
   )
 }
@@ -231,6 +263,8 @@ export default function PatientsTable({
   const [viewingPatient, setViewingPatient] = useState<PatientListItem | null>(
     null,
   )
+  // ITR opened from a visit card of the medical history modal.
+  const [itrRecord, setItrRecord] = useState<MedicalRecord | null>(null)
   const [form, setForm] = useState<PatientForm>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -242,6 +276,8 @@ export default function PatientsTable({
       p.id.toLowerCase().includes(q) ||
       p.sex.toLowerCase().includes(q) ||
       (p.phoneNumber || '').toLowerCase().includes(q) ||
+      (p.houseNumber || '').toLowerCase().includes(q) ||
+      (p.purok || '').toLowerCase().includes(q) ||
       (p.barangay || '').toLowerCase().includes(q) ||
       (p.city || '').toLowerCase().includes(q)
     )
@@ -286,6 +322,7 @@ export default function PatientsTable({
       birthdate: p.birthdate ? p.birthdate.slice(0, 10) : '',
       phoneNumber: p.phoneNumber || '',
       houseNumber: p.houseNumber || '',
+      purok: p.purok || '',
       barangay: p.barangay || '',
       city: p.city || '',
       province: p.province || '',
@@ -321,6 +358,7 @@ export default function PatientsTable({
     fd.set('birthdate', form.birthdate)
     fd.set('phoneNumber', form.phoneNumber)
     fd.set('houseNumber', form.houseNumber)
+    fd.set('purok', form.purok)
     fd.set('barangay', form.barangay)
     fd.set('city', form.city)
     fd.set('province', form.province)
@@ -356,7 +394,7 @@ export default function PatientsTable({
         <StatCard
           darkMode={darkMode}
           value={patients.length}
-          label="Total Patients"
+          label="Patients w/ Visits"
           color="#4E69D3"
           icon={
             <>
@@ -556,10 +594,31 @@ export default function PatientsTable({
                       {p.phoneNumber || '\u2014'}
                     </td>
                     <td
-                      className={`px-5 py-4 align-middle text-[15px] font-poppins truncate ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                      className={`px-5 py-4 align-middle text-[14px] font-poppins ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                      title={patientAddressLines(p).join(', ')}
                     >
-                      {[p.barangay, p.city].filter(Boolean).join(', ') ||
-                        '\u2014'}
+                      {(() => {
+                        const lines = patientAddressLines(p)
+                        if (lines.length === 0) return '\u2014'
+                        return (
+                          <span className="flex flex-col leading-tight">
+                            {lines.map((line, i) => (
+                              <span
+                                key={line + i}
+                                className={
+                                  i === 0
+                                    ? 'font-medium'
+                                    : darkMode
+                                      ? 'text-gray-400'
+                                      : 'text-gray-500'
+                                }
+                              >
+                                {line}
+                              </span>
+                            ))}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td
                       onClick={() => setViewingPatient(p)}
@@ -781,6 +840,24 @@ export default function PatientsTable({
                 </div>
               </div>
 
+              <div>
+                <label
+                  className={`block text-[12px] font-semibold uppercase tracking-[0.5px] mb-1.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                >
+                  Purok
+                </label>
+                <input
+                  type="text"
+                  value={form.purok}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, purok: e.target.value }))
+                  }
+                  placeholder="e.g. Purok 3"
+                  disabled={isPending}
+                  className={inputClass}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
                   <label
@@ -932,7 +1009,12 @@ export default function PatientsTable({
                 </p>
               )}
               {viewingPatient.visits.map((v) => (
-                <VisitCard key={v.id} v={v} darkMode={darkMode} />
+                <VisitCard
+                  key={v.id}
+                  v={v}
+                  darkMode={darkMode}
+                  onViewItr={setItrRecord}
+                />
               ))}
             </div>
 
@@ -952,6 +1034,15 @@ export default function PatientsTable({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ITR viewer — printed template layout, with print / zoom controls. */}
+      {itrRecord && (
+        <ItrViewerModal
+          record={itrRecord}
+          darkMode={darkMode}
+          onClose={() => setItrRecord(null)}
+        />
       )}
     </div>
   )

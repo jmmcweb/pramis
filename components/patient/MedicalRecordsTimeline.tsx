@@ -3,11 +3,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ClipboardList, Eye, Download, Plus, UserRoundPlus } from 'lucide-react'
+import { ClipboardList, Eye, FileText, Plus, UserRoundPlus } from 'lucide-react'
 import type { MedicalRecord, PatientMember } from '@/src/data/records'
 import { serviceIcons } from '@/src/data/appointment'
 import RecordDetailModal from '@/components/patient/RecordDetailModal'
-import { generateItrPdf } from '@/lib/itrapdf'
+import ItrViewerModal from '@/components/ui/ItrViewerModal'
 
 //
 export default function MedicalRecordsTimeline({
@@ -17,6 +17,7 @@ export default function MedicalRecordsTimeline({
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [viewingRecord, setViewingRecord] = useState<MedicalRecord | null>(null)
+  const [itrRecord, setItrRecord] = useState<MedicalRecord | null>(null)
   const activeMember =
     members.find((m) => m.id === activeId) ?? members[0] ?? null
 
@@ -373,11 +374,11 @@ export default function MedicalRecordsTimeline({
                           </button>
                           <button
                             type="button"
-                            onClick={() => generateItrPdf(record)}
+                            onClick={() => setItrRecord(record)}
                             className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors inline-flex items-center justify-center gap-1.5"
                           >
-                            <Download className="w-4 h-4" aria-hidden="true" />
-                            Download PDF
+                            <FileText className="w-4 h-4" aria-hidden="true" />
+                            View ITR
                           </button>
                         </div>
                       </div>
@@ -405,6 +406,14 @@ export default function MedicalRecordsTimeline({
           record={viewingRecord}
           memberName={activeMember.name}
           onClose={() => setViewingRecord(null)}
+        />
+      )}
+
+      {/* ITR viewer — the printed template layout, printable from the sheet. */}
+      {itrRecord && (
+        <ItrViewerModal
+          record={itrRecord}
+          onClose={() => setItrRecord(null)}
         />
       )}
     </div>

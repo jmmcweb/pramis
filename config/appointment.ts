@@ -214,6 +214,10 @@ export type PatientItrInfo = {
   contactNumber: string
   address: string
   purok: string
+  houseNumber: string
+  barangay: string
+  city: string
+  email: string
   philHealthNo: string
   bloodType: string
   religion: string
@@ -293,6 +297,10 @@ export function extractPatientItrInfo(row: any): PatientItrInfo {
       fathersName: familyMember.fathersName || row?.patient?.fathersName || '',
       mothersName: familyMember.mothersName || row?.patient?.mothersName || '',
       purok: familyMember.purok || row?.patient?.purok || '',
+      houseNumber: familyMember.houseNumber || row?.patient?.houseNumber || '',
+      barangay: familyMember.barangay || row?.patient?.barangay || '',
+      city: familyMember.city || row?.patient?.city || '',
+      email: '',
     }
   }
   return {
@@ -320,6 +328,10 @@ export function extractPatientItrInfo(row: any): PatientItrInfo {
     fathersName: profile?.fathersName || row?.patient?.fathersName || '',
     mothersName: profile?.mothersName || row?.patient?.mothersName || '',
     purok: profile?.purok || row?.patient?.purok || '',
+    houseNumber: profile?.houseNumber || row?.patient?.houseNumber || '',
+    barangay: profile?.barangay || row?.patient?.barangay || '',
+    city: profile?.city || row?.patient?.city || '',
+    email: profile?.email || '',
   }
 }
 

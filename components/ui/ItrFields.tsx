@@ -2,6 +2,7 @@
 // Individual Treatment Record (ITR) form fields and shared components. These are used by both the adult and child ITR forms, which are paginated multi-step wizards for post-consultation data entry. The fields include text inputs, read-only fields, radio buttons, and textareas, along with shared components for headers, stepper navigation, and footers. The code also includes a context for submitted values to preserve user input across form submissions.
 
 import { createContext, useContext } from 'react'
+import { splitMultiValue } from '@/src/data/itrAdult'
 
 export const LBL =
   'block text-xs font-bold uppercase tracking-wide mb-1.5 text-gray-500 dark:text-gray-400'
@@ -17,6 +18,12 @@ export const SECTION_TITLE =
 export const RADIO_LABEL =
   'flex items-center gap-1.5 cursor-pointer text-sm font-medium text-gray-800 dark:text-[#F9FAFB]'
 
+export const SUBTITLE =
+  'text-xs font-bold uppercase tracking-wide m-0 mb-3 text-gray-600 dark:text-gray-300'
+
+export const SPECIFY_LINE =
+  'flex-1 min-w-0 border-0 border-b border-gray-300 dark:border-white/20 bg-transparent text-sm py-0.5 px-1 outline-none text-gray-800 dark:text-[#F9FAFB] focus:border-[#4E69D3]'
+
 // Values the user typed in the last failed submission, echoed back by the
 // server action so inputs can be re-mounted pre-filled after a validation
 // error (React resets uncontrolled inputs after a form action runs).
@@ -31,6 +38,33 @@ export function computeAge(birthdate: string): string {
   const m = today.getMonth() - birth.getMonth()
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
   return age >= 0 && age < 150 ? String(age) : ''
+}
+
+// Splits the patient's age into years / months / days, as required by the
+// "PATIENT DETAILS" box of the printed ITR.
+export function computeAgeParts(birthdate: string): {
+  years: string
+  months: string
+  days: string
+} {
+  const birth = new Date(`${birthdate}T00:00:00`)
+  if (!birthdate || Number.isNaN(birth.getTime())) {
+    return { years: '', months: '', days: '' }
+  }
+  const today = new Date()
+  let years = today.getFullYear() - birth.getFullYear()
+  let months = today.getMonth() - birth.getMonth()
+  let days = today.getDate() - birth.getDate()
+  if (days < 0) {
+    months -= 1
+    days += new Date(today.getFullYear(), today.getMonth(), 0).getDate()
+  }
+  if (months < 0) {
+    years -= 1
+    months += 12
+  }
+  if (years < 0 || years > 150) return { years: '', months: '', days: '' }
+  return { years: String(years), months: String(months), days: String(days) }
 }
 
 export function TextField({
@@ -165,7 +199,174 @@ export function ItrTextarea({
   )
 }
 
-// Document header shared by both ITR forms.
+// Dropdown for the template's long option lists (e.g. "PhilHealth Category").
+// Accepts plain strings or { value, text } pairs.
+type OptionInput = string | { value: string; text: string }
+
+function normalizeOptions(options: OptionInput[]) {
+  return options.map((o) =>
+    typeof o === 'string' ? { value: o, text: o } : o,
+  )
+}
+
+export function SelectField({
+  name,
+  label,
+  options,
+  defaultValue,
+  placeholder = '— Select —',
+  className,
+}: {
+  name: string
+  label: string
+  options: OptionInput[]
+  defaultValue?: string
+  placeholder?: string
+  className?: string
+}) {
+  const submitted = useContext(SubmittedValuesContext)
+  return (
+    <div className={className}>
+      <label htmlFor={`itr-${name}`} className={LBL}>
+        {label}
+      </label>
+      <select
+        id={`itr-${name}`}
+        name={name}
+        defaultValue={submitted?.[name] ?? defaultValue ?? ''}
+        className={FIELD}
+      >
+        <option value="">{placeholder}</option>
+        {normalizeOptions(options).map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.text}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+// Single checklist box (">> PAST MEDICAL HISTORY <<" items). Ticking it
+// submits `value`; leaving it unticked submits nothing, which the ITR
+// snapshot simply skips.
+export function CheckboxField({
+  name,
+  label,
+  value = 'Yes',
+  defaultChecked,
+  className,
+}: {
+  name: string
+  label: string
+  value?: string
+  defaultChecked?: boolean
+  className?: string
+}) {
+  const submitted = useContext(SubmittedValuesContext)
+  const checked = submitted
+    ? submitted[name] === value
+    : Boolean(defaultChecked)
+  return (
+    <label className={`${RADIO_LABEL} ${className ?? ''}`}>
+      <input
+        type="checkbox"
+        name={name}
+        value={value}
+        defaultChecked={checked}
+        className="accent-[#4E69D3] w-4 h-4 shrink-0"
+      />
+      <span>{label}</span>
+    </label>
+  )
+}
+
+// Multi-select checklist (e.g. "Person with Disability? If yes (choose)").
+// Values are submitted under the same name and stored joined with '; '.
+export function CheckboxGroupField({
+  name,
+  label,
+  options,
+  defaultValue,
+  columns = 2,
+}: {
+  name: string
+  label: string
+  options: OptionInput[]
+  defaultValue?: string
+  columns?: 1 | 2 | 3
+}) {
+  const submitted = useContext(SubmittedValuesContext)
+  const selected = splitMultiValue(
+    submitted ? submitted[name] : defaultValue ?? '',
+  )
+  const gridClass =
+    columns === 1 ? '' : columns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+  return (
+    <div>
+      <span className={LBL}>{label}</span>
+      <div className={`grid grid-cols-1 gap-x-5 gap-y-2 ${gridClass}`}>
+        {normalizeOptions(options).map((o) => (
+          <label key={o.value} className={RADIO_LABEL}>
+            <input
+              type="checkbox"
+              name={name}
+              value={o.value}
+              defaultChecked={selected.includes(o.value)}
+              className="accent-[#4E69D3] w-4 h-4 shrink-0"
+            />
+            <span>{o.text}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Checklist item with an inline "Specify" line, matching the printed ITR
+// (e.g. "☐ Allergy (Specify) ______").
+export function CheckboxSpecifyField({
+  name,
+  specifyName,
+  label,
+  specifyPlaceholder = 'Specify',
+  defaultChecked,
+  defaultSpecify,
+}: {
+  name: string
+  specifyName: string
+  label: string
+  specifyPlaceholder?: string
+  defaultChecked?: boolean
+  defaultSpecify?: string
+}) {
+  const submitted = useContext(SubmittedValuesContext)
+  const checked = submitted
+    ? submitted[name] === 'Yes'
+    : Boolean(defaultChecked)
+  return (
+    <div className="flex items-center gap-2">
+      <label className={`${RADIO_LABEL} whitespace-nowrap`}>
+        <input
+          type="checkbox"
+          name={name}
+          value="Yes"
+          defaultChecked={checked}
+          className="accent-[#4E69D3] w-4 h-4 shrink-0"
+        />
+        <span>{label}</span>
+      </label>
+      <input
+        type="text"
+        name={specifyName}
+        defaultValue={submitted?.[specifyName] ?? defaultSpecify ?? ''}
+        placeholder={specifyPlaceholder}
+        aria-label={`${label} — ${specifyPlaceholder}`}
+        className={SPECIFY_LINE}
+      />
+    </div>
+  )
+}
 export function ItrHeader({ title }: { title: string }) {
   return (
     <div className="text-center leading-tight mb-5 pb-4 border-b border-inherit">

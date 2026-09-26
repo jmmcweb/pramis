@@ -9,6 +9,9 @@ import { isValidEmail } from '@/lib/helper'
 import { cacheTag, cacheLife, revalidateTag } from 'next/cache'
 
 import { initialRecords } from '@/src/data/patientRecords'
+import { buildMedicalRecord, splitFullName } from '@/lib/medicalRecord'
+import type { RecordDemographics } from '@/lib/medicalRecord'
+import type { MedicalRecord } from '@/src/data/records'
 
 // Normalizes the sex value to a standard format. It converts various
 function normalizeSex(val?: string | null): string {
@@ -33,6 +36,7 @@ export type PatientVisitView = {
   diagnosis: string
   recommendation: string
   checkedBy: string
+  record: MedicalRecord
 }
 
 export type PatientListItem = {
@@ -43,6 +47,7 @@ export type PatientListItem = {
   age: number | null
   phoneNumber: string
   houseNumber: string
+  purok: string
   barangay: string
   city: string
   province: string
@@ -79,6 +84,9 @@ export async function getPatientsData(): Promise<{
   // Fetches patient records from the database, including associated family members, user profiles, and medical histories. It processes the data to create a list of patients with their details, including name, sex, birthdate, contact information, and visit history. The function returns a success status, message, and the list of patients. If an error occurs during the database query, it logs the error and returns a failure status with an empty patient list.
   try { 
     const rows = await (prisma as any).patient.findMany({
+      // The patient lists are a clinical register: only patients with at
+      // least one completed visit (medical history) are listed.
+      where: { medicalHistories: { some: {} } },
       orderBy: { createdAt: 'desc' },
       include: {
         familyMember: true,
@@ -104,6 +112,43 @@ export async function getPatientsData(): Promise<{
           : '') ||
         row.name ||
         'Unnamed patient'
+
+      // Demographics used as ITR fallbacks whenever a visit's saved ITR
+      // snapshot has no value for that field. Patients registered at the
+      // desk (walk-ins) have no profile row, so the name stored on the
+      // patient / family member row is split as a fallback — otherwise the
+      // printed ITR would show an empty PERSONAL INFORMATION block.
+      const fam = row.familyMember
+      const nameParts = splitFullName(fam?.name ?? row.name)
+      const demographics: RecordDemographics = {
+        lastName:
+          (row.familyMemberId ? undefined : profile?.lastName) ??
+          nameParts.lastName,
+        firstName:
+          (row.familyMemberId ? undefined : profile?.firstName) ??
+          nameParts.firstName,
+        middleName:
+          (row.familyMemberId ? undefined : profile?.middleName) ??
+          nameParts.middleName,
+        suffix: row.familyMemberId ? undefined : (profile?.suffix ?? undefined),
+        birthdate: row.birthdate ?? fam?.birthdate ?? profile?.birthdate,
+        sex:
+          normalizeSex(row.sex) ||
+          normalizeSex(fam?.sex) ||
+          normalizeSex(profile?.sex) ||
+          undefined,
+        bloodType: row.bloodType ?? fam?.bloodType ?? profile?.bloodType,
+        religion: row.religion ?? fam?.religion ?? profile?.religion,
+        phoneNumber: row.phoneNumber ?? fam?.phone ?? profile?.phoneNumber,
+        houseNumber: row.houseNumber ?? fam?.houseNumber ?? profile?.houseNumber,
+        purok: row.purok ?? fam?.purok ?? profile?.purok,
+        barangay: row.barangay ?? fam?.barangay ?? profile?.barangay,
+        city: row.city ?? fam?.city ?? profile?.city,
+        province: row.province ?? fam?.province ?? profile?.province,
+        fathersName: row.fathersName ?? fam?.fathersName ?? profile?.fathersName,
+        mothersName: row.mothersName ?? fam?.mothersName ?? profile?.mothersName,
+      }
+
       return {
         id: row.patientid,
         name,
@@ -119,6 +164,11 @@ export async function getPatientsData(): Promise<{
         age: ageFrom(row.birthdate ?? profile?.birthdate),
         phoneNumber: row.phoneNumber || profile?.phoneNumber || '',
         houseNumber: row.houseNumber || profile?.houseNumber || '',
+        purok:
+          row.purok ||
+          row.familyMember?.purok ||
+          profile?.purok ||
+          '',
         barangay: row.barangay || profile?.barangay || '',
         city: row.city || profile?.city || '',
         province: row.province || profile?.province || '',
@@ -126,24 +176,34 @@ export async function getPatientsData(): Promise<{
         dateRecorded: row.createdAt.toISOString(),
         hasAccount: Boolean(row.userId),
         email: row.user?.email || '',
-        visits: (row.medicalHistories ?? []).map((h: any) => ({
-          id: h.medhisid,
-          date: h.checkedDate.toISOString(),
-          serviceName: h.appointment?.service?.name ?? 'Consultation',
-          condition: h.status ?? '',
-          bloodPressure: h.bloodPressure ?? '',
-          oxygenLevel: String(h.oxygenLevel ?? ''),
-          height: String(h.height ?? ''),
-          weight: String(h.weight ?? ''),
-          diagnosis: h.diagnosis ?? '',
-          recommendation: h.recommendation ?? '',
-          checkedBy: h.checkedBy
-            ? `${h.checkedBy.lastName}, ${h.checkedBy.firstName}`.replace(
-                /^, $/,
-                '',
-              )
-            : '',
-        })),
+        visits: (row.medicalHistories ?? []).map((h: any) => {
+          const serviceName = h.appointment?.service?.name ?? 'Consultation'
+          return {
+            id: h.medhisid,
+            date: h.checkedDate.toISOString(),
+            serviceName,
+            condition: h.status ?? '',
+            bloodPressure: h.bloodPressure ?? '',
+            oxygenLevel: String(h.oxygenLevel ?? ''),
+            height: String(h.height ?? ''),
+            weight: String(h.weight ?? ''),
+            diagnosis: h.diagnosis ?? '',
+            recommendation: h.recommendation ?? '',
+            checkedBy: h.checkedBy
+              ? `${h.checkedBy.lastName}, ${h.checkedBy.firstName}`.replace(
+                  /^, $/,
+                  '',
+                )
+              : '',
+            // Printable ITR (adult / child template) for this visit.
+            record: buildMedicalRecord({
+              mh: h,
+              serviceName,
+              profileInfo: demographics,
+              fallbackName: name,
+            }),
+          }
+        }),
       }
     })
 
@@ -182,6 +242,7 @@ function readDetailFields(formData: FormData) {
     birthdate: formData.get('birthdate')?.toString().trim() || '',
     phoneNumber: formData.get('phoneNumber')?.toString().trim() || '',
     houseNumber: formData.get('houseNumber')?.toString().trim() || '',
+    purok: formData.get('purok')?.toString().trim() || '',
     barangay: formData.get('barangay')?.toString().trim() || '',
     city: formData.get('city')?.toString().trim() || '',
     province: formData.get('province')?.toString().trim() || '',
@@ -235,6 +296,7 @@ export async function createPatientRecord(
         birthdate,
         phoneNumber: fields.phoneNumber || null,
         houseNumber: fields.houseNumber || null,
+        purok: fields.purok || null,
         barangay: fields.barangay || null,
         city: fields.city || null,
         province: fields.province || null,
@@ -312,6 +374,7 @@ export async function updatePatientRecord(
         birthdate,
         phoneNumber: fields.phoneNumber || null,
         houseNumber: fields.houseNumber || null,
+        purok: fields.purok || null,
         barangay: fields.barangay || null,
         city: fields.city || null,
         province: fields.province || null,
