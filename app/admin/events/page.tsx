@@ -219,7 +219,7 @@ export default function EventsPage() {
   const [serviceForm, setServiceForm] = useState<ServiceItem>({
     title: '',
     subtitle: 'Monday to Friday',
-    time: '8:00am - 5:00pm',
+    time: '8:00am - 12:00pm',
     icon: '🩺',
     desc: '',
   })
@@ -494,7 +494,7 @@ export default function EventsPage() {
       icon: '🩺',
       title: '',
       subtitle: 'Monday to Friday',
-      time: '8:00am - 5:00pm',
+      time: '8:00am - 12:00pm',
       desc: '',
     })
 
@@ -2251,7 +2251,7 @@ export default function EventsPage() {
                           time: e.target.value,
                         })
                       }
-                      placeholder="8:00am - 5:00pm"
+                      placeholder="8:00am - 12:00pm"
                       className={inputClass(
                         darkMode
                       )}

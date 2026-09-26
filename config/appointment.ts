@@ -3,16 +3,26 @@ export type AppointmentSlot = {
   label: string // display label, e.g. '8:00 AM - 9:00 AM'
 }
 
+// Services are offered in the morning only, so appointments can be booked
+// between 8:00 AM and 12:00 PM, one hour per slot.
 export const APPOINTMENT_SLOTS: AppointmentSlot[] = [
   { id: '08:00', label: '8:00 AM - 9:00 AM' },
   { id: '09:00', label: '9:00 AM - 10:00 AM' },
   { id: '10:00', label: '10:00 AM - 11:00 AM' },
   { id: '11:00', label: '11:00 AM - 12:00 PM' },
-  { id: '13:00', label: '1:00 PM - 2:00 PM' },
-  { id: '14:00', label: '2:00 PM - 3:00 PM' },
-  { id: '15:00', label: '3:00 PM - 4:00 PM' },
-  { id: '16:00', label: '4:00 PM - 5:00 PM' },
 ]
+
+// The morning window advertised on service cards and used by service forms.
+export const SERVICE_TIME_RANGE = '8:00am - 12:00pm'
+
+// Labels kept for appointments that were booked before the schedule became
+// morning-only, so their stored times still render readably.
+const LEGACY_SLOT_LABELS: Record<string, string> = {
+  '13:00': '1:00 PM - 2:00 PM',
+  '14:00': '2:00 PM - 3:00 PM',
+  '15:00': '3:00 PM - 4:00 PM',
+  '16:00': '4:00 PM - 5:00 PM',
+}
 
 export const SLOT_CAPACITY = 10
 
@@ -21,7 +31,29 @@ export function isValidSlotId(slotId: string): boolean {
 }
 
 export function getSlotLabel(slotId: string): string {
-  return APPOINTMENT_SLOTS.find((slot) => slot.id === slotId)?.label ?? slotId
+  return (
+    APPOINTMENT_SLOTS.find((slot) => slot.id === slotId)?.label ??
+    LEGACY_SLOT_LABELS[slotId] ??
+    slotId
+  )
+}
+
+// A service's advertised window must stay inside the morning schedule.
+// Noon (12:00pm) is allowed; every other pm time falls outside 8:00 AM - 12:00 PM.
+export function isMorningServiceTime(time: string | null | undefined): boolean {
+  const value = (time || '').trim()
+  if (!value) return false
+  const withoutNoon = value.toLowerCase().replace(/12(?::00)?\s*pm/g, '')
+  if (withoutNoon.includes('pm')) return false
+  if (/\b(1[3-9]|2[0-3]):[0-5]\d\b/.test(withoutNoon)) return false
+  return true
+}
+
+// Coerces any service time string to the 8:00 AM - 12:00 PM window so services
+// can never advertise appointment slots outside the morning.
+export function normalizeServiceTime(time: string | null | undefined): string {
+  const value = (time || '').trim()
+  return isMorningServiceTime(value) ? value : SERVICE_TIME_RANGE
 }
 
 export function normalizeSex(value: string | null | undefined): string {
@@ -90,7 +122,7 @@ export type ServiceView = {
   name: string
   description: string
   schedule: string // e.g. 'Monday to Friday'
-  time: string // e.g. '8:00am - 5:00pm'
+  time: string // e.g. '8:00am - 12:00pm'
   icon: string // emoji
   available: boolean
 }

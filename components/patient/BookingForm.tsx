@@ -13,7 +13,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { bookAppointment, getDayAvailability } from '@/lib/actions/appointment'
-import { isServiceAvailableOnDate } from '@/config/appointment'
+import { SERVICE_TIME_RANGE, isServiceAvailableOnDate } from '@/config/appointment'
 import type {
   FamilyMemberOption,
   ServiceView,
@@ -324,7 +324,8 @@ export default function BookingForm({
         <p className="text-sm text-muted mb-4">
           {selectedDate
             ? 'Live availability for the selected date.'
-            : 'Select a date above to see open slots.'}
+            : 'Select a date above to see open slots.'}{' '}
+          Slots are limited to {SERVICE_TIME_RANGE}.
         </p>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-4">
           <Legend color="bg-emerald-500" label="Available" />

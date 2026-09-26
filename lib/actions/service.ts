@@ -4,6 +4,7 @@
 import prisma from '@/lib/prisma'
 import { revalidateTag } from 'next/cache'
 import { requireUser, requireAdmin } from '@/lib/actions/guard'
+import { SERVICE_TIME_RANGE, normalizeServiceTime } from '@/config/appointment'
 import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
 
@@ -38,7 +39,7 @@ function parseService(s: any): ServiceItem {
     title: s.name,
     desc: meta.desc || s.description || '',
     subtitle: meta.subtitle || 'Monday to Friday',
-    time: meta.time || '8:00am - 5:00pm',
+    time: normalizeServiceTime(meta.time || SERVICE_TIME_RANGE),
     icon: meta.icon || '🩺',
     availability: s.availability ?? true,
     createdAt: s.createdAt,
@@ -55,7 +56,7 @@ function formatServiceDescription(meta: {
   return JSON.stringify({
     desc: meta.desc || '',
     subtitle: meta.subtitle || 'Monday to Friday',
-    time: meta.time || '8:00am - 5:00pm',
+    time: normalizeServiceTime(meta.time || SERVICE_TIME_RANGE),
     icon: meta.icon || '🩺',
   })
 }
@@ -64,49 +65,49 @@ const defaultSeedServices = [
   {
     title: 'Basic Consultation',
     subtitle: 'Monday to Friday',
-    time: '8:00am - 5:00pm',
+    time: SERVICE_TIME_RANGE,
     icon: '👩‍⚕️',
     desc: 'General medical consultation for patients of all ages. Includes check-ups, diagnosis, and treatment recommendations.',
   },
   {
     title: 'Pre-natal Care',
     subtitle: 'Tuesday',
-    time: '8:00am - 5:00pm',
+    time: SERVICE_TIME_RANGE,
     icon: '🤰',
     desc: 'Comprehensive care for pregnant women including check-ups, nutritional counseling, and monitoring of fetal development.',
   },
   {
     title: 'National Immunization Program (NIP)',
     subtitle: 'Wednesday to Friday',
-    time: '8:00am - 5:00pm',
+    time: SERVICE_TIME_RANGE,
     icon: '💉',
     desc: 'Routine immunization for infants, children, and adults following the national vaccination schedule.',
   },
   {
     title: 'Hypertension Detection and Management (HDM)',
     subtitle: 'Monday to Friday',
-    time: '8:00am - 5:00pm',
+    time: SERVICE_TIME_RANGE,
     icon: '🩸',
     desc: 'Blood pressure screening, monitoring, and treatment for hypertensive patients.',
   },
   {
     title: 'Visual Inspection with Acetic Acid (VIA)',
     subtitle: 'Thursday',
-    time: '8:00am - 5:00pm',
+    time: SERVICE_TIME_RANGE,
     icon: '🔬',
     desc: 'Cervical cancer screening procedure for early detection of abnormalities.',
   },
   {
     title: 'Family Planning',
     subtitle: 'Thursday',
-    time: '8:00am - 5:00pm',
+    time: SERVICE_TIME_RANGE,
     icon: '🧬',
     desc: 'Counseling and services for various family planning methods, reproductive health education, and informed choice.',
   },
   {
     title: 'Pills and Condoms',
     subtitle: 'Monday to Friday',
-    time: '8:00am - 5:00pm',
+    time: SERVICE_TIME_RANGE,
     icon: '💊',
     desc: 'Distribution and counseling on oral contraceptive pills and condoms for safe and responsible family planning.',
   },
@@ -187,7 +188,7 @@ export async function createService(data: {
         description: formatServiceDescription({
           desc: data.desc || '',
           subtitle: data.subtitle || 'Monday to Friday',
-          time: data.time || '8:00am - 5:00pm',
+          time: data.time || SERVICE_TIME_RANGE,
           icon: data.icon || '🩺',
         }),
         availability: data.availability !== undefined ? data.availability : true,
@@ -244,7 +245,7 @@ export async function updateService(data: {
     updateData.description = formatServiceDescription({
       desc: data.desc || '',
       subtitle: data.subtitle || 'Monday to Friday',
-      time: data.time || '8:00am - 5:00pm',
+      time: data.time || SERVICE_TIME_RANGE,
       icon: data.icon || '🩺',
     })
 

@@ -13,6 +13,8 @@ import { APP_NAME } from '@/config/constants'
 import { sendMail } from '@/lib/mailer'
 import {
   APPOINTMENT_SLOTS,
+  SERVICE_TIME_RANGE,
+  normalizeServiceTime,
   SLOT_CAPACITY,
   isValidSlotId,
   getSlotLabel,
@@ -60,7 +62,7 @@ function parseServiceMeta(description: string | null | undefined): {
   return {
     desc: meta.desc || '',
     subtitle: meta.subtitle || 'Monday to Friday',
-    time: meta.time || '8:00am - 5:00pm',
+    time: normalizeServiceTime(meta.time || SERVICE_TIME_RANGE),
     icon: meta.icon || '🩺',
   }
 }
