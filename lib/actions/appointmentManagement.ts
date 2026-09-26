@@ -10,6 +10,7 @@ import { nextReferenceId } from '@/lib/referenceId'
 import { createNotification } from '@/lib/actions/notifications'
 import { recordAudit } from '@/lib/actions/audit'
 import { isValidEmail } from '@/lib/helper'
+import { FIXED_ADDRESS, PUROKS } from '@/src/data/patientInfo'
 import {
   dayRange,
   todayISO,
@@ -24,6 +25,13 @@ function generateTempPassword(): string {
   let out = ''
   for (let i = 0; i < 10; i++) out += chars[randomInt(chars.length)]
   return out
+}
+
+// Walk-in addresses are captured as street + purok only. Storing them the same
+// way the signup flow does ("<street>, <purok>") keeps the purok derivable from
+// the address, which is what the population-per-purok aggregation relies on.
+function formatHouseAndPurok(houseNumber: string, purok: string): string {
+  return houseNumber ? `${houseNumber}, ${purok}` : purok
 }
 
 // Calculate age from birthdate
@@ -196,6 +204,34 @@ export type PatientLookup = {
   age: number
 }
 
+// Maps a Patient row (queried with `familyMember` and `user.profile` included)
+// to the lightweight shape the walk-in pickers render. Walk-in patients may not
+// have an account, so the Patient row itself is used as a name/barangay
+// fallback when no profile exists.
+function toPatientLookup(row: any): PatientLookup {
+  const profile = row?.user?.profile
+  const name =
+    row?.familyMember?.name ||
+    (profile
+      ? `${(profile.lastName || '').toUpperCase()}, ${profile.firstName || ''}${profile.middleName ? ' ' + profile.middleName : ''}`.trim()
+      : '') ||
+    row?.name ||
+    ''
+  const birthdate =
+    row?.familyMember?.birthdate || row?.birthdate || profile?.birthdate || null
+  const age = calculateAge(birthdate)
+  return {
+    patientId: row.patientid,
+    name,
+    barangay: profile?.barangay ?? row?.barangay ?? '',
+    hasAccount: Boolean(row.userId),
+    birthdate: birthdate ? new Date(birthdate).toISOString().split('T')[0] : null,
+    isSenior: age >= 60,
+    isPwd: profile?.isPwd === true || row?.familyMember?.isPwd === true,
+    age,
+  }
+}
+
 // Searches for a patient by their ID (PTN-####). It verifies the format of the patient ID, retrieves the patient's record from the database, and returns relevant information such as name, barangay, account status, birthdate, and senior citizen status. The function returns a structured response containing the success status, message, and a PatientLookup object if the patient is found.
 export async function searchPatientById(query: string): Promise<{
   success: boolean
@@ -229,37 +265,108 @@ export async function searchPatientById(query: string): Promise<{
     if (!row) {
       return { success: false, message: 'No patient found.', patient: null }
     }
-    const profile = row.user?.profile
-    const name =
-      row.familyMember?.name ||
-      (profile
-        ? `${(profile.lastName || '').toUpperCase()}, ${profile.firstName || ''}${profile.middleName ? ' ' + profile.middleName : ''}`.trim()
-        : '') ||
-      row.name ||
-      ''
-    const birthdate =
-      row.familyMember?.birthdate || row.birthdate || profile?.birthdate || null
-    const age = calculateAge(birthdate)
-    const isSenior = age >= 60
-    const isPwd =
-      profile?.isPwd === true || (row.familyMember as any)?.isPwd === true
     return {
       success: true,
       message: 'Patient verified.',
-      patient: {
-        patientId: row.patientid,
-        name,
-        barangay: profile?.barangay ?? '',
-        hasAccount: Boolean(row.userId),
-        birthdate: birthdate ? new Date(birthdate).toISOString().split('T')[0] : null,
-        isSenior,
-        isPwd,
-        age,
-      },
+      patient: toPatientLookup(row),
     }
   } catch (error) {
     console.error('[searchPatientById | Prisma | Error]:', error)
     return { success: false, message: 'Search failed.', patient: null }
+  }
+}
+
+// Searches patients by name so staff can find a walk-in without asking for the
+// PTN-####. Matching is case-insensitive and partial: every word typed must
+// appear in the stored patient name, the linked account profile, or a linked
+// family member record, so "juan cruz" still finds "DELA CRUZ, JUAN". A numeric
+// or PTN-#### entry matches on the patient ID instead, letting one input serve
+// both lookup styles. Returns at most 10 candidates ordered by patient ID.
+export async function searchPatientsByName(query: string): Promise<{
+  success: boolean
+  message: string
+  patients: PatientLookup[]
+}> {
+  const session = await requireAdmin()
+  if (!session) {
+    const staff = await requireStaff()
+    if (!staff)
+      return { success: false, message: 'Unauthorized', patients: [] }
+  }
+
+  const q = query.trim()
+  if (q.length < 2) {
+    return {
+      success: false,
+      message: 'Type at least 2 characters of the name or ID.',
+      patients: [],
+    }
+  }
+
+  const digits = q.replace(/^PTN-/i, '').trim()
+  const looksLikeId = /^\d+$/.test(digits)
+
+  // Each typed word must match somewhere in the patient's name so multi-word
+  // entries work regardless of the stored "LASTNAME, FIRSTNAME" order.
+  const nameFilters = q
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((term) => ({
+      OR: [
+        { name: { contains: term, mode: 'insensitive' } },
+        {
+          familyMember: {
+            is: { name: { contains: term, mode: 'insensitive' } },
+          },
+        },
+        {
+          user: {
+            is: {
+              profile: {
+                is: {
+                  OR: [
+                    { firstName: { contains: term, mode: 'insensitive' } },
+                    { middleName: { contains: term, mode: 'insensitive' } },
+                    { lastName: { contains: term, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ],
+    }))
+
+  try {
+    const rows = await (prisma as any).patient.findMany({
+      where: looksLikeId
+        ? { patientid: { contains: digits, mode: 'insensitive' } }
+        : { AND: nameFilters },
+      include: {
+        familyMember: true,
+        user: { include: { profile: true } },
+      },
+      orderBy: { patientid: 'asc' },
+      take: 10,
+    })
+
+    const patients: PatientLookup[] = (rows ?? []).map(toPatientLookup)
+    if (patients.length === 0) {
+      return {
+        success: false,
+        message: 'No patient matched that name.',
+        patients: [],
+      }
+    }
+    return {
+      success: true,
+      message: `${patients.length} patient${patients.length > 1 ? 's' : ''} found.`,
+      patients,
+    }
+  } catch (error) {
+    console.error('[searchPatientsByName | Prisma | Error]:', error)
+    return { success: false, message: 'Search failed.', patients: [] }
   }
 }
 
@@ -327,10 +434,14 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
       const sex = formData.get('sex')?.toString().trim() || ''
       const phoneNumber = formData.get('phoneNumber')?.toString().trim() || ''
       const houseNumber = formData.get('houseNumber')?.toString().trim() || ''
-      const barangay = formData.get('barangay')?.toString().trim() || ''
-      const city = formData.get('city')?.toString().trim() || ''
-      const province = formData.get('province')?.toString().trim() || ''
-      const zipCode = formData.get('zipCode')?.toString().trim() || ''
+      const purok = formData.get('purok')?.toString().trim() || ''
+      // Walk-ins are residents of this health center's catchment: only the
+      // street + purok are entered. Barangay / city / province / ZIP are always
+      // fixed to Sumapang Matanda, Malolos, Bulacan 3000.
+      const barangay = FIXED_ADDRESS.barangay
+      const city = FIXED_ADDRESS.municipality
+      const province = FIXED_ADDRESS.province
+      const zipCode = FIXED_ADDRESS.zipCode
       const email = formData.get('email')?.toString().trim().toLowerCase() || ''
 
       if (firstName.length < 2 || lastName.length < 2) {
@@ -354,6 +465,12 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
       }
       if (!sex) {
         return { success: false, message: "Select the patient's sex." }
+      }
+      if (!purok || !PUROKS.includes(purok)) {
+        return {
+          success: false,
+          message: 'Please select a valid purok in Barangay Sumapang Matanda.',
+        }
       }
       if (email && !isValidEmail(email)) {
         return {
@@ -396,7 +513,9 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
             lastName,
             birthdate: parsedBirthdate,
             phoneNumber,
-            houseNumber,
+            // "<street>, <purok>" — the same shape the signup flow stores.
+            houseNumber: formatHouseAndPurok(houseNumber, purok),
+            purok,
             barangay,
             city,
             province,
@@ -413,11 +532,14 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
           birthdate: parsedBirthdate,
           sex,
           phoneNumber: phoneNumber || null,
-          houseNumber: houseNumber || null,
-          barangay: barangay || null,
-          city: city || null,
-          province: province || null,
-          zipCode: zipCode || null,
+          // Same "<street>, <purok>" shape as the profile so the purok also
+          // counts towards the population-per-purok totals.
+          houseNumber: formatHouseAndPurok(houseNumber, purok),
+          purok,
+          barangay,
+          city,
+          province,
+          zipCode,
         },
       })
     }

@@ -5,13 +5,12 @@ import { authOptions } from '@/lib/authOptions'
 import { getScheduleAppointments } from '@/lib/actions/appointment'
 import { getArchiveAppointments } from '@/lib/actions/appointmentManagement'
 import { getTodayQueues } from '@/lib/actions/queue'
-import { getServices } from '@/lib/actions/service'
 import { todayISO } from '@/config/appointment'
 import AppointmentManagementClient from '@/components/staff/AppointmentManagementClient'
 
 export const metadata: Metadata = {
   title: 'Appointment Management | PRAMIS',
-  description: "Manage today's schedule, upcoming visits, archives and walk-ins",
+  description: "Manage today's schedule, upcoming visits and archives",
 }
 
 const STAFF_ROLES = ['MEDSTAFF']
@@ -24,11 +23,10 @@ export default async function StaffAppointmentManagementPage() {
     redirect('/staff')
   }
 
-  const [scheduleRes, archiveRes, queuesRes, servicesRes] = await Promise.all([
+  const [scheduleRes, archiveRes, queuesRes] = await Promise.all([
     getScheduleAppointments(),
     getArchiveAppointments(),
     getTodayQueues(),
-    getServices(),
   ])
 
   const today = todayISO()
@@ -46,9 +44,6 @@ export default async function StaffAppointmentManagementPage() {
       upcoming={upcoming}
       archive={archiveRes.appointments}
       queues={queuesRes.queues}
-      services={servicesRes.services
-        .filter(s => s.availability !== false)
-        .map(s => ({ id: s.id ?? '', title: s.title }))}
     />
   )
 }

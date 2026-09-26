@@ -8,7 +8,8 @@ import QueueingClient from '@/components/admin/QueueingClient'
 
 export const metadata: Metadata = {
   title: 'Queueing | PRAMIS',
-  description: "Live queue board for today's visits, walk-ins and priority patients",
+  description:
+    "Live queue board for today's visits — register walk-ins and serve priority patients",
 }
 
 const STAFF_ROLES = ['SUPERADMIN', 'ADMIN', 'MEDSTAFF']
