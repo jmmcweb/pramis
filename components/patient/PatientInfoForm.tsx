@@ -8,52 +8,58 @@ import {
   ChevronDown,
   Loader2,
   MapPin,
+  Pencil,
   Phone,
-  Plus,
   ShieldCheck,
-  Trash2,
   UserRound,
-  Users,
+  X,
 } from 'lucide-react'
 import { updateMyProfile } from '@/lib/actions/me'
+import FamilyMembersSection from '@/components/patient/FamilyMembersSection'
 import {
   emptyPatientInfo,
   patientInfoFromProfile,
   FIXED_ADDRESS,
-  splitHouseAndPurok,
 } from '@/src/data/patientInfo'
-import type {
-  AddressOptions,
-  FamilyMemberRow,
-  MyProfileView,
-} from '@/src/data/patientInfo'
+import type { AddressOptions, MyProfileView } from '@/src/data/patientInfo'
 
 const inputClass =
-  'mt-1.5 w-full bg-surface rounded-xl px-3 py-2.5 text-sm font-semibold text-body border border-transparent outline-none transition-colors focus:bg-card focus:border-brand focus:ring-2 focus:ring-brand-tint'
-
-const rowInputClass =
-  'w-full bg-card rounded-lg px-3 py-2 text-sm font-semibold text-body border border-transparent outline-none transition-colors focus:border-brand'
+  'mt-1.5 w-full rounded-2xl border border-line bg-white px-3.5 py-2.5 text-sm font-semibold text-body shadow-[inset_0_1px_2px_rgb(15_88_139/0.06)] outline-none transition-all placeholder:font-normal placeholder:text-muted/70 focus:border-brand focus:ring-4 focus:ring-brand/15 dark:bg-white/[0.04]'
 
 function SectionCard({
   title,
+  subtitle,
   icon: Icon,
+  action,
   className = '',
   children,
 }: {
   title: string
+  subtitle?: string
   icon: typeof UserRound
+  action?: React.ReactNode
   className?: string
   children: React.ReactNode
 }) {
   return (
-    <div className={`bg-card rounded-3xl shadow-card p-5 ${className}`}>
-      <h2 className="text-2xl font-bold text-brand mb-4 inline-flex items-center gap-2.5">
-        <span className="w-9 h-9 rounded-xl bg-brand-tint text-brand flex items-center justify-center">
-          <Icon className="w-5 h-5" aria-hidden="true" />
+    <div
+      className={`overflow-hidden rounded-[24px] border border-line/70 bg-card shadow-card ${className}`}
+    >
+      <div className="flex items-center gap-3 border-b border-line/60 bg-surface/60 px-5 py-4">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand to-brand-deep text-white shadow-sm">
+          <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
-        {title}
-      </h2>
-      {children}
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-[15px] font-extrabold tracking-tight text-body">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="truncate text-xs font-medium text-muted">{subtitle}</p>
+          )}
+        </div>
+        {action}
+      </div>
+      <div className="p-5">{children}</div>
     </div>
   )
 }
@@ -69,12 +75,12 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-bold uppercase tracking-wide text-muted">
+      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
         {label}
       </span>
       {children}
       {error && (
-        <span className="block text-xs font-medium text-red-500 mt-1">
+        <span className="mt-1 block text-xs font-medium text-red-500">
           {error}
         </span>
       )}
@@ -97,7 +103,7 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-bold uppercase tracking-wide text-muted">
+      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
         {label}
       </span>
 
@@ -121,11 +127,24 @@ function SelectField({
       </div>
 
       {error && (
-        <span className="block text-xs font-medium text-red-500 mt-1">
+        <span className="mt-1 block text-xs font-medium text-red-500">
           {error}
         </span>
       )}
     </label>
+  )
+}
+
+function ReadonlyRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-surface/70 px-3.5 py-2.5 dark:bg-white/[0.03]">
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate text-sm font-semibold text-body">
+        {value || '—'}
+      </p>
+    </div>
   )
 }
 
@@ -142,21 +161,6 @@ export default function PatientInfoForm({
   const initialForm = profile
     ? patientInfoFromProfile(profile)
     : emptyPatientInfo
-
-  const initialFamily: FamilyMemberRow[] = (profile?.familyMembers ?? []).map(
-    (member) => {
-      const address = splitHouseAndPurok(member.houseNumber, member.purok)
-
-      return {
-        ...member,
-        houseNumber: address.houseNumber,
-        purok: address.purok,
-      }
-    },
-  )
-
-  const [family, setFamily] =
-    useState<FamilyMemberRow[]>(initialFamily)
 
   const [addressOptions, setAddressOptions] =
     useState<AddressOptions | null>(null)
@@ -221,57 +225,61 @@ export default function PatientInfoForm({
 
   const handleCancel = () => {
     setFormKey((k) => k + 1)
-    setFamily(initialFamily)
     setIsEditing(false)
     toast('Changes discarded')
   }
 
-  const addMember = () => {
-    setFamily((prev) => [
-      ...prev,
-      {
-        id: `fam-${Date.now()}`,
-        name: '',
-        relation: '',
-        phone: '',
-        birthdate: '',
-        sex: '',
-        houseNumber: '',
-        barangay: '',
-        city: '',
-        province: '',
-        zipCode: '',
-        purok: '',
-        philHealthNo: '',
-        bloodType: '',
-        religion: '',
-        fathersName: '',
-        mothersName: '',
-      },
-    ])
-  }
-
-  const removeMember = (id: string) => {
-    setFamily((prev) =>
-      prev.filter((member) => member.id !== id),
-    )
-  }
-
   return (
-    <form
-      key={formKey}
-      action={formAction}
-      className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6"
-    >
-      {!isEditing && (
-        <div className="lg:col-span-2 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setIsEditing(true)}
-            className="bg-brand hover:bg-brand-dark text-white py-2.5 px-5 rounded-xl font-semibold text-sm transition-colors"
-          >
-            Edit Information
-          </button>
+    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-5">
+      <form
+        key={formKey}
+        action={formAction}
+        className="contents"
+      >
+      {!isEditing ? (
+        <div className="lg:col-span-2">
+          <div className="flex flex-col gap-3 rounded-[24px] border border-line/70 bg-card p-4 shadow-card sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-brand to-brand-deep px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.98] sm:ml-auto"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Edit Information
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="lg:col-span-2">
+          <div className="flex flex-col gap-3 rounded-[24px] border border-amber-200/70 bg-amber-50 p-4 sm:flex-row sm:items-center dark:border-amber-400/20 dark:bg-amber-400/10">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-amber-800 dark:text-amber-200">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+              Edit mode is on — update the fields below, then save.
+            </div>
+            <div className="flex gap-2 sm:ml-auto">
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={isPending}
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-line bg-card px-4 py-2 text-sm font-semibold text-body transition-colors hover:bg-surface disabled:opacity-50"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+                Discard
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="inline-flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-brand to-brand-deep px-5 py-2 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                )}
+                {isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -281,9 +289,33 @@ export default function PatientInfoForm({
       >
         <SectionCard
           title="Personal Information"
+          subtitle=""
           icon={UserRound}
           className="lg:order-1"
+          action={
+            !isEditing ? (
+              <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 sm:inline-block dark:bg-emerald-400/10 dark:text-emerald-300">
+                Saved
+              </span>
+            ) : undefined
+          }
         >
+          {!isEditing ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              <ReadonlyRow label="First Name" value={initialForm.firstName} />
+              <ReadonlyRow label="Middle Name" value={initialForm.middleName} />
+              <ReadonlyRow label="Last Name" value={initialForm.lastName} />
+              <ReadonlyRow label="Suffix" value={initialForm.suffix} />
+              <ReadonlyRow label="Date of Birth" value={initialForm.dateOfBirth} />
+              <ReadonlyRow label="Sex" value={initialForm.sex} />
+              <ReadonlyRow label="Blood Type" value={initialForm.bloodType} />
+              <ReadonlyRow label="Religion" value={initialForm.religion} />
+              <div className="col-span-2 grid grid-cols-2 gap-2.5">
+                <ReadonlyRow label="Father's Name" value={initialForm.fathersName} />
+                <ReadonlyRow label="Mother's Name" value={initialForm.mothersName} />
+              </div>
+            </div>
+          ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <Field
@@ -328,7 +360,7 @@ export default function PatientInfoForm({
                 <input
                   name="suffix"
                   defaultValue={initialForm.suffix}
-                  placeholder="Jr., Sr., III…"
+                  placeholder="Jr., Sr., III"
                   className={inputClass}
                 />
               </Field>
@@ -396,13 +428,21 @@ export default function PatientInfoForm({
               </Field>
             </div>
           </div>
+          )}
         </SectionCard>
 
         <SectionCard
           title="Contact Information"
+          subtitle=""
           icon={Phone}
           className="lg:order-2"
         >
+          {!isEditing ? (
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <ReadonlyRow label="Mobile Number" value={initialForm.mobile} />
+              <ReadonlyRow label="Email Address" value={initialForm.email} />
+            </div>
+          ) : (
           <div className="space-y-4">
             <Field
               label="Mobile Number"
@@ -427,13 +467,30 @@ export default function PatientInfoForm({
               />
             </Field>
           </div>
+          )}
         </SectionCard>
 
         <SectionCard
           title="Address"
+          subtitle=""
           icon={MapPin}
           className="lg:order-3"
         >
+          {!isEditing ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="col-span-2">
+                <ReadonlyRow
+                  label="House No. / Street"
+                  value={initialForm.houseStreet}
+                />
+              </div>
+              <ReadonlyRow label="Purok" value={initialForm.purok} />
+              <ReadonlyRow label="Barangay" value={lockedBarangay} />
+              <ReadonlyRow label="Municipality / City" value={lockedMunicipality} />
+              <ReadonlyRow label="Province" value={lockedProvince} />
+              <ReadonlyRow label="ZIP Code" value={lockedZipCode} />
+            </div>
+          ) : (
           <div className="space-y-4">
             <Field
               label="House No. / Street"
@@ -517,13 +574,33 @@ export default function PatientInfoForm({
               </Field>
             </div>
           </div>
+          )}
         </SectionCard>
 
         <SectionCard
           title="PhilHealth Information"
+          subtitle=""
           icon={ShieldCheck}
           className="lg:order-4"
         >
+          {!isEditing ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="col-span-2">
+                <ReadonlyRow
+                  label="PhilHealth No."
+                  value={initialForm.philHealthNo}
+                />
+              </div>
+              <ReadonlyRow
+                label="Membership Type"
+                value={initialForm.membershipType}
+              />
+              <ReadonlyRow
+                label="Status"
+                value={initialForm.philHealthStatus}
+              />
+            </div>
+          ) : (
           <div className="space-y-4">
             <Field
               label="PhilHealth No."
@@ -564,214 +641,18 @@ export default function PatientInfoForm({
               />
             </div>
           </div>
+          )}
         </SectionCard>
       </fieldset>
 
-      <SectionCard
-        title="Family Information"
-        icon={Users}
-        className="lg:order-5 lg:col-span-2"
-      >
-        <div className="space-y-3">
-          {errors?.familyMembers && (
-            <p className="text-xs font-medium text-red-500">
-              {errors.familyMembers}
-            </p>
-          )}
-
-          {family.length === 0 && (
-            <div className="rounded-2xl bg-surface py-8 px-5 text-center">
-              <Users className="w-8 h-8 text-muted mx-auto mb-2" />
-
-              <p className="text-sm font-semibold text-body">
-                No family members added
-              </p>
-
-              <p className="text-xs text-muted mt-1">
-                Add a family member to keep their information
-                available for patient records.
-              </p>
-            </div>
-          )}
-
-          {family.map((member) => (
-            <div
-              key={member.id}
-              className="relative bg-surface rounded-2xl p-3"
-            >
-              <input
-                type="hidden"
-                name="familyMemberId"
-                value={member.id}
-              />
-
-              <button
-                type="button"
-                aria-label={`Remove ${
-                  member.name || 'family member'
-                }`}
-                onClick={() => removeMember(member.id)}
-                className="absolute top-2.5 right-2.5 p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-              >
-                <Trash2
-                  className="w-4 h-4"
-                  aria-hidden="true"
-                />
-              </button>
-
-              <input
-                name="familyName"
-                placeholder="Full Name"
-                defaultValue={member.name}
-                className={`${rowInputClass} pr-9`}
-              />
-
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <input
-                  name="familyRelation"
-                  placeholder="Relation"
-                  defaultValue={member.relation}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyPhone"
-                  placeholder="Phone Number"
-                  defaultValue={member.phone}
-                  className={rowInputClass}
-                />
-              </div>
-
-              <p className="mt-3 mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">
-                Patient Info (auto-fills the ITR)
-              </p>
-
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  name="familyBirthdate"
-                  type="date"
-                  aria-label="Birthdate"
-                  defaultValue={member.birthdate}
-                  className={rowInputClass}
-                />
-
-                <select
-                  name="familySex"
-                  aria-label="Sex"
-                  defaultValue={member.sex}
-                  className={`${rowInputClass} cursor-pointer`}
-                >
-                  <option value="">Sex</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <input
-                  name="familyHouseNumber"
-                  placeholder="House No. / Street"
-                  defaultValue={member.houseNumber}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyBarangay"
-                  placeholder="Barangay / Purok"
-                  defaultValue={member.barangay}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyCity"
-                  placeholder="Municipality / City"
-                  defaultValue={member.city}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyProvince"
-                  placeholder="Province"
-                  defaultValue={member.province}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyZipCode"
-                  placeholder="ZIP Code"
-                  defaultValue={member.zipCode}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyPurok"
-                  placeholder="Purok"
-                  defaultValue={member.purok}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyPhilHealthNo"
-                  placeholder="PhilHealth No."
-                  defaultValue={member.philHealthNo}
-                  className={rowInputClass}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <input
-                  name="familyBloodType"
-                  placeholder="Blood Type"
-                  defaultValue={member.bloodType}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyReligion"
-                  placeholder="Religion"
-                  defaultValue={member.religion}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyFathersName"
-                  placeholder="Father's Name"
-                  defaultValue={member.fathersName}
-                  className={rowInputClass}
-                />
-
-                <input
-                  name="familyMothersName"
-                  placeholder="Mother's Name"
-                  defaultValue={member.mothersName}
-                  className={rowInputClass}
-                />
-              </div>
-            </div>
-          ))}
-
-          <button
-            type="button"
-            onClick={addMember}
-            className="w-full border-2 border-dashed border-line rounded-xl py-2.5 text-sm font-medium text-brand hover:bg-brand-tint transition-colors inline-flex items-center justify-center gap-1.5"
-          >
-            <Plus
-              className="w-4 h-4"
-              aria-hidden="true"
-            />
-            Add Family Member
-          </button>
-        </div>
-      </SectionCard>
-
       {isEditing && (
-        <div className="bg-card rounded-3xl shadow-card p-5 lg:order-6 lg:col-span-2 lg:bg-transparent lg:shadow-none lg:rounded-none lg:border-t lg:border-line lg:px-0 lg:pb-0 lg:pt-6">
-          <div className="flex gap-2.5 lg:justify-center">
+        <div className="lg:order-6 lg:col-span-2">
+          <div className="sticky bottom-24 flex gap-2.5 rounded-[24px] border border-line/70 bg-card/95 p-3 shadow-card backdrop-blur lg:static lg:justify-center lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
             <button
               type="button"
               onClick={handleCancel}
               disabled={isPending}
-              className="flex-1 bg-card border border-line text-brand hover:bg-brand-tint py-3 rounded-xl font-medium text-sm transition-colors disabled:opacity-50 lg:flex-none lg:min-w-44 lg:px-10"
+              className="flex-1 rounded-2xl border border-line bg-card px-6 py-3 text-sm font-semibold text-body transition-colors hover:bg-surface disabled:opacity-50 lg:flex-none lg:min-w-44 lg:px-10"
             >
               Cancel
             </button>
@@ -779,20 +660,20 @@ export default function PatientInfoForm({
             <button
               type="submit"
               disabled={isPending}
-              className="flex-1 bg-brand hover:bg-brand-dark text-white py-3 rounded-xl font-semibold text-sm transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed lg:flex-none lg:min-w-44 lg:px-10"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-brand to-brand-deep px-6 py-3 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 lg:flex-none lg:min-w-44 lg:px-10"
             >
               {isPending ? (
                 <>
                   <Loader2
-                    className="w-4 h-4 animate-spin"
+                    className="h-4 w-4 animate-spin"
                     aria-hidden="true"
                   />
-                  Saving…
+                  Saving...
                 </>
               ) : (
                 <>
                   <Check
-                    className="w-4 h-4"
+                    className="h-4 w-4"
                     aria-hidden="true"
                   />
                   Save Changes
@@ -802,6 +683,11 @@ export default function PatientInfoForm({
           </div>
         </div>
       )}
-    </form>
+      </form>
+
+      <div className="lg:order-5 lg:col-span-2">
+        <FamilyMembersSection profile={profile} />
+      </div>
+    </div>
   )
 }

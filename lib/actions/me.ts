@@ -12,8 +12,8 @@ import { isValidEmail } from '@/lib/helper'
 import { sanitizeUser, requireUser } from '@/lib/actions/guard'
 import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
-import { normalizeSex, patientInfoFromProfile } from '@/src/data/patientInfo'
-import type { MyProfileView } from '@/src/data/patientInfo'
+import { FIXED_ADDRESS, normalizeSex, patientInfoFromProfile } from '@/src/data/patientInfo'
+import type { FamilyMemberRow, MyProfileView } from '@/src/data/patientInfo'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -123,8 +123,58 @@ function toProfileView(user: any): MyProfileView {
           religion: m.religion ?? '',
           fathersName: m.fathersName ?? '',
           mothersName: m.mothersName ?? '',
+          isPwd: m.isPwd ?? null,
         }))
       : [],
+  }
+}
+
+// True when a Prisma error is caused by a column that does not exist yet in
+// the deployed database (for example `FamilyMember.isPwd` before the
+// migration is applied). Used to degrade gracefully instead of breaking the
+// whole profile page.
+function isMissingColumnError(error: unknown, column: string): boolean {
+  const message =
+    error instanceof Error
+      ? `${error.message} ${(error as any)?.cause?.message ?? ''} ${(error as any)?.meta ? JSON.stringify((error as any).meta) : ''}`
+      : String(error ?? '')
+  return (
+    message.toLowerCase().includes(column.toLowerCase()) &&
+    (message.toLowerCase().includes('does not exist') ||
+      message.toLowerCase().includes('unknown column') ||
+      message.toLowerCase().includes('no such column'))
+  )
+}
+
+function parseOptionalBoolean(value: string | undefined): boolean | null {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === 'yes' || normalized === 'true') return true
+  if (normalized === 'no' || normalized === 'false') return false
+  return null
+}
+
+function toFamilyMemberRow(m: any): FamilyMemberRow {
+  return {
+    id: m.familymemberid ?? '',
+    name: m.name ?? '',
+    relation: m.relation ?? '',
+    phone: m.phone ?? '',
+    birthdate: m.birthdate
+      ? new Date(m.birthdate).toISOString().slice(0, 10)
+      : '',
+    sex: m.sex ?? '',
+    houseNumber: m.houseNumber ?? '',
+    barangay: m.barangay ?? '',
+    city: m.city ?? '',
+    province: m.province ?? '',
+    zipCode: m.zipCode ?? '',
+    purok: m.purok ?? '',
+    philHealthNo: m.philHealthNo ?? '',
+    bloodType: m.bloodType ?? '',
+    religion: m.religion ?? '',
+    fathersName: m.fathersName ?? '',
+    mothersName: m.mothersName ?? '',
+    isPwd: (m as any).isPwd ?? null,
   }
 }
 
@@ -140,14 +190,51 @@ export async function getMyProfile(): Promise<{
   }
 
   try {
-    const user = await (prisma as any).user.findFirst({
-      where: { id: session.user.id },
-      include: {
-        profile: true,
-        patients: { select: { familyMemberId: true, sex: true } },
-        familyMembers: { orderBy: { createdAt: 'asc' } },
-      },
-    })
+    let user: any = null
+    try {
+      user = await (prisma as any).user.findFirst({
+        where: { id: session.user.id },
+        include: {
+          profile: true,
+          patients: { select: { familyMemberId: true, sex: true } },
+          familyMembers: { orderBy: { createdAt: 'asc' } },
+        },
+      })
+    } catch (error) {
+      // Older deployments may not have `FamilyMember.isPwd` yet.
+      if (!isMissingColumnError(error, 'isPwd')) throw error
+      user = await (prisma as any).user.findFirst({
+        where: { id: session.user.id },
+        include: {
+          profile: true,
+          patients: { select: { familyMemberId: true, sex: true } },
+          familyMembers: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              familymemberid: true,
+              name: true,
+              relation: true,
+              phone: true,
+              birthdate: true,
+              sex: true,
+              houseNumber: true,
+              barangay: true,
+              city: true,
+              province: true,
+              zipCode: true,
+              purok: true,
+              philHealthNo: true,
+              bloodType: true,
+              religion: true,
+              fathersName: true,
+              mothersName: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+      })
+    }
     if (!user) {
       return { success: false, message: 'Account not found.', profile: null }
     }
@@ -167,7 +254,205 @@ export async function getMyProfile(): Promise<{
   }
 }
 
-// Updates the current user's profile data in the database based on the provided form data. It checks for user authentication, validates the input fields, and updates the user's personal information and family members. The function returns a success status, message, and the updated profile view object if successful, or an appropriate error message if not authenticated or if validation fails.
+// Saves one family member on its own, so members can be added or edited
+// without putting the main profile into "Edit Information" mode.
+export async function saveFamilyMember(_prevState: any, formData: FormData) {
+  const session = await requireUser()
+  if (!session?.user?.id) {
+    return {
+      success: false,
+      message: 'User not authenticated!',
+      errors: { name: 'User not authenticated!' },
+    }
+  }
+  const id = session.user.id
+  const familyMemberId = formData.get('familyMemberId')?.toString().trim() || ''
+  const name = formData.get('name')?.toString().trim() || ''
+  const relation = formData.get('relation')?.toString().trim() || ''
+  const phone = formData.get('phone')?.toString().trim() || ''
+  const birthdateRaw = formData.get('birthdate')?.toString().trim() || ''
+  const sex = formData.get('sex')?.toString().trim() || ''
+  const houseNumber = formData.get('houseNumber')?.toString().trim() || ''
+  const purok = formData.get('purok')?.toString().trim() || ''
+  // Family members share the account holder's catchment: only the street +
+  // purok are entered. Barangay / city / province / ZIP are always fixed to
+  // Sumapang Matanda, Malolos, Bulacan 3000.
+  const barangay = FIXED_ADDRESS.barangay
+  const city = FIXED_ADDRESS.municipality
+  const province = FIXED_ADDRESS.province
+  const zipCode = FIXED_ADDRESS.zipCode
+  const philHealthNo = formData.get('philHealthNo')?.toString().trim() || ''
+  const bloodType = formData.get('bloodType')?.toString().trim() || ''
+  const religion = formData.get('religion')?.toString().trim() || ''
+  const fathersName = formData.get('fathersName')?.toString().trim() || ''
+  const mothersName = formData.get('mothersName')?.toString().trim() || ''
+  const isPwd = parseOptionalBoolean(
+    formData.get('isPwd')?.toString() ?? undefined,
+  )
+  const errors: Record<string, string> = {}
+  if (!name) errors['name'] = 'Full name is required.'
+  if (!relation) errors['relation'] = 'Relation is required.'
+  let parsedBirthdate: Date | null = null
+  if (birthdateRaw) {
+    parsedBirthdate = new Date(`${birthdateRaw}T00:00:00.000Z`)
+    if (Number.isNaN(parsedBirthdate.getTime())) {
+      errors['birthdate'] = 'Please provide a valid date of birth.'
+    }
+  }
+  if (Object.keys(errors).length > 0) {
+    return {
+      success: false,
+      message: 'Please fix the highlighted family member fields.',
+      errors,
+    }
+  }
+  try {
+    let existing: any = null
+    if (familyMemberId) {
+      existing = await (prisma as any).familyMember.findFirst({
+        where: { familymemberid: familyMemberId, userId: id },
+      })
+      if (!existing) {
+        return {
+          success: false,
+          message: 'Family member not found.',
+          errors: { name: 'Family member not found.' },
+        }
+      }
+    }
+    let supportsIsPwd = true
+    if (existing && !('isPwd' in existing)) supportsIsPwd = false
+    if (!existing) {
+      try {
+        await (prisma as any).familyMember.findFirst({
+          where: { userId: id },
+          select: { familymemberid: true, isPwd: true },
+        })
+      } catch (error) {
+        if (isMissingColumnError(error, 'isPwd')) supportsIsPwd = false
+        else throw error
+      }
+    }
+    const data: Record<string, unknown> = {
+      name,
+      relation,
+      phone: phone || null,
+      birthdate: parsedBirthdate,
+      sex: sex || null,
+      houseNumber: houseNumber || null,
+      barangay: barangay || null,
+      city: city || null,
+      province: province || null,
+      zipCode: zipCode || null,
+      purok: purok || null,
+      philHealthNo: philHealthNo || null,
+      bloodType: bloodType || null,
+      religion: religion || null,
+      fathersName: fathersName || null,
+      mothersName: mothersName || null,
+      updatedAt: new Date(),
+    }
+    if (supportsIsPwd) data.isPwd = isPwd
+    const saved = existing
+      ? await (prisma as any).familyMember.update({
+          where: { familymemberid: existing.familymemberid },
+          data,
+        })
+      : await (prisma as any).familyMember.create({
+          data: {
+            familymemberid: await nextReferenceId('FAM'),
+            userId: id,
+            ...data,
+          },
+        })
+    try {
+      revalidateTag('me', 'max')
+    } catch {
+      // Best effort only; the save already succeeded.
+    }
+    await recordAudit({
+      action: existing ? 'UPDATE' : 'CREATE',
+      entity: 'PROFILE',
+      entityId: id,
+      description: existing
+        ? `Updated family member ${saved.name}.`
+        : `Added family member ${saved.name}.`,
+      metadata: { self: true, familyMemberId: saved.familymemberid },
+    })
+    return {
+      success: true,
+      message: existing
+        ? 'Family member updated successfully!'
+        : 'Family member added successfully!',
+      member: toFamilyMemberRow(saved),
+    }
+  } catch (error) {
+    console.error('[saveFamilyMember | Prisma | Error]:', error)
+    return {
+      success: false,
+      message: 'Failed to save family member. Please try again.',
+      errors: { name: 'Failed to save family member. Please try again.' },
+    }
+  }
+}
+// Deletes one family member without requiring profile edit mode. Members
+// already linked to patient records or appointments are kept intact.
+export async function deleteFamilyMember(familyMemberId: string) {
+  const session = await requireUser()
+  if (!session?.user?.id) {
+    return { success: false, message: 'User not authenticated!' }
+  }
+  const trimmedId = familyMemberId?.trim()
+  if (!trimmedId) {
+    return { success: false, message: 'Family member not found.' }
+  }
+  try {
+    const existing = await (prisma as any).familyMember.findFirst({
+      where: { familymemberid: trimmedId, userId: session.user.id },
+      include: {
+        patients: { select: { patientid: true } },
+        appointments: { select: { appointmentid: true } },
+      },
+    })
+    if (!existing) {
+      return { success: false, message: 'Family member not found.' }
+    }
+    if (existing.patients?.length || existing.appointments?.length) {
+      return {
+        success: false,
+        message:
+          'This family member already has patient records or appointments and cannot be removed.',
+      }
+    }
+    await (prisma as any).familyMember.delete({
+      where: { familymemberid: existing.familymemberid },
+    })
+    try {
+      revalidateTag('me', 'max')
+    } catch {
+      // Best effort only; the delete already succeeded.
+    }
+    await recordAudit({
+      action: 'DELETE',
+      entity: 'PROFILE',
+      entityId: session.user.id,
+      description: `Removed family member ${existing.name}.`,
+      metadata: { self: true, familyMemberId: existing.familymemberid },
+    })
+    return { success: true, message: 'Family member removed successfully!' }
+  } catch (error) {
+    console.error('[deleteFamilyMember | Prisma | Error]:', error)
+    return {
+      success: false,
+      message: 'Failed to remove family member. Please try again.',
+    }
+  }
+}
+
+
+// Updates only the account holder's own personal information. Family
+// members are saved separately via saveFamilyMember / deleteFamilyMember so
+// adding family never requires "Edit Information" mode.
 export async function updateMyProfile(
   _prevState: any,
   formData: FormData,
@@ -207,165 +492,6 @@ export async function updateMyProfile(
   const fathersName = formData.get('fathersName')?.toString().trim() || ''
   const mothersName = formData.get('mothersName')?.toString().trim() || ''
 
-  const familyIds = formData
-    .getAll('familyMemberId')
-    .map((v) => v.toString().trim())
-  const familyNames = formData
-    .getAll('familyName')
-    .map((v) => v.toString().trim())
-  const familyRelations = formData
-    .getAll('familyRelation')
-    .map((v) => v.toString().trim())
-  const familyPhones = formData
-    .getAll('familyPhone')
-    .map((v) => v.toString().trim())
-  const familyBirthdates = formData
-    .getAll('familyBirthdate')
-    .map((v) => v.toString().trim())
-  const familySexes = formData
-    .getAll('familySex')
-    .map((v) => v.toString().trim())
-  const familyHouseNumbers = formData
-    .getAll('familyHouseNumber')
-    .map((v) => v.toString().trim())
-  const familyBarangays = formData
-    .getAll('familyBarangay')
-    .map((v) => v.toString().trim())
-  const familyCities = formData
-    .getAll('familyCity')
-    .map((v) => v.toString().trim())
-  const familyProvinces = formData
-    .getAll('familyProvince')
-    .map((v) => v.toString().trim())
-  const familyZipCodes = formData
-    .getAll('familyZipCode')
-    .map((v) => v.toString().trim())
-  const familyPuroks = formData
-    .getAll('familyPurok')
-    .map((v) => v.toString().trim())
-  const familyPhilHealthNos = formData
-    .getAll('familyPhilHealthNo')
-    .map((v) => v.toString().trim())
-  const familyBloodTypes = formData
-    .getAll('familyBloodType')
-    .map((v) => v.toString().trim())
-  const familyReligions = formData
-    .getAll('familyReligion')
-    .map((v) => v.toString().trim())
-  const familyFathersNames = formData
-    .getAll('familyFathersName')
-    .map((v) => v.toString().trim())
-  const familyMothersNames = formData
-    .getAll('familyMothersName')
-    .map((v) => v.toString().trim())
-  const familyRowCount = Math.max(
-    familyNames.length,
-    familyRelations.length,
-    familyPhones.length,
-    familyBirthdates.length,
-    familySexes.length,
-    familyHouseNumbers.length,
-    familyBarangays.length,
-    familyCities.length,
-    familyProvinces.length,
-    familyZipCodes.length,
-    familyPuroks.length,
-    familyPhilHealthNos.length,
-    familyBloodTypes.length,
-    familyReligions.length,
-    familyFathersNames.length,
-    familyMothersNames.length,
-  )
-  const familyRows: {
-    id: string | null
-    name: string
-    relation: string
-    phone: string | null
-    birthdate: Date | null
-    sex: string | null
-    houseNumber: string | null
-    barangay: string | null
-    city: string | null
-    province: string | null
-    zipCode: string | null
-    purok: string | null
-    philHealthNo: string | null
-    bloodType: string | null
-    religion: string | null
-    fathersName: string | null
-    mothersName: string | null
-  }[] = []
-  let familyError: string | null = null
-  for (let i = 0; i < familyRowCount; i++) {
-    const name = familyNames[i] ?? ''
-    const relation = familyRelations[i] ?? ''
-    const phone = familyPhones[i] ?? ''
-    const birthdate = familyBirthdates[i] ?? ''
-    const sex = familySexes[i] ?? ''
-    const houseNumber = familyHouseNumbers[i] ?? ''
-    const barangay = familyBarangays[i] ?? ''
-    const city = familyCities[i] ?? ''
-    const province = familyProvinces[i] ?? ''
-    const zipCode = familyZipCodes[i] ?? ''
-    const familyPurok = familyPuroks[i] ?? ''
-    const philHealthNo = familyPhilHealthNos[i] ?? ''
-    const familyBloodType = familyBloodTypes[i] ?? ''
-    const familyReligion = familyReligions[i] ?? ''
-    const familyFathersName = familyFathersNames[i] ?? ''
-    const familyMothersName = familyMothersNames[i] ?? ''
-    if (
-      !name &&
-      !relation &&
-      !phone &&
-      !birthdate &&
-      !sex &&
-      !houseNumber &&
-      !barangay &&
-      !city &&
-      !province &&
-      !zipCode &&
-      !familyPurok &&
-      !philHealthNo &&
-      !familyBloodType &&
-      !familyReligion &&
-      !familyFathersName &&
-      !familyMothersName
-    ) {
-      continue
-    }
-    if (!name || !relation) {
-      familyError = 'Each family member needs at least a name and a relation.'
-      break
-    }
-    let parsedBirthdate: Date | null = null
-    if (birthdate) {
-      parsedBirthdate = new Date(`${birthdate}T00:00:00.000Z`)
-      if (Number.isNaN(parsedBirthdate.getTime())) {
-        familyError = `Please provide a valid date of birth for ${name}.`
-        break
-      }
-    }
-    familyRows.push({
-      id: familyIds[i] || null,
-      name,
-      relation,
-      phone: phone || null,
-      birthdate: parsedBirthdate,
-      sex: sex || null,
-      houseNumber: houseNumber || null,
-      barangay: barangay || null,
-      city: city || null,
-      province: province || null,
-      zipCode: zipCode || null,
-      purok: familyPurok || null,
-      philHealthNo: philHealthNo || null,
-      bloodType: familyBloodType || null,
-      religion: familyReligion || null,
-      fathersName: familyFathersName || null,
-      mothersName: familyMothersName || null,
-    })
-  }
-
   let errors: Record<string, string> = {}
 
   const requiredFields: Array<[string, string, string]> = [
@@ -397,10 +523,6 @@ export async function updateMyProfile(
     if (Number.isNaN(parsedBirthdate.getTime())) {
       errors['birthdate'] = 'Please provide a valid date of birth.'
     }
-  }
-
-  if (familyError) {
-    errors['familyMembers'] = familyError
   }
 
   if (Object.keys(errors).length > 0) {
@@ -445,29 +567,6 @@ export async function updateMyProfile(
       updatedAt: new Date(),
     }
 
-    const existingFamilyMembers = await (prisma as any).familyMember.findMany({
-      where: { userId: id },
-      select: { familymemberid: true },
-    })
-    const existingFamilyMemberIds = new Set(
-      existingFamilyMembers.map((member: any) => member.familymemberid),
-    )
-    const retainedFamilyMemberIds = familyRows
-      .map((member) => member.id)
-      .filter((memberId): memberId is string =>
-        Boolean(memberId && existingFamilyMemberIds.has(memberId)),
-      )
-    const familyUpdates = await Promise.all(
-      familyRows.map(async (member) => {
-        const familymemberid =
-          member.id && existingFamilyMemberIds.has(member.id)
-            ? member.id
-            : await nextReferenceId('FAM')
-        const { id: _id, ...data } = member
-        return { familymemberid, data }
-      }),
-    )
-
     await (prisma as any).$transaction([
       (prisma as any).userProfile.upsert({
         where: { userId: id },
@@ -482,23 +581,6 @@ export async function updateMyProfile(
         where: { id },
         data: { email, updatedAt: new Date() },
       }),
-      (prisma as any).familyMember.deleteMany({
-        where: {
-          userId: id,
-          ...(retainedFamilyMemberIds.length
-            ? { familymemberid: { notIn: retainedFamilyMemberIds } }
-            : {}),
-          appointments: { none: {} },
-          patients: { none: {} },
-        },
-      }),
-      ...familyUpdates.map(({ familymemberid, data }) =>
-        (prisma as any).familyMember.upsert({
-          where: { familymemberid },
-          update: data,
-          create: { familymemberid, userId: id, ...data },
-        }),
-      ),
     ])
 
     const fresh = await (prisma as any).user.findFirst({

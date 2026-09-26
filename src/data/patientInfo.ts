@@ -98,6 +98,8 @@ export type FamilyMemberRow = {
   religion: string
   fathersName: string
   mothersName: string
+  /** null = not declared, true/false = declared PWD status */
+  isPwd?: boolean | null
 }
 
 // Type definition for the user's profile view, which includes personal and address information.
