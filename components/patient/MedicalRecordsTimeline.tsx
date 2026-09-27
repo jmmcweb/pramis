@@ -366,14 +366,6 @@ export default function MedicalRecordsTimeline({
                         <div className="flex gap-2.5 mt-4">
                           <button
                             type="button"
-                            onClick={() => setViewingRecord(record)}
-                            className="flex-1 bg-card border border-line text-brand hover:bg-brand-tint py-2.5 rounded-xl font-medium text-sm transition-colors inline-flex items-center justify-center gap-1.5"
-                          >
-                            <Eye className="w-4 h-4" aria-hidden="true" />
-                            View
-                          </button>
-                          <button
-                            type="button"
                             onClick={() => setItrRecord(record)}
                             className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors inline-flex items-center justify-center gap-1.5"
                           >

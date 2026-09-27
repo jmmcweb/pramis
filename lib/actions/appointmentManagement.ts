@@ -655,6 +655,71 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
   }
 }
 
+// Loads a single booked appointment as a ScheduleAppointmentView so the queue
+// board can open the full ITR form before the visit is marked done. This is
+// the scheduled-visit counterpart of getWalkInAppointmentView.
+export async function getScheduledAppointmentView(appointmentId: string): Promise<{
+  success: boolean
+  message: string
+  appointment: ScheduleAppointmentView | null
+}> {
+  const session = await requireAdmin()
+  if (!session) {
+    const staff = await requireStaff()
+    if (!staff) {
+      return { success: false, message: 'Unauthorized', appointment: null }
+    }
+  }
+  if (!appointmentId) {
+    return {
+      success: false,
+      message: 'Appointment ID is required.',
+      appointment: null,
+    }
+  }
+
+  try {
+    const appt = await (prisma as any).appointment.findUnique({
+      where: { appointmentid: appointmentId },
+      include: BOARD_INCLUDE,
+    })
+    if (!appt) {
+      return {
+        success: false,
+        message: 'Appointment not found.',
+        appointment: null,
+      }
+    }
+    if (appt.source !== 'BOOKING') {
+      return {
+        success: false,
+        message: 'Only booked appointments can be opened here.',
+        appointment: null,
+      }
+    }
+    if (['CANCELLED', 'NO_SHOW'].includes(appt.status)) {
+      return {
+        success: false,
+        message: `A ${appt.status === 'NO_SHOW' ? 'no-show' : 'cancelled'} appointment cannot be recorded.`,
+        appointment: null,
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Visit loaded.',
+      appointment: toScheduleView(appt),
+    }
+  } catch (error) {
+    console.error('[getScheduledAppointmentView | Prisma | Error]:', error)
+    return {
+      success: false,
+      message: 'Failed to load the visit.',
+      appointment: null,
+    }
+  }
+}
+
 // Retrieves the display name of the signed-in user. If the user has a profile with a first and/or last name, it returns the full name; otherwise, it returns the user's email or a default label "Patient" if no information is available.
 export async function getWalkInAppointmentView(qid: string): Promise<{
   success: boolean

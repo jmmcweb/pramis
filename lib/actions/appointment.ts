@@ -744,10 +744,21 @@ export async function updateAppointmentStatus(
   try {
     const appointment = await (prisma as any).appointment.findUnique({
       where: { appointmentid: appointmentId },
-      include: { service: true, familyMember: true },
+      include: { service: true, familyMember: true, medicalHistory: true },
     })
     if (!appointment) {
       return { success: false, message: 'Appointment not found.' }
+    }
+
+    // A visit may only be completed through the ITR form. saveMedicalRecord
+    // sets COMPLETED itself once the record is saved, so anything arriving
+    // here without a record is an attempt to skip the ITR.
+    if (status === 'COMPLETED' && !appointment.medicalHistory) {
+      return {
+        success: false,
+        message:
+          'Complete the ITR form first — a visit can only be marked done once its medical record is saved.',
+      }
     }
 
     const serviceName = appointment.service?.name ?? 'your appointment'

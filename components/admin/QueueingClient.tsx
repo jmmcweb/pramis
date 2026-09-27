@@ -14,9 +14,9 @@ import {
 } from '@/lib/actions/queue'
 import {
   cancelAppointment,
-  updateAppointmentStatus,
 } from '@/lib/actions/appointment'
 import {
+  getScheduledAppointmentView,
   getWalkInAppointmentView,
   registerWalkIn,
   searchPatientById,
@@ -66,6 +66,8 @@ export default function QueueingClient({
 
   const [recordFor, setRecordFor] = useState<ScheduleAppointmentView | null>(null)
   const [pendingDoneQid, setPendingDoneQid] = useState<string | null>(null)
+  // APT-#### id of a scheduled visit waiting on its ITR before completing.
+  const [pendingDoneAppointmentId, setPendingDoneAppointmentId] = useState<string | null>(null)
 
   const [showAdd, setShowAdd] = useState(false)
   const [lane, setLane] = useState<Lane>('WALKIN')
@@ -110,18 +112,25 @@ export default function QueueingClient({
     })
   }
 
+  // Completing a scheduled visit requires the full ITR, exactly like a
+  // walk-in: the visit only flips to COMPLETED once the record is saved
+  // (saveMedicalRecord marks the appointment COMPLETED on submit).
   const advanceScheduled = (entry: QueueEntry) => {
-    if (inConsultation.has(entry.id)) {
-      setInConsultation(prev => {
-        const next = new Set(prev)
-        next.delete(entry.id)
-        return next
-      })
-      runAction(() => updateAppointmentStatus(entry.id, 'COMPLETED'))
-    } else {
+    if (!inConsultation.has(entry.id)) {
       setInConsultation(prev => new Set(prev).add(entry.id))
       toast.success('Consultation started.')
+      return
     }
+    if (isPending) return
+    startTransition(async () => {
+      const res = await getScheduledAppointmentView(entry.id)
+      if (res.success && res.appointment) {
+        setPendingDoneAppointmentId(entry.id)
+        setRecordFor(res.appointment)
+      } else {
+        toast.error(res.message)
+      }
+    })
   }
 
   const scheduledStatus = (entry: QueueEntry): QueueEntry['status'] =>
@@ -402,9 +411,25 @@ export default function QueueingClient({
         <MedicalRecordModal
           appointment={recordFor}
           darkMode={darkMode}
-          onClose={() => { setRecordFor(null); setPendingDoneQid(null) }}
+          onClose={() => {
+            setRecordFor(null)
+            setPendingDoneQid(null)
+            setPendingDoneAppointmentId(null)
+          }}
           onSaved={() => {
-            if (pendingDoneQid) runAction(() => markQueueDone(pendingDoneQid))
+            // Walk-ins also need their queue entry flipped to DONE. Scheduled
+            // visits are already COMPLETED by saveMedicalRecord, so they only
+            // need to leave the in-consultation set.
+            if (pendingDoneQid) {
+              runAction(() => markQueueDone(pendingDoneQid))
+            } else if (pendingDoneAppointmentId) {
+              setInConsultation(prev => {
+                const next = new Set(prev)
+                next.delete(pendingDoneAppointmentId)
+                return next
+              })
+              refresh()
+            }
             setPendingDoneQid(null)
           }}
         />
