@@ -326,7 +326,7 @@ export default function AdultItrForm({
             </div>
 
             <h4 className={`${SUBTITLE} sm:col-span-2 mt-2`}>
-              &gt;&gt; Other Personal Information &lt;&lt;
+              Other Personal Information
             </h4>
             <TextField
               name="birthplace"
@@ -470,7 +470,7 @@ export default function AdultItrForm({
         <div className={`${PANEL} ${page !== 2 ? 'hidden' : ''}`}>
           <h3 className={SECTION_TITLE}>Other Info &amp; PhilHealth</h3>
 
-          <h4 className={SUBTITLE}>&gt;&gt; Other Info &lt;&lt;</h4>
+          <h4 className={SUBTITLE}>Other Info</h4>
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <RadioField
@@ -510,7 +510,7 @@ export default function AdultItrForm({
             />
           </div>
 
-          <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; PhilHealth Info &lt;&lt;</h4>
+          <h4 className={`${SUBTITLE} mt-5`}>PhilHealth Info</h4>
           <div className="grid sm:grid-cols-2 gap-4">
             <RadioField
               name="philHealthMember"
@@ -582,7 +582,7 @@ export default function AdultItrForm({
             Consultation Details &amp; Medical History
           </h3>
 
-          <h4 className={SUBTITLE}>&gt;&gt; Consultation Details &lt;&lt;</h4>
+          <h4 className={SUBTITLE}>Consultation Details</h4>
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <RadioField
@@ -618,7 +618,7 @@ export default function AdultItrForm({
           </div>
 
           <h4 className={`${SUBTITLE} mt-5`}>
-            &gt;&gt; Past Medical History &lt;&lt;
+            Past Medical History
           </h4>
           <HistoryChecklist prefix="pastMed" itr={itr} />
           <div className="grid sm:grid-cols-2 gap-4 mt-3">
@@ -635,7 +635,7 @@ export default function AdultItrForm({
             />
           </div>
 
-          <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Family History &lt;&lt;</h4>
+          <h4 className={`${SUBTITLE} mt-5`}>Family History</h4>
           <HistoryChecklist prefix="famHist" itr={itr} />
           <div className="grid sm:grid-cols-2 gap-4 mt-3">
             <TextField
@@ -658,7 +658,7 @@ export default function AdultItrForm({
             Immunization, Family Planning &amp; Female Health
           </h3>
 
-          <h4 className={SUBTITLE}>&gt;&gt; Immunization &lt;&lt;</h4>
+          <h4 className={SUBTITLE}>Immunization</h4>
           <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 m-0 mb-2">
             *For Adult:
           </p>
@@ -686,7 +686,7 @@ export default function AdultItrForm({
             ))}
           </div>
 
-          <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Family Planning &lt;&lt;</h4>
+          <h4 className={`${SUBTITLE} mt-5`}>Family Planning</h4>
           <RadioField
             name="familyPlanningCounseling"
             label="With access to family planning counselling?"
@@ -696,7 +696,7 @@ export default function AdultItrForm({
 
           {isFemale && (
             <>
-              <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Menstrual History &lt;&lt;</h4>
+              <h4 className={`${SUBTITLE} mt-5`}>Menstrual History</h4>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <TextField
                   name="ageOfMenarche"
@@ -753,7 +753,7 @@ export default function AdultItrForm({
                 />
               </div>
 
-              <h4 className={`${SUBTITLE} mt-5`}>&gt;&gt; Pregnancy History &lt;&lt;</h4>
+              <h4 className={`${SUBTITLE} mt-5`}>Pregnancy History</h4>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <TextField
@@ -817,8 +817,8 @@ export default function AdultItrForm({
           </h3>
 
           <h4 className={SUBTITLE}>
-            &gt;&gt; Patient Answer to NCD Questionnaires — For Patient Aged 25
-            Years Old and Above &lt;&lt;
+            Patient Answer to NCD Questionnaires — For Patient Aged 25
+            Years Old and Above
           </h4>
           <div className="grid gap-0 mb-5">
             {NCD_QUESTIONS.map((q) => (
@@ -836,7 +836,7 @@ export default function AdultItrForm({
             ))}
           </div>
 
-          <h4 className={SUBTITLE}>&gt;&gt; Personal / Social History &lt;&lt;</h4>
+          <h4 className={SUBTITLE}>Personal / Social History</h4>
           <div className="grid sm:grid-cols-2 gap-4">
             <RadioField
               name="smoking"

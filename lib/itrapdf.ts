@@ -1,7 +1,8 @@
 // Generates a PDF of the Individual Treatment Record (ITR) for a given medical record. The PDF includes patient information, vital signs, consultation records, and immunization records (for child patients). It is formatted to fit on A4 paper and includes headers, tables, and footers with relevant details. The generated PDF can be saved with a filename based on the record date.
 
 import { jsPDF } from 'jspdf'
-import type { MedicalRecord } from '@/src/data/records'
+import { providerDesignation, type MedicalRecord } from '@/src/data/records'
+import { isChildRecord } from '@/src/data/itrChild'
 import {
   HISTORY_CONDITIONS,
   NCD_QUESTIONS,
@@ -67,16 +68,8 @@ export const generateItrPdf = (record: MedicalRecord) => {
           : c.label,
       )
       .join(' · ')
-  // Child ITR records carry birth details / immunization dates.
-  const isChild = Boolean(
-    record.placeDelivered ||
-      record.typeOfDelivery ||
-      record.attendantAtBirth ||
-      record.birthLength ||
-      record.birthWeight ||
-      record.immBcg ||
-      record.immPenta1
-  )
+  // Only 0-5 year olds get the Child template; 6+ get the Adult one.
+  const isChild = isChildRecord(record)
 
   //  OFFICIAL DOH / CHU HEADER
   text('REPUBLIC OF THE PHILIPPINES', M, y + 2, { style: 'bold', size: 9 })
@@ -661,7 +654,9 @@ export const generateItrPdf = (record: MedicalRecord) => {
   doc.line(M, y, M + INNER, y)
   y += 5
   text('NAME & SIGNATURE OF HEALTH CARE PROVIDER:', M, y, { style: 'bold', size: 8 })
-  const provider = [record.staffName, record.role].filter(Boolean).join(' — ')
+  const provider = [record.staffName, providerDesignation(record)]
+    .filter(Boolean)
+    .join(' — ')
   if (provider) text(provider, M + INNER, y, { size: 8.5, align: 'right' })
   doc.line(M + 95, y + 3.5, M + INNER, y + 3.5) // signature line
   text('Signature over printed name', M + 105, y + 8, { size: 6.5, color: [120, 120, 120] })

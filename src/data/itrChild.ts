@@ -30,7 +30,44 @@ export const CHILD_IMMUNIZATIONS: { key: keyof MedicalRecord; label: string }[] 
     { key: 'immOthers', label: 'Others' },
   ]
 
+export const CHILD_ITR_MAX_AGE = 5
+
+export function ageInYears(birthdate?: string | Date | null): number | null {
+  if (!birthdate) return null
+  const iso = typeof birthdate === 'string' ? birthdate : ''
+  const birth =
+    birthdate instanceof Date
+      ? birthdate
+      : new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : birthdate)
+  if (Number.isNaN(birth.getTime())) return null
+
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const months = today.getMonth() - birth.getMonth()
+  if (months < 0 || (months === 0 && today.getDate() < birth.getDate())) age--
+  return age >= 0 ? age : null
+}
+
+export function isChildByAge(birthdate?: string | Date | null): boolean {
+  const age = ageInYears(birthdate)
+  return age !== null && age <= CHILD_ITR_MAX_AGE
+}
+
+function recordAge(record: MedicalRecord): number | null {
+  const snapshot = record.itr ?? {}
+  const fromBirthday = ageInYears(record.birthday || snapshot.birthday || null)
+  if (fromBirthday !== null) return fromBirthday
+
+  const raw = (record.age ?? snapshot.age ?? '').toString().trim()
+  if (!raw) return null
+  const stored = Number(raw)
+  return Number.isInteger(stored) && stored >= 0 ? stored : null
+}
+
 export function isChildRecord(record: MedicalRecord): boolean {
+  const age = recordAge(record)
+  if (age !== null) return age <= CHILD_ITR_MAX_AGE
+
   return Boolean(
     record.placeDelivered ||
       record.typeOfDelivery ||

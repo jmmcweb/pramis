@@ -124,6 +124,7 @@ export function buildMedicalRecord({
       ? `${staff.firstName ?? ''} ${staff.lastName ?? ''}`.trim()
       : 'Health Staff',
     role: staffRoleLabel(staff?.role),
+    position: staff?.position || undefined,
     condition: mh.status || undefined,
     // ITR patient profile (from the saved ITR snapshot)
     lastName: itr.lastName || p.lastName || undefined,

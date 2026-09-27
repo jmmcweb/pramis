@@ -1,25 +1,20 @@
 'use client'
 
 // Post-consultation record modal. Routes to the full paginated
-//   - Adults (18+): Adult ITR
-//   - Children (<18): Child ITR (with birth & immunization records)
+//   - Children (0-5 years old): Child ITR (with birth & immunization records)
+//   - Everyone else (6+): Adult ITR
 // Unknown birthdates are treated as adults. Saving either form marks the appointment COMPLETED.
 
 import { X } from 'lucide-react'
 import type { ScheduleAppointmentView } from '@/config/appointment'
+import { isChildByAge } from '@/src/data/itrChild'
 import AdultItrForm from '@/components/ui/AdultItrForm'
 import ChildItrForm from '@/components/ui/ChildItrForm'
 
+// Only the 0-5 age band is recorded on the Child ITR. Anyone older and
+// anyone with no usable birthdate — gets the Adult ITR.
 function isAdultPatient(appointment: ScheduleAppointmentView): boolean {
-  const birthdate = appointment.patientInfo?.birthdate
-  if (!birthdate) return true
-  const birth = new Date(`${birthdate}T00:00:00`)
-  if (Number.isNaN(birth.getTime())) return true
-  const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
-  const m = today.getMonth() - birth.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
-  return age >= 18
+  return !isChildByAge(appointment.patientInfo?.birthdate)
 }
 
 export default function MedicalRecordModal({

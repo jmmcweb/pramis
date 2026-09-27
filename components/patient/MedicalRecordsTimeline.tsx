@@ -4,7 +4,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ClipboardList, Eye, FileText, Plus, UserRoundPlus } from 'lucide-react'
-import type { MedicalRecord, PatientMember } from '@/src/data/records'
+import {
+  providerDesignation,
+  type MedicalRecord,
+  type PatientMember,
+} from '@/src/data/records'
 import { serviceIcons } from '@/src/data/appointment'
 import RecordDetailModal from '@/components/patient/RecordDetailModal'
 import ItrViewerModal from '@/components/ui/ItrViewerModal'
@@ -188,7 +192,7 @@ export default function MedicalRecordsTimeline({
                           {record.type}
                         </h3>
                         <p className="text-sm text-muted">
-                          {record.staffName} · {record.role}
+                          {record.staffName} · {providerDesignation(record)}
                         </p>
                         {record.condition && (
                           <span className="inline-block mt-2 px-2.5 py-1 rounded-full bg-brand-tint text-brand text-[11px] font-bold">

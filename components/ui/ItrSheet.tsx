@@ -3,7 +3,7 @@
 
 
 import type { ReactNode } from 'react'
-import type { MedicalRecord } from '@/src/data/records'
+import { providerDesignation, type MedicalRecord } from '@/src/data/records'
 import { CHILD_IMMUNIZATIONS, isChildRecord } from '@/src/data/itrChild'
 import {
   CIVIL_STATUS_OPTIONS,
@@ -85,12 +85,16 @@ function Field({
   children?: ReactNode
   width?: string
 }) {
+  const bare = label === ''
+
   return (
     <div
       className="grid border-b border-black last:border-b-0"
-      style={{ gridTemplateColumns: `${width} 1fr` }}
+      style={{ gridTemplateColumns: bare ? '1fr' : `${width} 1fr` }}
     >
-      <div className={`border-r border-black px-1.5 py-[3px] ${T}`}>{label}</div>
+      {!bare && (
+        <div className={`border-r border-black px-1.5 py-[3px] ${T}`}>{label}</div>
+      )}
       <div className={`px-1.5 py-[3px] ${T} min-h-[19px] break-words`}>
         {children ?? <span>&nbsp;</span>}
       </div>
@@ -98,47 +102,88 @@ function Field({
   )
 }
 
-// "____ Mr.  ____ Mrs." — the option matching `value` is emphasised.
-function Choices({
-  options,
-  value,
-  lineWidth = '12mm',
-}: {
-  options: ItrOption[]
-  value?: string
-  lineWidth?: string
-}) {
+function normalizeAnswer(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+const YES_ALIASES = new Set(['yes', 'y', 'true', '1'])
+const NO_ALIASES = new Set(['no', 'n', 'false', '0'])
+
+function answerMatches(stored: string[], option: string): boolean {
+  const target = normalizeAnswer(option)
+  const aliases = YES_ALIASES.has(target)
+    ? YES_ALIASES
+    : NO_ALIASES.has(target)
+      ? NO_ALIASES
+      : null
+  return stored.some((raw) => {
+    const value = normalizeAnswer(raw)
+    if (value === target) return true
+    return aliases ? aliases.has(value) : false
+  })
+}
+
+function CircleMark({ checked }: { checked: boolean }) {
   return (
-    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-[3px]">
-      {options.map((o) => (
-        <span key={o.value} className="inline-flex items-baseline gap-[3px]">
-          <span
-            className="inline-block border-b border-black"
-            style={{ width: lineWidth }}
-          />
-          <span className={value === o.value ? 'font-bold' : undefined}>
-            {o.text}
-          </span>
-        </span>
-      ))}
+    <span
+      className="inline-grid shrink-0 place-items-center rounded-full border border-black leading-none align-middle"
+      style={{ width: '3.4mm', height: '3.4mm' }}
+    >
+      {checked ? <span className="text-[7px] font-bold leading-none">✓</span> : null}
     </span>
   )
 }
 
-// A blank + label line, optionally followed by a "Specify" write-on line.
+function Choices({
+  options,
+  value,
+}: {
+  options: ItrOption[]
+  value?: string
+}) {
+  const selected = splitMultiValue(value)
+  return (
+    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-[3px]">
+      {options.map((o) => {
+        const checked = answerMatches(selected, o.value)
+        return (
+          <span key={o.value} className="inline-flex items-center gap-[3px]">
+            <CircleMark checked={checked} />
+            <span className={checked ? 'font-bold' : undefined}>{o.text}</span>
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
 function CheckLine({
   label,
   checked,
   specify,
+  lineWidth = '8mm',
 }: {
   label: string
   checked?: boolean
   specify?: string
+  lineWidth?: string
 }) {
+  const ticked = Boolean(checked)
   return (
-    <div className={`flex items-baseline gap-1 ${T}`}>
-      <span className="inline-block w-[6mm] border-b border-black" />
-      <span className={checked ? 'font-bold' : undefined}>{label}</span>
+    <div className={`flex items-start gap-1 ${T}`}>
+      <span
+        className="relative inline-block shrink-0 border-b border-black"
+        style={{ width: lineWidth, height: '1.3em' }}
+      >
+        {ticked ? (
+          <span className="absolute left-[1.5mm] -bottom-[1.5px] text-[8px] font-bold leading-none">
+            ✓
+          </span>
+        ) : null}
+      </span>
+      <span className={`min-w-0 ${ticked ? 'font-bold' : undefined}`}>
+        {label}
+      </span>
       {specify !== undefined && (
         <span className="ml-1 inline-block flex-1 border-b border-black px-1">
           {specify}
@@ -158,13 +203,24 @@ function WriteLine({ value }: { value?: string }) {
   )
 }
 
-function Seal({ lines }: { lines: string[] }) {
+function HeaderSeal({
+  src,
+  alt,
+  size = '18mm',
+  className,
+}: {
+  src: string
+  alt: string
+  size?: string
+  className?: string
+}) {
   return (
-    <div className="flex h-[18mm] w-[18mm] shrink-0 flex-col items-center justify-center rounded-full border border-black/60 text-center text-[5px] font-bold uppercase leading-[1.15] tracking-tight">
-      {lines.map((l) => (
-        <span key={l}>{l}</span>
-      ))}
-    </div>
+    <img
+      src={src}
+      alt={alt}
+      className={`shrink-0 object-contain ${className ?? ''}`}
+      style={{ width: size, height: size }}
+    />
   )
 }
 
@@ -179,8 +235,8 @@ export default function ItrSheet({
 
   const pick = (k: string, ...fallback: (string | undefined)[]) =>
     V(record, k) || fallback.find(Boolean) || ''
-  const is = (k: string, v: string) => V(record, k) === v
-  const isYes = (k: string) => V(record, k) === 'Yes'
+  const is = (k: string, v: string) => answerMatches([V(record, k)], v)
+  const isYes = (k: string) => is(k, 'Yes')
   const disability = splitMultiValue(V(record, 'disabilityTypes'))
 
   const freeAddress = V(record, 'address').trim()
@@ -202,27 +258,27 @@ export default function ItrSheet({
     ))
 
   const gravidaParity = (
-    <span className={`flex flex-wrap items-baseline gap-x-3 ${T}`}>
+    <span className={`flex flex-wrap items-baseline gap-x-1.5 ${T}`}>
       <span className="inline-flex items-baseline gap-1">
-        <span className="w-[8mm] border-b border-black" />G {pick('gravidity')}
+        <span className="w-[5mm] border-b border-black" />G {pick('gravidity')}
       </span>
       <span className="inline-flex items-baseline gap-1">
-        <span className="w-[8mm] border-b border-black" />P {pick('parityLivebirth')}
+        <span className="w-[5mm] border-b border-black" />P {pick('parityLivebirth')}
       </span>
       <span className="inline-flex items-baseline gap-1">
-        (T <span className="w-[8mm] border-b border-black" />
+        (T <span className="w-[5mm] border-b border-black" />
         {pick('parityFullTerm')}
       </span>
       <span className="inline-flex items-baseline gap-1">
-        P <span className="w-[8mm] border-b border-black" />
+        P <span className="w-[5mm] border-b border-black" />
         {pick('parityPreterm')}
       </span>
       <span className="inline-flex items-baseline gap-1">
-        A <span className="w-[8mm] border-b border-black" />
+        A <span className="w-[5mm] border-b border-black" />
         {pick('parityAbortion')}
       </span>
       <span className="inline-flex items-baseline gap-1">
-        L <span className="w-[8mm] border-b border-black" />
+        L <span className="w-[5mm] border-b border-black" />
       </span>
       )
     </span>
@@ -232,30 +288,43 @@ export default function ItrSheet({
     <div className="flex flex-col items-center gap-[6mm]">
       {/* -------------------------------- PAGE 1 -------------------------------- */}
       <div className={PAGE}>
-        <div className="flex items-start justify-between gap-3">
-          <Seal lines={['City Health Office', 'City of Malolos']} />
-          <div className="flex-1 text-center">
-            <p className={`${T} leading-[1.3]`}>Republic of the Philippines</p>
-            <p className={`${T} leading-[1.3]`}>Province of Bulacan</p>
-            <p className={`${T} leading-[1.3]`}>City of Malolos</p>
-            <p className="mt-[2mm] text-[15px] font-bold uppercase leading-tight tracking-[0.5px]">
+        <div className="grid grid-cols-[18mm_1fr_18mm] items-center gap-x-[4mm]">
+          <HeaderSeal
+            src="/cho-logo.png"
+            alt="City Health Office, City of Malolos seal"
+          />
+          <div className="text-center">
+            <p className={`${T} leading-[1.35]`}>Republic of the Philippines</p>
+            <p className={`${T} leading-[1.35]`}>Province of Bulacan</p>
+            <p className={`${T} leading-[1.35]`}>City of Malolos</p>
+            <p className="mt-[2.5mm] font-serif text-[17px] font-bold uppercase leading-tight tracking-[0.5px]">
               City Health Unit VII
             </p>
-            <p className={`${T} leading-[1.3]`}>Brgy. Mojon, City of Malolos</p>
+            <p className={`${T} mt-[1mm] leading-[1.35]`}>
+              Brgy. Mojon, City of Malolos
+            </p>
           </div>
-          <Seal lines={['Rural Health Unit', 'City of Malolos']} />
+          <HeaderSeal
+            src="/rhu-logo.png"
+            alt="Rural Health Unit VII, City of Malolos seal"
+          />
         </div>
 
-        <h1 className="mt-[4mm] border-b-[1.5px] border-black pb-[1.5mm] text-center text-[14px] font-bold uppercase tracking-[0.5px]">
-          {isChild
-            ? 'Individual Child Treatment Record (ITR)'
-            : 'Individual Adult Treatment Record for iClinicSys & Yakap'}
+        <h1 className="mt-[4mm] flex flex-wrap items-baseline justify-center gap-x-[2.5px] border-b-[1.5px] border-black pb-[1.5mm] text-center text-[12px] font-bold uppercase leading-tight tracking-[0.5px]">
+          <span>Individual</span>
+          <span className="text-[15px] underline underline-offset-[1.5px]">
+            {isChild ? 'Child' : 'Adult'}
+          </span>
+          <span>Treatment Record</span>
+          <span className="text-[11px] font-semibold normal-case">
+            for iClinicSys &amp; Yakap
+          </span>
         </h1>
 
         <div className="mt-[4mm] grid grid-cols-2 items-start gap-x-[4mm]">
           {/* ------------------------- LEFT COLUMN ------------------------- */}
           <div className="flex flex-col">
-            <SectionBar>&gt;&gt; PERSONAL INFORMATION &lt;&lt;</SectionBar>
+            <SectionBar>PERSONAL INFORMATION</SectionBar>
             <FieldGroup>
               <Field label="Prefix :">
                 <Choices options={PREFIX_OPTIONS} value={V(record, 'prefix')} />
@@ -283,9 +352,7 @@ export default function ItrSheet({
 
             <div className="h-[3mm]" />
 
-            <SectionBar>
-              &gt;&gt; OTHER PERSONAL INFORMATION &lt;&lt;
-            </SectionBar>
+            <SectionBar>OTHER PERSONAL INFORMATION</SectionBar>
             <FieldGroup>
               <Field label="Birth Place :">
                 {pick('birthplace', record.birthplace)}
@@ -350,9 +417,7 @@ export default function ItrSheet({
             
             <div className="h-[3mm]" />
 
-            <SectionBar>
-              &gt;&gt; ADDRESS AND CONTACT INFO &lt;&lt;
-            </SectionBar>
+            <SectionBar>ADDRESS AND CONTACT INFO</SectionBar>
             <FieldGroup>
               <Field label="City/Mun. :">{pick('cityMun')}</Field>
               <Field label="Barangay :">{pick('barangay')}</Field>
@@ -363,20 +428,19 @@ export default function ItrSheet({
               {extraAddress && <Field label="Complete Address :">{extraAddress}</Field>}
               <Field label="Email :">{pick('email')}</Field>
               <Field label="Mobile Number :">
-                {pick('mobileNumber', 'contactNumber', record.contactNumber)}
+                {pick('mobileNumber') || record.contactNumber || ''}
               </Field>
               <Field label="Landline Number">{pick('landlineNumber')}</Field>
             </FieldGroup>
           </div>
           {/* ------------------------- RIGHT COLUMN ------------------------- */}
           <div className="flex flex-col">
-            <SectionBar>&gt;&gt; OTHER INFO &lt;&lt;</SectionBar>
+            <SectionBar>OTHER INFO</SectionBar>
             <FieldGroup>
               <Field label="Family Member :">
                 <Choices
                   options={FAMILY_MEMBER_OPTIONS}
                   value={V(record, 'familyMemberRole')}
-                  lineWidth="8mm"
                 />
               </Field>
               <Field label="DSWD 4Ps Member">
@@ -410,7 +474,7 @@ export default function ItrSheet({
 
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt; PHILHEALTH INFO &lt;&lt;</SectionBar>
+            <SectionBar>PHILHEALTH INFO</SectionBar>
             <FieldGroup>
               <Field label="Philhealth Member :">
                 <Choices
@@ -436,18 +500,15 @@ export default function ItrSheet({
               <Field label="Philhealth Category :">
                 <div className={T}>
                   {PHILHEALTH_CATEGORIES.map((c) => (
-                    <div key={c} className="flex items-baseline gap-1">
-                      <span className="inline-block w-[5mm] border-b border-black" />
-                      <span
-                        className={
-                          V(record, 'philHealthCategory') === c
-                            ? 'font-bold'
-                            : undefined
-                        }
-                      >
-                        {c}
-                      </span>
-                    </div>
+                    <CheckLine
+                      key={c}
+                      label={c}
+                      checked={answerMatches(
+                        splitMultiValue(V(record, 'philHealthCategory')),
+                        c,
+                      )}
+                      lineWidth="5mm"
+                    />
                   ))}
                 </div>
               </Field>
@@ -465,20 +526,19 @@ export default function ItrSheet({
       <div className={PAGE}>
         <div className="grid grid-cols-2 items-start gap-x-[4mm]">
           <div className="flex flex-col">
-            <SectionBar>&gt;&gt; Consultation Details &lt;&lt;</SectionBar>
+            <SectionBar>Consultation Details</SectionBar>
             <FieldGroup>
               <Field label="Nature of Visit" width="45%">
                 <Choices
                   options={NATURE_OF_VISIT_OPTIONS}
                   value={V(record, 'natureOfVisit')}
-                  lineWidth="9mm"
                 />
               </Field>
             </FieldGroup>
 
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt; PATIENT DETAILS &lt;&lt;</SectionBar>
+            <SectionBar>PATIENT DETAILS</SectionBar>
             <FieldGroup>
               <Field label="Patient Age" width="45%">
                 <span className={`flex flex-wrap items-baseline gap-x-3 ${T}`}>
@@ -500,7 +560,7 @@ export default function ItrSheet({
 
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt;PAST MEDICAL HISTORY &lt;&lt;</SectionBar>
+            <SectionBar>PAST MEDICAL HISTORY</SectionBar>
             <FieldGroup>
               <Field label="" width="0%">
                 <div className="flex flex-col gap-[2px]">{historyRows('pastMed')}</div>
@@ -518,7 +578,7 @@ export default function ItrSheet({
 
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt; FAMILY HISTORY &lt;&lt;</SectionBar>
+            <SectionBar>FAMILY HISTORY</SectionBar>
             <FieldGroup>
               <Field label="" width="0%">
                 <div className="flex flex-col gap-[2px]">{historyRows('famHist')}</div>
@@ -536,7 +596,7 @@ export default function ItrSheet({
           </div>
           {/* ---------------- RIGHT COLUMN ---------------- */}
           <div className="flex flex-col">
-            <SectionBar>&gt;&gt; IMMUNIZATION &lt;&lt;</SectionBar>
+            <SectionBar>IMMUNIZATION</SectionBar>
             <FieldGroup>
               {isChild ? (
                 <Field label="" width="0%">
@@ -560,29 +620,19 @@ export default function ItrSheet({
                 <Field label="*For Adult:" width="26%">
                   <div className={T}>
                     {IMMUNIZATION_ADULT_OPTIONS.map((o) => (
-                      <div key={o.value} className="flex items-baseline gap-1">
-                        <span className="w-[8mm] border-b border-black" />
-                        <span
-                          className={
-                            isYes(IMM_FIELD[o.value]) ? 'font-bold' : undefined
-                          }
-                        >
-                          {o.text}
-                        </span>
-                      </div>
+                      <CheckLine
+                        key={o.value}
+                        label={o.text}
+                        checked={isYes(IMM_FIELD[o.value])}
+                      />
                     ))}
                     <div className="mt-[2px] font-bold">*For Elderly:</div>
                     {IMMUNIZATION_ELDERLY_OPTIONS.map((o) => (
-                      <div key={o.value} className="flex items-baseline gap-1">
-                        <span className="w-[8mm] border-b border-black" />
-                        <span
-                          className={
-                            isYes(IMM_FIELD[o.value]) ? 'font-bold' : undefined
-                          }
-                        >
-                          {o.text}
-                        </span>
-                      </div>
+                      <CheckLine
+                        key={o.value}
+                        label={o.text}
+                        checked={isYes(IMM_FIELD[o.value])}
+                      />
                     ))}
                   </div>
                 </Field>
@@ -591,7 +641,7 @@ export default function ItrSheet({
 
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt; FAMILY PLANNING &lt;&lt;</SectionBar>
+            <SectionBar>FAMILY PLANNING</SectionBar>
             <FieldGroup>
               <Field label="With access to family planning counselling?" width="52%">
                 <Choices
@@ -603,7 +653,7 @@ export default function ItrSheet({
 
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt; MENSTRUAL HISTORY &lt;&lt;</SectionBar>
+            <SectionBar>MENSTRUAL HISTORY</SectionBar>
             <FieldGroup>
               <Field label="Menarche" width="58%">
                 {pick('ageOfMenarche')} years old
@@ -639,9 +689,9 @@ export default function ItrSheet({
             
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt; PREGNANCY HISTORY &lt;&lt;</SectionBar>
+            <SectionBar>PREGNANCY HISTORY</SectionBar>
             <FieldGroup>
-              <Field label="G   P   (T   P   A   L )" width="34%">
+              <Field label="G   P   (T   P   A   L )" width="30%">
                 {gravidaParity}
               </Field>
               <Field label="Type of Delivery" width="45%">
@@ -664,8 +714,8 @@ export default function ItrSheet({
             <div className="h-[3mm]" />
 
             <SectionBar>
-              &gt;&gt; PATIENT ANSWER TO NCD QUESTIONNAIRES &ndash; FOR PATIENT
-              AGED 25 YEARS OLD AND ABOVE &lt;&lt;
+              PATIENT ANSWER TO NCD QUESTIONNAIRES &ndash; FOR PATIENT
+              AGED 25 YEARS OLD AND ABOVE
             </SectionBar>
             <FieldGroup>
               {NCD_QUESTIONS.map((q) => (
@@ -676,20 +726,23 @@ export default function ItrSheet({
                   <div className={`border-r border-black px-1.5 py-[2px] ${T}`}>
                     {q.label}
                   </div>
-                  <div className="px-1 py-[2px] text-center">
-                    <span className={T}>
-                      <span
-                        className={is(q.name, 'Yes') ? 'font-bold' : undefined}
-                      >
-                        Yes
-                      </span>
-                      {' / '}
-                      <span
-                        className={is(q.name, 'No') ? 'font-bold' : undefined}
-                      >
-                        No
-                      </span>
-                    </span>
+                  <div
+                    className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-[2px] px-1 py-[2px] ${T}`}
+                  >
+                    {YES_NO_OPTIONS.map((o) => {
+                      const checked = is(q.name, o.value)
+                      return (
+                        <span
+                          key={o.value}
+                          className="inline-flex items-center gap-[3px]"
+                        >
+                          <CircleMark checked={checked} />
+                          <span className={checked ? 'font-bold' : undefined}>
+                            {o.text}
+                          </span>
+                        </span>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
@@ -697,14 +750,13 @@ export default function ItrSheet({
 
             <div className="h-[3mm]" />
 
-            <SectionBar>&gt;&gt; PERSONAL/SOCIAL HISTORY &lt;&lt;</SectionBar>
+            <SectionBar>PERSONAL/SOCIAL HISTORY</SectionBar>
             <FieldGroup>
               <Field label="Smoking" width="42%">
                 <span className={`flex flex-wrap items-baseline gap-x-2 ${T}`}>
                   <Choices
                     options={SOCIAL_HISTORY_OPTIONS}
                     value={V(record, 'smoking')}
-                    lineWidth="6mm"
                   />
                   <span className="w-[10mm] border-b border-black" />
                   {pick('smokingPacksPerDay')} No of packs a day
@@ -715,7 +767,6 @@ export default function ItrSheet({
                   <Choices
                     options={SOCIAL_HISTORY_OPTIONS}
                     value={V(record, 'alcohol')}
-                    lineWidth="6mm"
                   />
                   <span className="w-[10mm] border-b border-black" />
                   {pick('alcoholBottlesPerDay')} No of bottles a day
@@ -725,7 +776,6 @@ export default function ItrSheet({
                 <Choices
                   options={SOCIAL_HISTORY_OPTIONS}
                   value={V(record, 'illicitDrugs')}
-                  lineWidth="6mm"
                 />
               </Field>
               <Field label="Sexually Active" width="42%">
@@ -739,7 +789,7 @@ export default function ItrSheet({
         </div>
         {/* CONSULTATION RECORD (spans both columns) */}
         <div className="mt-[4mm]">
-          <div className="grid grid-cols-[16mm_20mm_1fr_1fr_1fr] border border-black text-center">
+          <div className="grid grid-cols-[16mm_23mm_1fr_1fr_1fr] border border-black text-center">
             <div className={`border-r border-black px-1 py-[3px] font-bold ${T}`}>
               DATE
             </div>
@@ -758,11 +808,11 @@ export default function ItrSheet({
               MEDICATIONS / TREATMENT
             </div>
           </div>
-          <div className="grid grid-cols-[16mm_20mm_1fr_1fr_1fr] border-x border-b border-black">
+          <div className="grid grid-cols-[16mm_23mm_1fr_1fr_1fr] border-x border-b border-black">
             <div className={`border-r border-black px-1 py-[3px] ${T}`}>
               {asDate(record.date)}
             </div>
-            <div className="border-r border-black">
+            <div className={`border-r border-black ${T}`}>
               {(
                 [
                   ['BP', record.bloodPressure],
@@ -775,10 +825,12 @@ export default function ItrSheet({
               ).map(([label, value]) => (
                 <div
                   key={label}
-                  className="grid grid-cols-[10mm_1fr] border-b border-black px-1 py-[2px] last:border-b-0"
+                  className="grid grid-cols-[10mm_1fr] items-baseline border-b border-black px-1 py-[2px] last:border-b-0"
                 >
                   <span className="font-semibold">{label}</span>
-                  <span>{value ?? ''}</span>
+                  {/* nowrap keeps a reading like 120/80 on one line; the
+                      column is sized so the widest reading still fits. */}
+                  <span className="whitespace-nowrap">{value ?? ''}</span>
                 </div>
               ))}
             </div>
@@ -802,7 +854,7 @@ export default function ItrSheet({
 
         {/* CONSENT & SIGNATURE */}
         <div className="mt-[4mm]">
-          <SectionBar>&gt;&gt; CONSENT &lt;&lt;</SectionBar>
+          <SectionBar>CONSENT</SectionBar>
           <FieldGroup>
             <Field label="Name (Patient / Representative)" width="42%">
               {record.consentPatientName}
@@ -825,7 +877,9 @@ export default function ItrSheet({
           </span>
           <span className="flex-1 border-b border-black" />
           <span className={`${T}`}>
-            {[record.staffName, record.role].filter(Boolean).join(' — ')}
+            {[record.staffName, providerDesignation(record)]
+              .filter(Boolean)
+              .join(' — ')}
           </span>
         </div>
       </div>
