@@ -580,7 +580,7 @@ export default function UserManagementPage() {
       const rows: StaffUser[] = Array.isArray(data.users)
         ? data.users
             .filter((user: AnyUser) => user.kind === 'staff')
-            .map((user: AnyUser & { dateJoined: string }) => ({
+            .map((user: StaffUser & { dateJoined: string }) => ({
               ...user,
               databaseId: user.id,
               firstName: user.firstName || 'User',

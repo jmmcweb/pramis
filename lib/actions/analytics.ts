@@ -6,10 +6,54 @@ import { getSlotLabel } from '@/config/appointment'
 import { classifyMedicalCase } from '@/lib/analytics/disease'
 import {
   ANALYTICS_RANGES,
+  isYearRangeKey,
   type AnalyticsRangeKey,
 } from '@/lib/constants/analytics'
 
 export type AnalyticsBreakdown = { label: string; count: number }
+
+export type AnalyticsDateWindow = {
+  start: Date | null
+  end: Date | null
+  label: string
+}
+
+function resolveAnalyticsDateWindow(
+  rangeKey: AnalyticsRangeKey,
+  year?: number | null,
+): AnalyticsDateWindow {
+  const range =
+    ANALYTICS_RANGES.find((r) => r.key === rangeKey) || ANALYTICS_RANGES[1]
+
+  if (isYearRangeKey(range.key)) {
+    const y = year ?? new Date().getFullYear()
+    const safeYear = Number.isFinite(y) ? y : new Date().getFullYear()
+    return {
+      start: new Date(safeYear, 0, 1, 0, 0, 0, 0),
+      end: new Date(safeYear, 11, 31, 23, 59, 59, 999),
+      label: `Year ${safeYear}`,
+    }
+  }
+
+  if (range.days > 0) {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    start.setDate(start.getDate() - (range.days - 1))
+    const end = new Date()
+    end.setHours(23, 59, 59, 999)
+    return { start, end, label: range.label }
+  }
+
+  return { start: null, end: null, label: range.label }
+}
+
+// Applies a date window to a Prisma `where` clause on the given field.
+function withDateWindow(where: any, field: string, win: AnalyticsDateWindow) {
+  if (win.start && win.end) {
+    where[field] = { gte: win.start, lte: win.end }
+  }
+  return where
+}
 
 // This file contains logic for fetching and computing analytics statistics for the Meditrack application. It includes functions to retrieve appointment data, classify medical cases, and compute various breakdowns such as service share, reasons for visits, outcomes, peak hours, and disease cases within a specified date range. The main function `getAnalyticsStats` returns an object containing the computed statistics along with success status and messages.
 
@@ -123,6 +167,7 @@ const AGE_GROUP_ORDER = [
 // Fetches analytics statistics for appointments and medical cases within a specified date range. It computes various breakdowns such as service share, reasons for visits, outcomes, peak hours, and disease cases. The function checks user authorization and returns the computed statistics along with success status and messages.
 export async function getAnalyticsStats(
   rangeKey: AnalyticsRangeKey = '1M',
+  year?: number | null,
 ): Promise<{ success: boolean; message: string; stats?: AnalyticsStats }> {
   const session = await requireUser()
   if (!session) {
@@ -134,18 +179,10 @@ export async function getAnalyticsStats(
     return { success: false, message: 'Unauthorized' }
   }
 
-  const range =
-    ANALYTICS_RANGES.find((r) => r.key === rangeKey) || ANALYTICS_RANGES[1]
+  const window = resolveAnalyticsDateWindow(rangeKey, year)
+  const rangeLabel = window.label
 
-  const where: any = {}
-  if (range.days > 0) {
-    const start = new Date()
-    start.setHours(0, 0, 0, 0)
-    start.setDate(start.getDate() - (range.days - 1))
-    const end = new Date()
-    end.setHours(23, 59, 59, 999)
-    where.appointmentAt = { gte: start, lte: end }
-  }
+  const where: any = withDateWindow({}, 'appointmentAt', window)
 
   // Fetch appointment records from the database based on the specified date range and compute various statistics.
 
@@ -284,15 +321,7 @@ export async function getAnalyticsStats(
     let immunization: AnalyticsBreakdown[] = []
 
     try {
-      const mhWhere: any = {}
-      if (range.days > 0) {
-        const mhStart = new Date()
-        mhStart.setHours(0, 0, 0, 0)
-        mhStart.setDate(mhStart.getDate() - (range.days - 1))
-        const mhEnd = new Date()
-        mhEnd.setHours(23, 59, 59, 999)
-        mhWhere.checkedDate = { gte: mhStart, lte: mhEnd }
-      }
+      const mhWhere: any = withDateWindow({}, 'checkedDate', window)
 
       const cases = await (prisma as any).medicalHistory.findMany({
         where: mhWhere,
@@ -541,7 +570,7 @@ export async function getAnalyticsStats(
       success: true,
       message: 'Analytics fetched successfully.',
       stats: {
-        rangeLabel: range.label,
+        rangeLabel,
         total,
         walkIns,
         resident,
@@ -566,5 +595,48 @@ export async function getAnalyticsStats(
   } catch (error) {
     console.error('[getAnalyticsStats | Prisma | Error]:', error)
     return { success: false, message: 'Failed to fetch analytics.' }
+  }
+}
+
+export async function getAnalyticsYears(): Promise<{
+  success: boolean
+  message: string
+  years: number[]
+}> {
+  const session = await requireUser()
+  if (!session) {
+    return { success: false, message: 'Unauthorized', years: [] }
+  }
+
+  const role = (session.user as any)?.role ?? ''
+  if (!['SUPERADMIN', 'ADMIN', 'MEDSTAFF'].includes(role)) {
+    return { success: false, message: 'Unauthorized', years: [] }
+  }
+
+  const currentYear = new Date().getFullYear()
+
+  try {
+    const bounds = await (prisma as any).appointment.aggregate({
+      _min: { appointmentAt: true },
+      _max: { appointmentAt: true },
+    })
+
+    const min = bounds?._min?.appointmentAt
+      ? new Date(bounds._min.appointmentAt).getFullYear()
+      : currentYear
+    const max = bounds?._max?.appointmentAt
+      ? new Date(bounds._max.appointmentAt).getFullYear()
+      : currentYear
+
+    const first = Math.max(Math.min(min, currentYear), currentYear - 11)
+    const last = Math.max(max, currentYear)
+
+    const years: number[] = []
+    for (let y = last; y >= first; y--) years.push(y)
+
+    return { success: true, message: 'Years fetched.', years }
+  } catch (error) {
+    console.error('[getAnalyticsYears | Prisma | Error]:', error)
+    return { success: false, message: 'Failed to fetch years.', years: [] }
   }
 }

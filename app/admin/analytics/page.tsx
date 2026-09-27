@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import {
   getAnalyticsStats,
+  getAnalyticsYears,
   type AnalyticsStats,
   type AnalyticsBreakdown,
 } from '@/lib/actions/analytics'
 import {
   ANALYTICS_RANGES,
+  isYearRangeKey,
   type AnalyticsRangeKey,
 } from '@/lib/constants/analytics'
 
@@ -52,9 +54,36 @@ export default function AnalyticsPage() {
 }
 
 function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
+  const currentYear = new Date().getFullYear()
   const [rangeKey, setRangeKey] = useState<AnalyticsRangeKey>('1M')
+  const [year, setYear] = useState<number>(currentYear)
+  const [years, setYears] = useState<number[]>([currentYear])
   const [stats, setStats] = useState<AnalyticsStats | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const byYear = isYearRangeKey(rangeKey)
+
+  // Load the list of selectable years once, when the year view is first opened.
+  useEffect(() => {
+    if (!byYear) return
+    let cancelled = false
+
+    async function loadYears() {
+      try {
+        const res = await getAnalyticsYears()
+        if (cancelled || !res.success || res.years.length === 0) return
+        setYears(res.years)
+        if (!res.years.includes(year)) setYear(res.years[0])
+      } catch {
+      }
+    }
+
+    loadYears()
+
+    return () => {
+      cancelled = true
+    }
+  }, [byYear])
 
   useEffect(() => {
     let cancelled = false
@@ -62,7 +91,10 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
     async function load() {
       try {
-        const res = await getAnalyticsStats(rangeKey)
+        const res = await getAnalyticsStats(
+          rangeKey,
+          isYearRangeKey(rangeKey) ? year : null,
+        )
         if (!cancelled && res.success && res.stats) setStats(res.stats)
       } catch {
         if (!cancelled) setStats(null)
@@ -76,14 +108,16 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
     return () => {
       cancelled = true
     }
-  }, [rangeKey])
+  }, [rangeKey, year])
 
   const fmt = (n: number) => n.toLocaleString()
   const total = stats?.total ?? 0
 
   const rangeLabel =
     stats?.rangeLabel.toLowerCase() ??
-    ANALYTICS_RANGES.find((r) => r.key === rangeKey)!.label.toLowerCase()
+    (isYearRangeKey(rangeKey)
+      ? `year ${year}`
+      : ANALYTICS_RANGES.find((r) => r.key === rangeKey)!.label.toLowerCase())
 
   const buildData = (
     rows: AnalyticsBreakdown[],
@@ -182,12 +216,18 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
           : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
     }`
 
+  const yearSelect = `px-4 py-2.5 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-colors outline-none ${
+    darkMode
+      ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)]'
+      : 'bg-white text-gray-600 border-gray-200'
+  }`
+
   return (
     <div className="mb-8">
       {/* Header / Date Range */}
       <div className="flex items-end justify-end gap-4 flex-wrap mb-6">
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {ANALYTICS_RANGES.map((r) => (
             <button
               key={r.key}
@@ -197,6 +237,31 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
               {r.label}
             </button>
           ))}
+
+          {byYear && (
+            <>
+              <label
+                htmlFor="analytics-year"
+                className={`text-[14px] font-semibold ml-1 ${
+                  darkMode ? 'text-gray-400' : 'text-gray-500'
+                }`}
+              >
+                Year
+              </label>
+              <select
+                id="analytics-year"
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                className={yearSelect}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       </div>
 
@@ -225,8 +290,10 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
             >
               <p className="m-0 text-sm font-medium">
                 No appointments found for{' '}
-                <strong>{stats?.rangeLabel ?? rangeKey}</strong>. Try{' '}
-                <strong>All Time</strong> to view historical analytics.
+                <strong>{stats?.rangeLabel ?? rangeLabel}</strong>. Try{' '}
+                <strong>All Time</strong>
+                {byYear ? ' or a different year' : ''} to view historical
+                analytics.
               </p>
             </div>
           )}
@@ -300,7 +367,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     />
                   </div>
                 ) : (
-                  <EmptyState text="No appointment outcome data available." />
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon="chart"
+                    title="No outcome data"
+                    text="No appointment outcome data available."
+                  />
                 )}
               </div>
 
@@ -322,7 +394,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState text="No appointment reason data available." />
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon="chart"
+                    title="No reasons recorded"
+                    text="No appointment reason data available."
+                  />
                 )}
               </div>
 
@@ -344,7 +421,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState text="No peak-hour data available." />
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon="chart"
+                    title="No peak-hour data"
+                    text="No peak-hour data available."
+                  />
                 )}
               </div>
             </div>
@@ -377,7 +459,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState text="No service data available." />
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon="chart"
+                    title="No service data"
+                    text="No service data available."
+                  />
                 )}
               </div>
 
@@ -413,7 +500,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState text="No age-group data available." />
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon="users"
+                    title="No age-group data"
+                    text="No age-group data available."
+                  />
                 )}
               </div>
             </div>
@@ -472,7 +564,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     </div>
                   </div>
                 ) : (
-                  <EmptyState text="No medical case data available." />
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon="chart"
+                    title="No medical case data"
+                    text="No medical case data available."
+                  />
                 )}
               </div>
 
@@ -504,7 +601,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                   <p className={`${sub} mt-1 mb-5`}>
                     Additional demographic indicators.
                   </p>
-                  <EmptyState text="No demographic data available." />
+                  <EmptyState
+                    darkMode={darkMode}
+                    icon="users"
+                    title="No demographic data"
+                    text="No demographic data available."
+                  />
                 </div>
               )}
             </div>
