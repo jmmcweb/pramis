@@ -18,6 +18,7 @@ export function isYearRangeKey(key: AnalyticsRangeKey): boolean {
 
 export const ANALYTICS_REPORT_SECTIONS = [
   { key: 'summary', label: 'Key performance indicators' },
+  { key: 'executiveSummary', label: 'Executive summary & key findings' },
   { key: 'serviceShare', label: 'Service utilization' },
   { key: 'reasons', label: 'Top appointment reasons' },
   { key: 'outcomes', label: 'Appointment outcomes' },
@@ -31,6 +32,7 @@ export const ANALYTICS_REPORT_SECTIONS = [
   { key: 'pwdStats', label: 'PWD & senior citizen overview' },
   { key: 'dailyTrend', label: 'Daily appointment trend' },
   { key: 'weeklyTrend', label: 'Weekly appointment trend' },
+  { key: 'monthlyTrend', label: 'Monthly rollup' },
   { key: 'serviceMatrix', label: 'Service breakdown table' },
   { key: 'topPatients', label: 'Most frequent patients' },
   { key: 'patientAppendix', label: 'Patient-level appendix' },
@@ -124,5 +126,16 @@ export const DEFAULT_ANALYTICS_DETAIL_COLUMNS: AnalyticsDetailColumn[] = [
   { key: 'age', label: 'Age', align: 'right' },
   { key: 'sex', label: 'Sex' },
   { key: 'service', label: 'Service' },
+  { key: 'date', label: 'Date' },
+]
+
+export const ANALYTICS_APPENDIX_COLUMNS: AnalyticsDetailColumn[] = [
+  { key: 'patientName', label: 'Patient' },
+  { key: 'age', label: 'Age', align: 'right' },
+  { key: 'sex', label: 'Sex' },
+  { key: 'service', label: 'Service' },
+  { key: 'reason', label: 'Reason' },
+  { key: 'outcome', label: 'Outcome' },
+  { key: 'diagnosis', label: 'Diagnosis' },
   { key: 'date', label: 'Date' },
 ]

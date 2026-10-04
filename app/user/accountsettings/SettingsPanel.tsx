@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useActionState } from 'react'
 import { toast } from 'sonner'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { updateMe, updateMePassword } from '@/lib/actions/me'
 import { useDarkMode } from '@/components/globals/DarkModeContext'
 import FontSizeSetting from '@/components/globals/FontSizeSetting'
+import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
 import { ChevronLeft } from 'lucide-react'
 
 type SettingsUser = {
@@ -27,6 +28,7 @@ const sections = [
 export default function SettingsPanel({ user }: { user: SettingsUser }) {
   const [active, setActive] = useState('account')
   const { darkMode, setDarkMode } = useDarkMode()
+  const { requestLogout, logoutDialog } = useLogoutConfirmation({ darkMode })
   const [isMobile, setIsMobile] = useState(false)
   const [mobileScreen, setMobileScreen] = useState<'menu' | 'detail'>('menu')
   const [toggles, setToggles] = useState({
@@ -480,7 +482,7 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
       />
       <button
         className={`w-full flex items-center gap-3 px-5 py-2.5 border-none bg-transparent text-[15px] font-semibold font-poppins cursor-pointer text-left transition-colors whitespace-nowrap max-[900px]:px-4 max-[900px]:text-[14px] text-red-500 ${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-red-50'}`}
-        onClick={() => signOut({ callbackUrl: '/login' })}
+        onClick={requestLogout}
       >
         Log Out
       </button>
@@ -525,6 +527,7 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
           )}
         </>
       )}
+      {logoutDialog}
     </div>
   )
 }

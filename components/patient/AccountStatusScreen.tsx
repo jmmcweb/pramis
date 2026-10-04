@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { signOut } from 'next-auth/react'
 import { Clock3, LayoutDashboard, LogOut, ShieldAlert } from 'lucide-react'
 import AccountStatusWatcher from '@/components/patient/AccountStatusWatcher'
+import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
 
 export default function AccountStatusScreen({
   status,
@@ -16,6 +16,7 @@ export default function AccountStatusScreen({
   // Rejection is stored as `INACTIVE` in the database and normalized to
   // `REJECTED` by the guard/status APIs; accept both for safety.
   const isRejected = status === 'REJECTED' || status === 'INACTIVE'
+  const { requestLogout, logoutDialog } = useLogoutConfirmation()
 
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-4">
@@ -86,7 +87,7 @@ export default function AccountStatusScreen({
           {showSignOut && (
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={requestLogout}
               className="inline-flex items-center justify-center gap-2 w-full bg-white dark:bg-card border border-line text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-soft py-3 rounded-xl font-semibold text-sm transition-colors"
             >
               <LogOut className="w-4 h-4" aria-hidden="true" />
@@ -95,6 +96,7 @@ export default function AccountStatusScreen({
           )}
         </div>
       </div>
+      {logoutDialog}
     </div>
   )
 }

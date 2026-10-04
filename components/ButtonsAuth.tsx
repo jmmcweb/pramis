@@ -1,7 +1,8 @@
 'use client'
 
-import { signIn, signOut } from 'next-auth/react'
+import { signIn } from 'next-auth/react'
 import { LogOut } from 'lucide-react'
+import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
 
 export function ButtonSignIn({
   className,
@@ -18,15 +19,15 @@ export function ButtonSignIn({
 }
 
 export function ButtonSignOut({ className }: { className?: string }) {
+  const { requestLogout, logoutDialog } = useLogoutConfirmation()
+
   return (
-    <button
-      onClick={() => {
-        signOut()
-      }}
-      className={`button w-full justify-start ${className}`}
-    >
-      <LogOut className="inline mr-2 mb-1" />
-      Logout
-    </button>
+    <>
+      <button onClick={requestLogout} className={`button w-full justify-start ${className}`}>
+        <LogOut className="inline mr-2 mb-1" />
+        Logout
+      </button>
+      {logoutDialog}
+    </>
   )
 }

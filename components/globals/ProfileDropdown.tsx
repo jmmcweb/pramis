@@ -2,8 +2,9 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { signOut, useSession } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { LogOut, Settings, UserRound } from 'lucide-react'
+import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
 
 interface ProfileDropdownProps {
   onClose: () => void
@@ -49,6 +50,7 @@ export default function ProfileDropdown({
 }: ProfileDropdownProps) {
   const router = useRouter()
   const { data: session } = useSession()
+  const { requestLogout, logoutDialog } = useLogoutConfirmation({ darkMode })
 
   const image = photo ?? session?.user?.image
   const name = session?.user?.name?.trim() || fallbackName
@@ -61,8 +63,7 @@ export default function ProfileDropdown({
   }
 
   const handleSignOut = () => {
-    onClose()
-    signOut({ callbackUrl: '/login' })
+    requestLogout()
   }
 
   const isDark = darkMode ?? false
@@ -223,6 +224,7 @@ export default function ProfileDropdown({
           </button>
         </div>
       </div>
+      {logoutDialog}
     </>
   )
 }

@@ -195,6 +195,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
       let patientRows: AnalyticsDetailRow[] | undefined
       let patientRowsTruncated = false
+      let patientRowsTotal: number | undefined
       if (sections.includes('patientAppendix')) {
         try {
           const res = await getAnalyticsSectionRows(
@@ -205,6 +206,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
           )
           if (res.success) {
             patientRows = res.rows
+            patientRowsTotal = res.totalMatched
             patientRowsTruncated = res.totalMatched > res.rows.length
           }
         } catch {
@@ -220,6 +222,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
         sections,
         patientRows,
         patientRowsTruncated,
+        patientRowsTotal,
         appendixSection: 'serviceShare',
       })
 

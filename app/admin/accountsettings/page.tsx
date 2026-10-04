@@ -1,17 +1,21 @@
 'use client'
 
 import { useDarkMode } from '@/app/admin/DarkModeContext'
-import { signOut } from 'next-auth/react'
+import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
 import Settings from './settings'
 
 export default function SettingsPage() {
   const { darkMode, setDarkMode } = useDarkMode()
+  const { requestLogout, logoutDialog } = useLogoutConfirmation({ darkMode })
 
   return (
-    <Settings
-      darkMode={darkMode}
-      setDarkMode={setDarkMode}
-      onLogout={() => signOut({ callbackUrl: '/login' })}
-    />
+    <>
+      <Settings
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        onLogout={requestLogout}
+      />
+      {logoutDialog}
+    </>
   )
 }

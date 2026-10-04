@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { signOut, useSession } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useDarkMode, DarkModeProvider } from '@/app/admin/DarkModeContext'
 import {
   ProfilePhotoProvider,
@@ -12,6 +12,7 @@ import {
 import SidebarFooter from '@/components/globals/SidebarFooter'
 import { useNotifications } from '@/components/patient/useNotifications'
 import StaffStatusWatcher from '@/components/staff/StaffStatusWatcher'
+import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
 import type { PatientNotification } from '@/components/patient/notificationData'
 
 const navItems = [
@@ -94,6 +95,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   const { notifications, unreadCount, refresh, markRead, markAllRead } =
     useNotifications()
+  const { requestLogout, logoutDialog } = useLogoutConfirmation({ darkMode })
 
   return (
     <div
@@ -202,8 +204,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           />
         )}
         {profileOpen && (
-          <ProfileDropdown onClose={() => setProfileOpen(false)} />
+          <ProfileDropdown
+            onClose={() => setProfileOpen(false)}
+            onSignOut={requestLogout}
+          />
         )}
+        {logoutDialog}
 
         <div
           className={`flex-1 px-4 sm:px-6 lg:px-12 pt-5 pb-12 ${darkMode ? 'bg-[#050617]/40' : ''}`}
@@ -430,7 +436,13 @@ function NotificationDropdown({
   )
 }
 
-function ProfileDropdown({ onClose }: { onClose: () => void }) {
+function ProfileDropdown({
+  onClose,
+  onSignOut,
+}: {
+  onClose: () => void
+  onSignOut: () => void
+}) {
   const { darkMode, setDarkMode } = useDarkMode()
   const { photo } = useProfilePhoto()
   const { data: session } = useSession()
@@ -549,7 +561,8 @@ function ProfileDropdown({ onClose }: { onClose: () => void }) {
           <button
             className={`flex items-center gap-3 w-full px-5 py-2.5 border-none bg-transparent text-sm font-semibold cursor-pointer font-poppins text-left ${darkMode ? 'text-red-400 hover:bg-[#0f1438]' : 'text-red-500 hover:bg-gray-50'}`}
             onClick={() => {
-              signOut({ callbackUrl: '/login' })
+              onClose()
+              onSignOut()
             }}
           >
             <svg
