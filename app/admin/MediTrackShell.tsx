@@ -43,6 +43,11 @@ const navItems = [
     icon: '/calendar.png',
   },
   { href: '/admin/auditlogs', label: 'Audit Logs', icon: '/record.png' },
+  {
+    href: '/admin/backup',
+    label: 'Database Backup',
+    icon: '/record.png',
+  },
 ]
 
 const notificationCategories = [

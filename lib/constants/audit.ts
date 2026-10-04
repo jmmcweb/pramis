@@ -34,6 +34,7 @@ export const AUDIT_ENTITIES = [
   'EVENT',
   'AUTH',
   'PROFILE',
+  'BACKUP',
 ] as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
@@ -71,6 +72,7 @@ export const AUDIT_ENTITY_LABELS: Record<string, string> = {
   EVENT: 'Event',
   AUTH: 'Authentication',
   PROFILE: 'Profile',
+  BACKUP: 'Database Backup',
 }
 
 export const AUDIT_ROLE_LABELS: Record<string, string> = {

@@ -18,6 +18,7 @@
     "db:studio": "dotenv -e .env.local -- npx prisma studio",
     "smtp:check": "node scripts/smtp-diagnose.mjs",
     "smtp:check:e2e": "dotenv -e .env.local -- npx tsx scripts/smtp-e2e-check.ts",
+    "db:backup": "dotenv -e .env.local -- npx tsx scripts/db-backup-e2e.ts",
     "test": "jest"
   },
   "prisma": {
@@ -27,6 +28,7 @@
     "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-neon": "^7.8.0",
     "@prisma/client": "^7.9.0",
+    "@vercel/blob": "^2.4.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "jspdf": "^4.2.1",
