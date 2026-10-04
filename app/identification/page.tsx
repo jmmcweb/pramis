@@ -333,7 +333,7 @@ const Identification = () => {
               {idType || 'Select your valid ID'}
             </span>
             <span className="text-[11px] text-slate truncate hidden sm:block">
-              {idType ? PHILIPPINE_IDS.find((id) => id.name === idType)?.note : '18 options'}
+              {idType ? PHILIPPINE_IDS.find((id) => id.name === idType)?.note : ''}
             </span>
             <ChevronDown
               size={16}

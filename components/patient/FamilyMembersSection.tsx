@@ -4,11 +4,42 @@ import { useActionState, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { BadgeCheck, Cake, Check, ChevronDown, HeartHandshake, Loader2, MapPin, Pencil, Phone, Plus, Trash2, UserRound, Users, VenusAndMars, X } from 'lucide-react'
 import { deleteFamilyMember, saveFamilyMember } from '@/lib/actions/me'
-import { FIXED_ADDRESS, PUROKS, splitHouseAndPurok } from '@/src/data/patientInfo'
+import { BLOOD_TYPES, FIXED_ADDRESS, PUROKS, splitHouseAndPurok } from '@/src/data/patientInfo'
 import type { FamilyMemberRow, MyProfileView } from '@/src/data/patientInfo'
+import { FAMILY_MEMBER_OPTIONS } from '@/src/data/itrAdult'
+
+// Relations offered in the Relation dropdown, reusing the ITR's canonical list
+// so family members and ITR records stay consistent.
+const RELATIONS = FAMILY_MEMBER_OPTIONS.map((option) => option.value)
 
 const rowInputClass =
   'w-full rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold text-body shadow-[inset_0_1px_2px_rgb(15_88_139/0.06)] outline-none transition-all placeholder:font-normal placeholder:text-muted/70 focus:border-brand focus:ring-4 focus:ring-brand/15 dark:bg-white/[0.04]'
+
+// Small caption rendered above each input so every field in the family member
+// form has a persistent, visible label (placeholders alone disappear while typing).
+function FieldLabel({
+  htmlFor,
+  children,
+  optional = false,
+}: {
+  htmlFor: string
+  children: React.ReactNode
+  optional?: boolean
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="mb-1 flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.08em] text-muted"
+    >
+      {children}
+      {optional && (
+        <span className="rounded-full bg-surface px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal text-muted dark:bg-white/[0.06]">
+          optional
+        </span>
+      )}
+    </label>
+  )
+}
 
 // Prefix used for client-only member ids that have not been saved to the
 // database yet. Once saved, the real `FAM...` reference id replaces it.
@@ -96,6 +127,9 @@ function MemberCard({
   const [formKey, setFormKey] = useState(0)
 
   const isNew = member.id.startsWith(TEMP_ID_PREFIX)
+  // Prefix for the `for`/`id` pair of every labelled control, scoped per card so
+  // multiple member cards on the same page never share ids.
+  const uid = `fm-${member.id.replace(/[^a-zA-Z0-9_-]/g, '')}`
   // New (unsaved) cards start in edit mode so the Save button is visible.
   // Existing (saved) cards start read-only; the button shows as Edit.
   const [isEditing, setIsEditing] = useState(isNew)
@@ -262,24 +296,38 @@ function MemberCard({
         )}
       </div>
 
-      <input
-        name="name"
-        placeholder="Full Name"
-        defaultValue={member.name}
-        className={rowInputClass}
-      />
-      {errors?.name && (
-        <p className="text-xs font-medium text-red-500 mt-1">{errors.name}</p>
-      )}
+      <div>
+        <FieldLabel htmlFor={`${uid}-name`}>Full Name</FieldLabel>
+        <input
+          id={`${uid}-name`}
+          name="name"
+          placeholder="e.g. Juan Dela Cruz"
+          defaultValue={member.name}
+          className={rowInputClass}
+        />
+        {errors?.name && (
+          <p className="text-xs font-medium text-red-500 mt-1">{errors.name}</p>
+        )}
+      </div>
 
-      <div className="grid grid-cols-2 gap-2 mt-2">
+      <div className="grid grid-cols-2 gap-2 mt-3">
         <div>
-          <input
+          <FieldLabel htmlFor={`${uid}-relation`}>Relation</FieldLabel>
+          <select
+            id={`${uid}-relation`}
             name="relation"
-            placeholder="Relation"
             defaultValue={member.relation}
-            className={rowInputClass}
-          />
+            className={`${rowInputClass} cursor-pointer`}
+          >
+            <option value="">Select relation</option>
+            {Array.from(
+              new Set([...RELATIONS, ...(member.relation ? [member.relation] : [])]),
+            ).map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           {errors?.relation && (
             <p className="text-xs font-medium text-red-500 mt-1">
               {errors.relation}
@@ -287,27 +335,32 @@ function MemberCard({
           )}
         </div>
 
-        <input
-          name="phone"
-          placeholder="Phone Number"
-          defaultValue={member.phone}
-          className={rowInputClass}
-        />
+        <div>
+          <FieldLabel htmlFor={`${uid}-phone`} optional>
+            Phone Number
+          </FieldLabel>
+          <input
+            id={`${uid}-phone`}
+            name="phone"
+            inputMode="tel"
+            placeholder="09XX XXX XXXX"
+            defaultValue={member.phone}
+            className={rowInputClass}
+          />
+        </div>
       </div>
 
-      <p className="mb-1.5 mt-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+      <p className="mb-2 mt-5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
         Patient Info
-        <span className="rounded-full bg-surface px-2 py-0.5 font-semibold normal-case tracking-normal dark:bg-white/[0.06]">
-          auto-fills the ITR
-        </span>
       </p>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
+          <FieldLabel htmlFor={`${uid}-birthdate`}>Birthdate</FieldLabel>
           <input
+            id={`${uid}-birthdate`}
             name="birthdate"
             type="date"
-            aria-label="Birthdate"
             defaultValue={member.birthdate}
             className={rowInputClass}
           />
@@ -318,53 +371,62 @@ function MemberCard({
           )}
         </div>
 
-        <select
-          name="sex"
-          aria-label="Sex"
-          defaultValue={member.sex}
-          className={`${rowInputClass} cursor-pointer`}
-        >
-          <option value="">Sex</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
+        <div>
+          <FieldLabel htmlFor={`${uid}-sex`}>Sex</FieldLabel>
+          <select
+            id={`${uid}-sex`}
+            name="sex"
+            defaultValue={member.sex}
+            className={`${rowInputClass} cursor-pointer`}
+          >
+            <option value="">---</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
       </div>
 
-      <p className="mb-1.5 mt-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+      <p className="mb-2 mt-5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
         Address
-        <span className="rounded-full bg-surface px-2 py-0.5 font-semibold normal-case tracking-normal dark:bg-white/[0.06]">
-          Sumapang Matanda only
-        </span>
       </p>
 
       <div className="grid grid-cols-2 gap-2">
-        <input
-          name="houseNumber"
-          placeholder="Street (e.g. Mabini Street)"
-          defaultValue={member.houseNumber}
-          className={`${rowInputClass} col-span-2`}
-        />
-
-        <div className="relative col-span-2">
-          <select
-            name="purok"
-            aria-label="Purok"
-            defaultValue={member.purok}
-            className={`${rowInputClass} cursor-pointer appearance-none pr-9`}
-          >
-            <option value="">Select Purok</option>
-            {Array.from(
-              new Set([...PUROKS, ...(member.purok ? [member.purok] : [])]),
-            ).map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
-            aria-hidden="true"
+        <div className="col-span-2">
+          <FieldLabel htmlFor={`${uid}-houseNumber`}>
+            Street
+          </FieldLabel>
+          <input
+            id={`${uid}-houseNumber`}
+            name="houseNumber"
+            placeholder="e.g. Mabini Street"
+            defaultValue={member.houseNumber}
+            className={rowInputClass}
           />
+        </div>
+
+        <div className="col-span-2">
+          <FieldLabel htmlFor={`${uid}-purok`}>Purok</FieldLabel>
+          <div className="relative">
+            <select
+              id={`${uid}-purok`}
+              name="purok"
+              defaultValue={member.purok}
+              className={`${rowInputClass} cursor-pointer appearance-none pr-9`}
+            >
+              <option value="">Select Purok</option>
+              {Array.from(
+                new Set([...PUROKS, ...(member.purok ? [member.purok] : [])]),
+              ).map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+              aria-hidden="true"
+            />
+          </div>
         </div>
       </div>
 
@@ -380,60 +442,104 @@ function MemberCard({
       <input type="hidden" name="province" value={FIXED_ADDRESS.province} />
       <input type="hidden" name="zipCode" value={FIXED_ADDRESS.zipCode} />
 
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-4">
+        <FieldLabel htmlFor={`${uid}-philHealthNo`} optional>
+          PhilHealth No.
+        </FieldLabel>
         <input
+          id={`${uid}-philHealthNo`}
           name="philHealthNo"
           placeholder="PhilHealth No."
           defaultValue={member.philHealthNo}
-          className={`${rowInputClass} col-span-2`}
+          className={rowInputClass}
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mt-2">
-        <select
-          name="isPwd"
-          aria-label="PWD status"
-          defaultValue={
-            member.isPwd === true
-              ? 'Yes'
-              : member.isPwd === false
-                ? 'No'
-                : ''
-          }
-          className={`${rowInputClass} cursor-pointer`}
-        >
-          <option value="">PWD?</option>
-          <option value="Yes">Yes — PWD</option>
-          <option value="No">No</option>
-        </select>
+      <div className="grid grid-cols-2 gap-2 mt-3">
+        <div>
+          <FieldLabel htmlFor={`${uid}-isPwd`}>Is the family member a PWD?</FieldLabel>
+          <select
+            id={`${uid}-isPwd`}
+            name="isPwd"
+            defaultValue={
+              member.isPwd === true
+                ? 'Yes'
+                : member.isPwd === false
+                  ? 'No'
+                  : ''
+            }
+            className={`${rowInputClass} cursor-pointer`}
+          >
+            <option value="">---</option>
+            <option value="Yes">Yes — PWD</option>
+            <option value="No">No</option>
+          </select>
+        </div>
 
-        <input
-          name="bloodType"
-          placeholder="Blood Type"
-          defaultValue={member.bloodType}
-          className={rowInputClass}
-        />
+        <div>
+          <FieldLabel htmlFor={`${uid}-bloodType`} optional>
+            Blood Type
+          </FieldLabel>
+          <select
+            id={`${uid}-bloodType`}
+            name="bloodType"
+            defaultValue={member.bloodType}
+            className={`${rowInputClass} cursor-pointer`}
+          >
+            <option value="">---</option>
+            {Array.from(
+              new Set([
+                ...BLOOD_TYPES,
+                ...(member.bloodType ? [member.bloodType] : []),
+              ]),
+            ).map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-        <input
-          name="religion"
-          placeholder="Religion"
-          defaultValue={member.religion}
-          className={rowInputClass}
-        />
+      <div className="grid grid-cols-2 gap-2 mt-3">
+        <div>
+          <FieldLabel htmlFor={`${uid}-religion`} optional>
+            Religion
+          </FieldLabel>
+          <input
+            id={`${uid}-religion`}
+            name="religion"
+            placeholder="Religion"
+            defaultValue={member.religion}
+            className={rowInputClass}
+          />
+        </div>
 
-        <input
-          name="fathersName"
-          placeholder="Father's Name"
-          defaultValue={member.fathersName}
-          className={rowInputClass}
-        />
+        <div>
+          <FieldLabel htmlFor={`${uid}-fathersName`} optional>
+            Father&apos;s Name
+          </FieldLabel>
+          <input
+            id={`${uid}-fathersName`}
+            name="fathersName"
+            placeholder="Father's Name"
+            defaultValue={member.fathersName}
+            className={rowInputClass}
+          />
+        </div>
 
-        <input
-          name="mothersName"
-          placeholder="Mother's Name"
-          defaultValue={member.mothersName}
-          className={rowInputClass}
-        />
+        <div className="col-span-2">
+          <FieldLabel htmlFor={`${uid}-mothersName`} optional>
+            Mother&apos;s Name
+          </FieldLabel>
+          <input
+            id={`${uid}-mothersName`}
+            name="mothersName"
+            placeholder="Mother's Name"
+            defaultValue={member.mothersName}
+            className={rowInputClass}
+          />
+        </div>
       </div>
 
 

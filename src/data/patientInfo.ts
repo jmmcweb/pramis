@@ -48,6 +48,18 @@ export const PUROKS: string[] = [
   'Purok 8',
 ]
 
+// List of the eight possible human blood types, used for the blood type dropdowns.
+export const BLOOD_TYPES: string[] = [
+  'A+',
+  'A-',
+  'B+',
+  'B-',
+  'AB+',
+  'AB-',
+  'O+',
+  'O-',
+]
+
 // Returns the fixed address for the application.
 export type AddressOptions = {
   success: boolean

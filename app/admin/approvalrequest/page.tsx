@@ -165,13 +165,18 @@ export default function UserManagementPage() {
         return
       }
 
+      const data = await response.json().catch(() => ({}))
       setPatients((prev) =>
         prev.map((a) =>
           a.status === 'Pending' ? { ...a, status: 'Approved' } : a,
         ),
       )
+      const failed: number = data.emailFailures?.length ?? 0
       toast.success(
-        `Successfully approved all ${pendingList.length} pending user account(s)!`,
+        `Successfully approved all ${pendingList.length} pending user account(s)!` +
+          (failed > 0
+            ? ` ${failed} approval email(s) failed to send.`
+            : ' Approval emails sent.'),
       )
     } catch {
       toast.error('Failed to execute bulk approval.')
@@ -200,15 +205,20 @@ export default function UserManagementPage() {
       toast.error(data.message || 'Unable to update approval request')
       return
     }
+    const data = await response.json().catch(() => ({}))
     const status: AccountStatus = action === 'approve' ? 'Approved' : 'Rejected'
     setPatients((prev) =>
       prev.map((a) => (a.id === account.id ? { ...a, status } : a)),
     )
-    toast.success(
-      action === 'approve'
-        ? `${fullName(account)} has been approved`
-        : `${fullName(account)} has been rejected`,
-    )
+    if (action === 'approve') {
+      toast.success(
+        data.emailSent
+          ? `${fullName(account)} has been approved and notified by email`
+          : `${fullName(account)} has been approved, but the notification email could not be sent`,
+      )
+    } else {
+      toast.success(`${fullName(account)} has been rejected`)
+    }
     setRejecting(false)
   }
 

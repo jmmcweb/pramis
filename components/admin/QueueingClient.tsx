@@ -89,7 +89,9 @@ export default function QueueingClient({
   const [walkInResult, setWalkInResult] = useState<{
     patientId: string
     email?: string
-    tempPassword?: string
+    // The temp password itself is never sent to the browser — only whether the
+    // email carrying it went out.
+    credentialsEmailed?: boolean
   } | null>(null)
 
   const setNewField =
@@ -207,10 +209,12 @@ export default function QueueingClient({
     })
   }
 
-  // Selecting a shortlist row is equivalent to a verified ID lookup.
+  // Selecting a shortlist row is equivalent to a verified ID lookup. Candidates
+  // that have no patient record yet keep the typed name in the box, since there
+  // is no PTN-#### to show until they are queued.
   const pickMatch = (p: PatientLookup) => {
     setMatches([])
-    setSearch(p.patientId)
+    setSearch(p.patientId || p.name)
     applyPatientLookup(p)
   }
 
@@ -254,17 +258,17 @@ export default function QueueingClient({
       if (res.success) {
         toast.success(res.message)
         refresh()
-        // Stay open on the result panel so the generated login credentials
-        // can be handed to the patient.
+        // Stay open on the result panel so the patient ID / email notice can be
+        // read out to the patient.
         const p = (res.payload ?? {}) as {
           patientId?: string
           email?: string
-          tempPassword?: string
+          credentialsEmailed?: boolean
         }
         setWalkInResult({
           patientId: p.patientId ?? '',
           email: p.email,
-          tempPassword: p.tempPassword,
+          credentialsEmailed: p.credentialsEmailed,
         })
       } else {
         toast.error(res.message)
@@ -290,7 +294,14 @@ export default function QueueingClient({
   const submitAdd = () => {
     if (!patient) return
     const fd = new FormData()
-    fd.set('patientId', patient.patientId)
+    if (patient.patientId) {
+      fd.set('patientId', patient.patientId)
+    } else {
+      // No patient record yet — queue by account identity and let the server
+      // generate the PTN-####.
+      fd.set('userId', patient.userId ?? '')
+      if (patient.familyMemberId) fd.set('familyMemberId', patient.familyMemberId)
+    }
     
     // DB-verified senior/PWD always goes to priority (senior wins the tie).
     const qualifiesForPriority =
@@ -465,7 +476,7 @@ export default function QueueingClient({
               </div>
 
               {walkInResult ? (
-                /* Success panel — surfaces the generated login credentials */
+                /* Success panel — confirms the queue add and the emailed login details */
                 <div className="flex flex-col items-center text-center gap-2 py-4">
                   <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-6 h-6 text-green-600">
@@ -476,17 +487,15 @@ export default function QueueingClient({
                   <p className={`m-0 text-[14px] font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                     Patient <span className="font-bold">{walkInResult.patientId}</span> was added to today&rsquo;s queue.
                   </p>
-                  {walkInResult.tempPassword && (
+                  {walkInResult.email && (
                     <div className={`mt-2 w-full rounded-xl border p-4 text-left ${darkMode ? 'bg-[#0f1438] border-[#4E69D3]/40' : 'bg-[#F0FDF4] border-green-200'}`}>
                       <p className={`m-0 mb-1 text-[13px] font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#166534]'}`}>
-                        Login account created{walkInResult.email ? ` for ${walkInResult.email}` : ''}
+                        Login account created for {walkInResult.email}
                       </p>
                       <p className={`m-0 text-[13px] font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        Temporary password:{' '}
-                        <span className={`font-mono font-bold text-[15px] ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}>{walkInResult.tempPassword}</span>
-                      </p>
-                      <p className={`m-0 mt-1 text-[12px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Give these to the patient — they can sign in and change their password anytime.
+                        {walkInResult.credentialsEmailed
+                          ? 'The temporary password has been emailed to the patient.'
+                          : 'The email could not be sent — ask the patient to use “Forgot password” on the login page to set their own.'}
                       </p>
                     </div>
                   )}
@@ -572,9 +581,9 @@ export default function QueueingClient({
                   <div className={`rounded-xl border mb-4 overflow-hidden ${darkMode ? 'bg-[#0f1438] border-[rgba(255,255,255,0.15)]' : 'bg-white border-gray-200'}`}>
                     <p className={`m-0 px-3.5 pt-3 text-[12px] font-bold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{matches.length} matching {matches.length > 1 ? 'patients' : 'patient'} — select the right one</p>
                     <div className="max-h-[220px] overflow-y-auto p-2">
-                      {matches.map(m => (
+                      {matches.map((m, i) => (
                         <button
-                          key={m.patientId}
+                          key={m.patientId || `${m.userId ?? 'u'}-${m.familyMemberId ?? 'self'}-${i}`}
                           type="button"
                           onClick={() => pickMatch(m)}
                           className={`w-full flex items-center gap-3 p-2.5 rounded-lg border-none text-left cursor-pointer transition-colors ${darkMode ? 'bg-transparent hover:bg-[#1a2050]' : 'bg-transparent hover:bg-[#f2f6ff]'}`}
@@ -582,7 +591,13 @@ export default function QueueingClient({
                           <span className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-[14px] bg-[#E8EAF6] text-[#4E69D3]">{(m.name || m.patientId).charAt(0)}</span>
                           <span className="flex-1 min-w-0">
                             <span className={`block text-[14px] font-bold truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{m.name || m.patientId}</span>
-                            <span className={`block text-[12px] font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}>{m.patientId}{m.hasAccount ? '' : ' \u00B7 No account'}{m.barangay ? ` \u00B7 ${m.barangay}` : ''}</span>
+                            <span className={`block text-[12px] font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}>
+                              {m.patientId ? (
+                                <>{m.patientId}{m.hasAccount ? '' : ' \u00B7 No account'}{m.barangay ? ` \u00B7 ${m.barangay}` : ''}</>
+                              ) : (
+                                <>Account registered{m.familyMemberId ? ' \u00B7 Family member' : ''} \u00B7 ID generated on add</>
+                              )}
+                            </span>
                           </span>
                           {m.isSenior && <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-600">Senior</span>}
                           {m.isPwd && <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-violet-500/10 text-violet-600">PWD</span>}
@@ -594,7 +609,11 @@ export default function QueueingClient({
                 {searchState === 'found' && patient && (
                   <div className={`rounded-xl border p-3.5 mb-4 ${darkMode ? 'bg-[#0f1438] border-green-500/30' : 'bg-[#F0FDF4] border-green-200'}`}>
                     <span className={`text-[15px] font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#166534]'}`}>{patient.name || patient.patientId}</span>
-                    <span className={`ml-2 text-[13px] font-semibold ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}>{patient.patientId}{patient.hasAccount ? '' : ' \u00B7 No account'}</span>
+                    <span className={`ml-2 text-[13px] font-semibold ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}>
+                      {patient.patientId
+                        ? `${patient.patientId}${patient.hasAccount ? '' : ' \u00B7 No account'}`
+                        : `Account registered${patient.familyMemberId ? ' \u00B7 Family member' : ''} \u00B7 Patient ID will be generated`}
+                    </span>
                   </div>
                 )}
                 {searchState === 'notfound' && (
@@ -667,16 +686,22 @@ export default function QueueingClient({
                 </>
               )}
 
-              {/* Service — required when registering a new walk-in */}
-              <p className={`m-0 mb-2 text-[13px] font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{mode === 'new' ? 'Service *' : '3. Service (optional)'}</p>
-              <select
-                value={serviceId}
-                onChange={e => setServiceId(e.target.value)}
-                className={`w-full px-3.5 py-2.5 rounded-lg text-[15px] outline-none transition-colors cursor-pointer border ${darkMode ? 'bg-[#0f1438] text-[#F9FAFB] border-[rgba(255,255,255,0.15)] focus:border-[#4E69D3]' : 'bg-white text-gray-800 border-gray-200 focus:border-[#4E69D3]'}`}
-              >
-                <option value="" disabled={mode === 'new'}>{mode === 'new' ? 'Select service' : 'Unspecified / Triage on arrival'}</option>
-                {services.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
-              </select>
+              {/* Service — required when registering a new walk-in. Hidden once the
+                  walk-in is registered: the patient is already queued, so the
+                  picker is dead weight on the confirmation panel. */}
+              {!walkInResult && (
+                <>
+                  <p className={`m-0 mb-2 text-[13px] font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{mode === 'new' ? 'Service *' : '3. Service (optional)'}</p>
+                  <select
+                    value={serviceId}
+                    onChange={e => setServiceId(e.target.value)}
+                    className={`w-full px-3.5 py-2.5 rounded-lg text-[15px] outline-none transition-colors cursor-pointer border ${darkMode ? 'bg-[#0f1438] text-[#F9FAFB] border-[rgba(255,255,255,0.15)] focus:border-[#4E69D3]' : 'bg-white text-gray-800 border-gray-200 focus:border-[#4E69D3]'}`}
+                  >
+                    <option value="" disabled={mode === 'new'}>{mode === 'new' ? 'Select service' : 'Unspecified / Triage on arrival'}</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                  </select>
+                </>
+              )}
             </div>
 
             <div className={`flex justify-end gap-3 px-7 py-4 border-t ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'} sticky bottom-0 ${darkMode ? 'bg-[#2d1b4e]' : 'bg-white'} rounded-b-2xl`}>

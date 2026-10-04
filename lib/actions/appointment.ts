@@ -41,6 +41,80 @@ const VALID_STATUSES = [
   'NO_SHOW',
 ]
 
+// Emails the patient a "booking received, pending approval" confirmation.
+// Never throws — a mail failure must not roll back a successful booking.
+async function sendBookingConfirmation({
+  to,
+  patientName,
+  forName,
+  serviceName,
+  dateISO,
+  slotId,
+}: {
+  to: string
+  patientName: string
+  forName: string
+  serviceName: string
+  dateISO: string
+  slotId: string
+}): Promise<boolean> {
+  try {
+    return await sendMail({
+      to,
+      subject: `Appointment Booked - ${APP_NAME}`,
+      content: `
+        <p>Hi ${patientName},</p>
+        <p>We have received your appointment request. It is now <strong>pending approval</strong>.</p>
+        <p><strong>Service:</strong> ${serviceName}</p>
+        <p><strong>For:</strong> ${forName}</p>
+        <p><strong>Date:</strong> ${dateISO}</p>
+        <p><strong>Time:</strong> ${getSlotLabel(slotId)}</p>
+        <p>We will email you again as soon as the health center approves it. Thank you!</p>
+      `,
+    })
+  } catch (error) {
+    console.error('[sendBookingConfirmation] Error:', error)
+    return false
+  }
+}
+
+// Emails the patient once staff approve their appointment. Never throws —
+// the status change itself must still succeed when SMTP is down.
+async function sendAppointmentApproved({
+  to,
+  patientName,
+  forName,
+  serviceName,
+  dateISO,
+  slotId,
+}: {
+  to: string
+  patientName: string
+  forName: string
+  serviceName: string
+  dateISO: string
+  slotId: string
+}): Promise<boolean> {
+  try {
+    return await sendMail({
+      to,
+      subject: `Appointment Approved - ${APP_NAME}`,
+      content: `
+        <p>Hi ${patientName},</p>
+        <p>Good news — your appointment has been <strong>approved</strong>.</p>
+        <p><strong>Service:</strong> ${serviceName}</p>
+        <p><strong>For:</strong> ${forName}</p>
+        <p><strong>Date:</strong> ${dateISO}</p>
+        <p><strong>Time:</strong> ${getSlotLabel(slotId)}</p>
+        <p>Please arrive a few minutes early and bring a valid ID. Thank you!</p>
+      `,
+    })
+  } catch (error) {
+    console.error('[sendAppointmentApproved] Error:', error)
+    return false
+  }
+}
+
 // Parses the service metadata from the description field, which may contain JSON-encoded information about the service's description, subtitle, time, and icon. If the description is not in JSON format, it treats it as a plain string and assigns default values for missing fields.
 function parseServiceMeta(description: string | null | undefined): {
   desc: string
@@ -523,6 +597,24 @@ export async function bookAppointment(_prevState: any, formData: FormData) {
       } on ${dateISO} at ${getSlotLabel(slotId)}.`,
     })
 
+    // Email the patient a confirmation so they are not limited to the in-app
+    // notification (many patients never log back in).
+    if (booker?.email) {
+      const emailed = await sendBookingConfirmation({
+        to: booker.email,
+        patientName: bookerName || 'there',
+        forName: familyMember ? familyMember.name : 'yourself',
+        serviceName: service.name,
+        dateISO,
+        slotId,
+      })
+      if (!emailed) {
+        console.error(
+          `[bookAppointment] Confirmation email failed for ${created.appointmentid}`,
+        )
+      }
+    }
+
     return {
       success: true,
       message: `Appointment booked for ${familyMember ? familyMember.name : 'you'} on ${dateISO} at ${getSlotLabel(slotId)}. Status: pending approval.`,
@@ -744,7 +836,12 @@ export async function updateAppointmentStatus(
   try {
     const appointment = await (prisma as any).appointment.findUnique({
       where: { appointmentid: appointmentId },
-      include: { service: true, familyMember: true, medicalHistory: true },
+      include: {
+        service: true,
+        familyMember: true,
+        medicalHistory: true,
+        user: { include: { profile: true } },
+      },
     })
     if (!appointment) {
       return { success: false, message: 'Appointment not found.' }
@@ -839,6 +936,33 @@ export async function updateAppointmentStatus(
         category: 'Appointment',
         ...notice,
       })
+    }
+
+    // Approval is the point where the patient needs to act, so it also goes out
+    // by email. Only sent on a real PENDING -> APPROVED transition, so a
+    // re-run of the same status does not spam the patient.
+    if (
+      status === 'APPROVED' &&
+      appointment.status !== 'APPROVED' &&
+      appointment.user?.email
+    ) {
+      const patientProfile = appointment.user.profile
+      const patientName = patientProfile
+        ? `${patientProfile.firstName ?? ''} ${patientProfile.lastName ?? ''}`.trim()
+        : String(appointment.user.email).split('@')[0]
+      const emailed = await sendAppointmentApproved({
+        to: appointment.user.email,
+        patientName: patientName || 'there',
+        forName: appointment.familyMember?.name ?? 'yourself',
+        serviceName,
+        dateISO: appointment.appointmentAt.toISOString().slice(0, 10),
+        slotId: `${String(appointment.appointmentAt.getUTCHours()).padStart(2, '0')}:00`,
+      })
+      if (!emailed) {
+        console.error(
+          `[updateAppointmentStatus] Approval email failed for ${appointmentId}`,
+        )
+      }
     }
 
     return { success: true, message: `Appointment marked as ${status}.` }
