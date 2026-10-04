@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { nextReferenceId } from '@/lib/referenceId'
 import { notifyAllStaff } from '@/lib/actions/notifications'
 import { PUROKS, FIXED_ADDRESS } from '@/src/data/patientInfo'
+import { isAtLeastAge, MIN_ACCOUNT_AGE, parseISODate } from '@/src/lib/age'
 
 // structure for the signup payload
 type SignupPayload = {
@@ -101,10 +102,20 @@ export async function POST(request: Request) {
     )
   }
 
-  const parsedBirthday = new Date(`${birthday}T00:00:00.000Z`)
-  if (Number.isNaN(parsedBirthday.getTime())) {
+  const parsedBirthday = parseISODate(birthday)
+  if (!parsedBirthday) {
     return NextResponse.json(
       { message: 'Please provide a valid birthday.' },
+      { status: 400 },
+    )
+  }
+
+  // Only adults may hold an account; minors are registered at the desk.
+  if (!isAtLeastAge(parsedBirthday, MIN_ACCOUNT_AGE)) {
+    return NextResponse.json(
+      {
+        message: `You must be at least ${MIN_ACCOUNT_AGE} years old to create an account.`,
+      },
       { status: 400 },
     )
   }

@@ -6,8 +6,16 @@ import { Check, Eye, EyeOff, X } from 'lucide-react'
 import AuthShell from '@/components/auth/AuthShell'
 import Field from '@/components/auth/Field'
 import { useSignup } from '@/store/useSignup'
+import {
+  isAtLeastAge,
+  MIN_ACCOUNT_AGE,
+  parseISODate,
+} from '@/src/lib/age'
 
 type Errors = Record<string, string>
+
+// Upper bound for the birthday picker: today, so future dates cannot be picked.
+const TODAY = new Date().toISOString().slice(0, 10)
 
 // PH mobile numbers only: 10 digits starting with 9, displayed as 917 123 4567.
 const formatMobile = (raw: string) => {
@@ -105,6 +113,12 @@ const Signup = () => {
     if (!firstName.trim()) nextErrors.firstName = 'Enter your first name.'
     if (!lastName.trim()) nextErrors.lastName = 'Enter your last name.'
     if (!birthday) nextErrors.birthday = 'Select your birthday.'
+    else {
+      const parsedBirthday = parseISODate(birthday)
+      if (!parsedBirthday) nextErrors.birthday = 'Enter a valid birthday.'
+      else if (!isAtLeastAge(parsedBirthday, MIN_ACCOUNT_AGE))
+        nextErrors.birthday = `You must be at least ${MIN_ACCOUNT_AGE} years old to register.`
+    }
     if (!gender) nextErrors.gender = 'Select a gender.'
     if (!mobile.trim()) nextErrors.mobile = 'Enter your mobile number.'
     else if (!/^9\d{9}$/.test(mobileDigits(mobile)))
@@ -201,7 +215,11 @@ const Signup = () => {
             name="birthday"
             type="date"
             value={birthday}
-            onChange={(e) => setBirthday(e.target.value)}
+            onChange={(e) => {
+              setBirthday(e.target.value)
+              if (errors.birthday) setErrors((prev) => ({ ...prev, birthday: '' }))
+            }}
+            max={TODAY}
             error={errors.birthday}
             required
           />
