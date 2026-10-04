@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { Pencil, Trash2, Loader2, Plus, CalendarDays, ChevronLeft, ChevronRight, Clock, X } from 'lucide-react'
+import { Pencil, Archive, Loader2, Plus, CalendarDays, ChevronLeft, ChevronRight, Clock, X, RotateCcw } from 'lucide-react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 
 import {
   getEvents,
   createEvent,
   updateEvent,
-  deleteEvent,
+  archiveEvent,
+  restoreEvent,
   type EventItem,
 } from '@/lib/actions/event'
 
@@ -17,7 +18,8 @@ import {
   getServices,
   createService,
   updateService,
-  deleteService,
+  archiveService,
+  restoreService,
   type ServiceItem,
 } from '@/lib/actions/service'
 
@@ -28,14 +30,16 @@ const months = [
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+
 export type ArchiveItem = {
   id?: string
   title: string
   date: string
   time: string
   type: string
-  status: 'Done' | 'Cancelled'
+  status?: 'Scheduled' | 'Done' | 'Cancelled'
   description?: string
+  archivedAt?: string | null
 }
 
 const typeColors: Record<
@@ -175,6 +179,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<Record<string, EventItem[]>>({})
   const [archive, setArchive] = useState<ArchiveItem[]>([])
   const [services, setServices] = useState<ServiceItem[]>([])
+  const [archivedServices, setArchivedServices] = useState<ServiceItem[]>([])
 
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
@@ -192,7 +197,7 @@ export default function EventsPage() {
 
   const [eventModal, setEventModal] = useState(false)
   const [eventEditItem, setEventEditItem] = useState<EventItem | null>(null)
-  const [deleteEventItem, setDeleteEventItem] =
+  const [archiveEventItem, setArchiveEventItem] =
     useState<EventItem | null>(null)
   const [savingEvent, setSavingEvent] = useState(false)
 
@@ -211,7 +216,7 @@ export default function EventsPage() {
   const [serviceEditItem, setServiceEditItem] =
     useState<ServiceItem | null>(null)
 
-  const [deleteServiceItem, setDeleteServiceItem] =
+  const [archiveServiceItem, setArchiveServiceItem] =
     useState<ServiceItem | null>(null)
 
   const [savingService, setSavingService] = useState(false)
@@ -228,9 +233,9 @@ export default function EventsPage() {
     document.body.style.overflow =
       showArchive ||
       serviceModal ||
-      deleteServiceItem !== null ||
+      archiveServiceItem !== null ||
       eventModal ||
-      deleteEventItem !== null
+      archiveEventItem !== null
         ? 'hidden'
         : ''
 
@@ -240,9 +245,9 @@ export default function EventsPage() {
   }, [
     showArchive,
     serviceModal,
-    deleteServiceItem,
+    archiveServiceItem,
     eventModal,
-    deleteEventItem,
+    archiveEventItem,
   ])
 
   const loadData = useCallback(async () => {
@@ -271,6 +276,9 @@ export default function EventsPage() {
 
       if (serviceResult.success) {
         setServices(serviceResult.services || [])
+        setArchivedServices(
+          (serviceResult.archive as ServiceItem[]) || []
+        )
       }
     } catch (error) {
       console.error(error)
@@ -447,11 +455,11 @@ export default function EventsPage() {
     }
   }
 
-  const confirmDeleteEvent = async () => {
-    if (!deleteEventItem?.id) return
+  const confirmArchiveEvent = async () => {
+    if (!archiveEventItem?.id) return
 
     try {
-      const result = await deleteEvent(deleteEventItem.id)
+      const result = await archiveEvent(archiveEventItem.id)
 
       if (result.success) {
         setEvents((prev) => {
@@ -459,7 +467,7 @@ export default function EventsPage() {
 
           for (const date of Object.keys(next)) {
             next[date] = next[date].filter(
-              (event) => event.id !== deleteEventItem.id
+              (event) => event.id !== archiveEventItem.id
             )
 
             if (next[date].length === 0) {
@@ -470,21 +478,68 @@ export default function EventsPage() {
           return next
         })
 
-        setArchive((prev) =>
-          prev.filter(
-            (item) => item.id !== deleteEventItem.id
+        // The event now lives in the archive view rather than being gone, so
+        // drop any stale copy and add the freshly archived one.
+        setArchive((prev) => {
+          const without = prev.filter(
+            (item) => item.id !== archiveEventItem.id
           )
-        )
 
-        toast.success('Event deleted')
+          return result.event
+            ? [result.event as ArchiveItem, ...without]
+            : without
+        })
+
+        toast.success('Event archived')
       } else {
-        toast.error(result.message || 'Failed to delete event')
+        toast.error(result.message || 'Failed to archive event')
       }
     } catch (error) {
       console.error(error)
-      toast.error('Failed to delete event')
+      toast.error('Failed to archive event')
     } finally {
-      setDeleteEventItem(null)
+      setArchiveEventItem(null)
+    }
+  }
+
+  const restoreArchivedEvent = async (event: ArchiveItem) => {
+    if (!event.id) return
+
+    try {
+      const result = await restoreEvent(event.id)
+
+      if (result.success && result.event) {
+        const restored = result.event
+
+        setArchive((prev) =>
+          prev.filter((item) => item.id !== restored.id)
+        )
+
+        if (restored.status === 'Scheduled') {
+          setEvents((prev) => ({
+            ...prev,
+            [restored.date]: [
+              ...(prev[restored.date] || []),
+              restored,
+            ],
+          }))
+        } else {
+          // Done/Cancelled events are surfaced by `getEvents` through the
+          // archive list (not the calendar), so once `archivedAt` is cleared
+          // they belong back in the archive view.
+          setArchive((prev) => [
+            restored as ArchiveItem,
+            ...prev,
+          ])
+        }
+
+        toast.success('Event restored')
+      } else {
+        toast.error(result.message || 'Failed to restore event')
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to restore event')
     }
   }
 
@@ -566,28 +621,66 @@ export default function EventsPage() {
     }
   }
 
-  const confirmDeleteService = async () => {
-    if (!deleteServiceItem?.id) return
+  const confirmArchiveService = async () => {
+    if (!archiveServiceItem?.id) return
 
     try {
-      const result = await deleteService(deleteServiceItem.id)
+      const result = await archiveService(archiveServiceItem.id)
 
       if (result.success) {
         setServices((prev) =>
           prev.filter(
-            (service) => service.id !== deleteServiceItem.id
+            (service) => service.id !== archiveServiceItem.id
           )
         )
 
-        toast.success('Service deleted')
+        setArchivedServices((prev) => {
+          const without = prev.filter(
+            (service) => service.id !== archiveServiceItem.id
+          )
+
+          return result.service
+            ? [result.service, ...without]
+            : without
+        })
+
+        toast.success('Service archived')
       } else {
-        toast.error(result.message || 'Failed to delete service')
+        toast.error(result.message || 'Failed to archive service')
       }
     } catch (error) {
       console.error(error)
-      toast.error('Failed to delete service')
+      toast.error('Failed to archive service')
     } finally {
-      setDeleteServiceItem(null)
+      setArchiveServiceItem(null)
+    }
+  }
+
+  const restoreArchivedService = async (service: ServiceItem) => {
+    if (!service.id) return
+
+    try {
+      const result = await restoreService(service.id)
+
+      if (result.success && result.service) {
+        const restored = result.service
+
+        setArchivedServices((prev) =>
+          prev.filter((item) => item.id !== restored.id)
+        )
+
+        setServices((prev) => [
+          ...prev.filter((item) => item.id !== restored.id),
+          restored,
+        ])
+
+        toast.success('Service restored')
+      } else {
+        toast.error(result.message || 'Failed to restore service')
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to restore service')
     }
   }
 
@@ -741,7 +834,20 @@ export default function EventsPage() {
               transition-colors
             "
           >
-            <CalendarDays size={17} />
+            <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="21 8 21 21 3 21 3 8" />
+                  <rect x="1" y="3" width="22" height="5" />
+                  <line x1="10" y1="12" x2="14" y2="12" />
+                </svg>
             Archive
           </button>
         </div>
@@ -1107,7 +1213,7 @@ export default function EventsPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            setDeleteEventItem(event)
+                            setArchiveEventItem(event)
                           }
                           className={`
                             w-8 h-8 rounded-lg
@@ -1115,13 +1221,13 @@ export default function EventsPage() {
                             border transition-colors
                             ${
                               darkMode
-                                ? 'border-white/10 bg-[#171333] text-red-400 hover:bg-red-500/10'
-                                : 'border-gray-200 bg-white text-red-500 hover:bg-red-50'
+                                ? 'border-white/10 bg-[#171333] text-amber-400 hover:bg-amber-500/10'
+                                : 'border-gray-200 bg-white text-amber-600 hover:bg-amber-50'
                             }
                           `}
-                          title="Delete event"
+                          title="Archive event"
                         >
-                          <Trash2 size={14} />
+                          <Archive size={14} />
                         </button>
                       </div>
                     </div>
@@ -1543,7 +1649,7 @@ export default function EventsPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              setDeleteServiceItem(
+                              setArchiveServiceItem(
                                 service
                               )
                             }
@@ -1553,13 +1659,13 @@ export default function EventsPage() {
                               flex items-center justify-center
                               ${
                                 darkMode
-                                  ? 'bg-[#171333] border-white/10 text-red-400 hover:bg-red-500/10'
-                                  : 'bg-white border-gray-200 text-red-500 hover:bg-red-50'
+                                  ? 'bg-[#171333] border-white/10 text-amber-400 hover:bg-amber-500/10'
+                                  : 'bg-white border-gray-200 text-amber-600 hover:bg-amber-50'
                               }
                             `}
-                            title="Delete service"
+                            title="Archive service"
                           >
-                            <Trash2 size={14} />
+                            <Archive size={14} />
                           </button>
                         </div>
                       </td>
@@ -1804,6 +1910,14 @@ export default function EventsPage() {
                         <th className={tableHeader(darkMode)}>
                           Status
                         </th>
+
+                        <th
+                          className={`${tableHeader(
+                            darkMode
+                          )} text-center w-[110px]`}
+                        >
+                          Actions
+                        </th>
                       </tr>
                     </thead>
 
@@ -1917,12 +2031,69 @@ export default function EventsPage() {
                                     event.status ===
                                     'Done'
                                       ? 'bg-green-100 text-green-700'
-                                      : 'bg-red-100 text-red-700'
+                                      : event.status ===
+                                          'Cancelled'
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-blue-100 text-blue-700'
                                   }
                                 `}
                               >
                                 {event.status}
                               </span>
+                            </td>
+
+                            <td
+                              className={tableCell(
+                                darkMode
+                              )}
+                            >
+                              <div className="flex justify-center">
+                                {event.archivedAt ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      restoreArchivedEvent(
+                                        event
+                                      )
+                                    }
+                                    className={`
+                                      inline-flex
+                                      items-center
+                                      gap-1.5
+                                      px-2.5 py-1.5
+                                      rounded-lg
+                                      text-[11px]
+                                      font-semibold
+                                      border
+                                      transition-colors
+                                      ${
+                                        darkMode
+                                          ? 'border-white/10 bg-[#171333] text-green-400 hover:bg-[#29214d]'
+                                          : 'border-gray-200 bg-white text-green-700 hover:bg-green-50'
+                                      }
+                                    `}
+                                    title="Restore event"
+                                  >
+                                    <RotateCcw
+                                      size={12}
+                                    />
+                                    Restore
+                                  </button>
+                                ) : (
+                                  <span
+                                    className={`
+                                      text-[11px]
+                                      ${
+                                        darkMode
+                                          ? 'text-gray-600'
+                                          : 'text-gray-400'
+                                      }
+                                    `}
+                                  >
+                                    —
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -1931,6 +2102,197 @@ export default function EventsPage() {
                   </table>
                 </div>
               )}
+
+              {/* ARCHIVED SERVICES */}
+              <div className="mt-6">
+                <h3
+                  className={`
+                    text-sm font-bold
+                    mb-2.5
+                    ${
+                      darkMode
+                        ? 'text-white'
+                        : 'text-[#2A2E43]'
+                    }
+                  `}
+                >
+                  Archived Services
+                </h3>
+
+                {archivedServices.length === 0 ? (
+                  <p
+                    className={`
+                      text-xs
+                      ${
+                        darkMode
+                          ? 'text-gray-500'
+                          : 'text-gray-400'
+                      }
+                    `}
+                  >
+                    Archived services will appear here.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto border rounded-lg border-inherit">
+                    <table className="w-full min-w-[600px] border-collapse">
+                      <thead>
+                        <tr
+                          className={
+                            darkMode
+                              ? 'bg-[#171333]'
+                              : 'bg-gray-50'
+                          }
+                        >
+                          <th className={tableHeader(darkMode)}>
+                            Service
+                          </th>
+
+                          <th className={tableHeader(darkMode)}>
+                            Schedule
+                          </th>
+
+                          <th className={tableHeader(darkMode)}>
+                            Time
+                          </th>
+
+                          <th
+                            className={`${tableHeader(
+                              darkMode
+                            )} text-center w-[110px]`}
+                          >
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {archivedServices.map(
+                          (service, index) => (
+                            <tr
+                              key={
+                                service.id ||
+                                service.title ||
+                                index
+                              }
+                              className={`
+                                transition-colors
+                                ${
+                                  darkMode
+                                    ? 'hover:bg-[#171333]'
+                                    : 'hover:bg-gray-50'
+                                }
+                              `}
+                            >
+                              <td
+                                className={tableCell(
+                                  darkMode
+                                )}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg">
+                                    {service.icon}
+                                  </span>
+
+                                  <span
+                                    className={`
+                                      text-sm font-semibold
+                                      ${
+                                        darkMode
+                                          ? 'text-white'
+                                          : 'text-[#2A2E43]'
+                                      }
+                                    `}
+                                  >
+                                    {service.title}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td
+                                className={tableCell(
+                                  darkMode
+                                )}
+                              >
+                                <span
+                                  className={`
+                                    text-xs
+                                    ${
+                                      darkMode
+                                        ? 'text-gray-400'
+                                        : 'text-gray-500'
+                                    }
+                                  `}
+                                >
+                                  {service.subtitle}
+                                </span>
+                              </td>
+
+                              <td
+                                className={tableCell(
+                                  darkMode
+                                )}
+                              >
+                                <span
+                                  className={`
+                                    text-xs
+                                    whitespace-nowrap
+                                    ${
+                                      darkMode
+                                        ? 'text-gray-400'
+                                        : 'text-gray-500'
+                                    }
+                                  `}
+                                >
+                                  {service.time}
+                                </span>
+                              </td>
+
+                              <td
+                                className={tableCell(
+                                  darkMode
+                                )}
+                              >
+                                <div className="flex justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      restoreArchivedService(
+                                        service
+                                      )
+                                    }
+                                    className={`
+                                      inline-flex
+                                      items-center
+                                      gap-1.5
+                                      px-2.5 py-1.5
+                                      rounded-lg
+                                      text-[11px]
+                                      font-semibold
+                                      border
+                                      transition-colors
+                                      ${
+                                        darkMode
+                                          ? 'border-white/10 bg-[#171333] text-green-400 hover:bg-[#29214d]'
+                                          : 'border-gray-200 bg-white text-green-700 hover:bg-green-50'
+                                      }
+                                    `}
+                                    title="Restore service"
+                                  >
+                                    <RotateCcw
+                                      size={12}
+                                    />
+                                    Restore
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
 
             <ModalFooter
@@ -2302,29 +2664,31 @@ export default function EventsPage() {
 
 
 
-      {deleteEventItem && (
-        <DeleteModal
+      {archiveEventItem && (
+        <ArchiveModal
           darkMode={darkMode}
-          title="Delete Event?"
-          itemName={deleteEventItem.title}
+          title="Archive Event?"
+          itemName={archiveEventItem.title}
+          itemLabel="event"
           onCancel={() =>
-            setDeleteEventItem(null)
+            setArchiveEventItem(null)
           }
-          onConfirm={confirmDeleteEvent}
+          onConfirm={confirmArchiveEvent}
         />
       )}
 
 
 
-      {deleteServiceItem && (
-        <DeleteModal
+      {archiveServiceItem && (
+        <ArchiveModal
           darkMode={darkMode}
-          title="Delete Service?"
-          itemName={deleteServiceItem.title}
+          title="Archive Service?"
+          itemName={archiveServiceItem.title}
+          itemLabel="service"
           onCancel={() =>
-            setDeleteServiceItem(null)
+            setArchiveServiceItem(null)
           }
-          onConfirm={confirmDeleteService}
+          onConfirm={confirmArchiveService}
         />
       )}
     </div>
@@ -2576,16 +2940,18 @@ function ModalActions({
   )
 }
 
-function DeleteModal({
+function ArchiveModal({
   darkMode,
   title,
   itemName,
+  itemLabel,
   onCancel,
   onConfirm,
 }: {
   darkMode: boolean
   title: string
   itemName: string
+  itemLabel: string
   onCancel: () => void
   onConfirm: () => void
 }) {
@@ -2610,15 +2976,15 @@ function DeleteModal({
         <div className="p-5">
           <div className="flex items-start gap-3">
             <div
-              className="
+              className={`
                 w-10 h-10 rounded-lg
-                bg-red-50
-                text-red-500
+                bg-amber-50
+                text-amber-600
                 flex items-center justify-center
                 flex-shrink-0
-              "
+              `}
             >
-              <Trash2 size={19} />
+              <Archive size={19} />
             </div>
 
             <div className="min-w-0">
@@ -2645,7 +3011,7 @@ function DeleteModal({
                   }
                 `}
               >
-                Are you sure you want to delete{' '}
+                Are you sure you want to archive this{' '}
                 <strong
                   className={
                     darkMode
@@ -2654,8 +3020,10 @@ function DeleteModal({
                   }
                 >
                   {itemName}
-                </strong>
-                ? This action cannot be undone.
+                </strong>{' '}
+                {itemLabel}? It will be hidden from the active
+                list, but you can restore it at any time
+                from the Archive view.
               </p>
             </div>
           </div>
@@ -2696,14 +3064,14 @@ function DeleteModal({
             className="
               px-4 py-2.5
               rounded-lg
-              bg-red-500
-              hover:bg-red-600
+              bg-amber-500
+              hover:bg-amber-600
               text-white
               text-sm font-semibold
               transition-colors
             "
           >
-            Yes, Delete
+            Yes, Archive
           </button>
         </div>
       </div>

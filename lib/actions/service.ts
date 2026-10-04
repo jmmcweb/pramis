@@ -16,8 +16,15 @@ export type ServiceItem = {
   icon: string
   desc: string
   availability?: boolean
+  archivedAt?: string | null
   createdAt?: Date
   updatedAt?: Date
+}
+
+function toIsoOrNull(value: unknown): string | null {
+  if (!value) return null
+  if (value instanceof Date) return value.toISOString()
+  return String(value)
 }
 
 // Parses a raw service object from the database and converts it into a structured ServiceItem. It extracts metadata from the service description, such as subtitle, time, and icon, and returns a ServiceItem with the relevant properties. If the description is not in JSON format, it defaults to using the raw description as the service description.
@@ -42,6 +49,7 @@ function parseService(s: any): ServiceItem {
     time: normalizeServiceTime(meta.time || SERVICE_TIME_RANGE),
     icon: meta.icon || '🩺',
     availability: s.availability ?? true,
+    archivedAt: toIsoOrNull(s.archivedAt),
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
   }
@@ -151,7 +159,12 @@ export async function getServices() {
     return {
       success: true,
       message: 'Services fetched successfully',
-      services: rawServices.map(parseService),
+      services: rawServices
+        .map(parseService)
+        .filter((s: any) => !s.archivedAt),
+      archive: rawServices
+        .map(parseService)
+        .filter((s: any) => Boolean(s.archivedAt)),
     }
   } catch (error) {
     console.error('[getServices | Prisma | Error]:', error)
@@ -159,6 +172,7 @@ export async function getServices() {
       success: false,
       message: 'Failed to fetch services from database.',
       services: [],
+      archive: [],
     }
   }
 }
@@ -278,7 +292,7 @@ export async function updateService(data: {
   }
 }
 
-export async function deleteService(id: string) {
+export async function archiveService(id: string) {
   const session = await requireUser()
   if (!session) {
     return { success: false, message: 'Unauthorized' }
@@ -291,25 +305,95 @@ export async function deleteService(id: string) {
   try {
     const existing = await (prisma as any).service.findUnique({
       where: { serviceid: id },
-      select: { name: true },
     })
-    await (prisma as any).service.delete({
+
+    if (!existing) {
+      return { success: false, message: 'Service not found.' }
+    }
+
+    if (existing.archivedAt) {
+      return {
+        success: true,
+        message: 'Service is already archived.',
+        service: parseService(existing),
+      }
+    }
+
+    const archived = await (prisma as any).service.update({
       where: { serviceid: id },
+      data: { archivedAt: new Date() },
     })
 
     revalidateTag('services', 'max')
 
     await recordAudit({
-      action: 'DELETE',
+      action: 'ARCHIVE',
       entity: 'SERVICE',
       entityId: id,
-      description: `Deleted service "${existing?.name ?? id}".`,
-      metadata: { name: existing?.name ?? null },
+      description: `Archived service "${archived.name}".`,
+      metadata: { name: archived.name },
     })
 
-    return { success: true, message: 'Service deleted successfully from database.' }
+    return {
+      success: true,
+      message: 'Service archived successfully.',
+      service: parseService(archived),
+    }
   } catch (error) {
-    console.error('[deleteService | Prisma | Error]:', error)
-    return { success: false, message: 'Failed to delete service from database.' }
+    console.error('[archiveService | Prisma | Error]:', error)
+    return { success: false, message: 'Failed to archive service.' }
+  }
+}
+
+export async function restoreService(id: string) {
+  const session = await requireUser()
+  if (!session) {
+    return { success: false, message: 'Unauthorized' }
+  }
+
+  if (!id) {
+    return { success: false, message: 'Service ID is required.' }
+  }
+
+  try {
+    const existing = await (prisma as any).service.findUnique({
+      where: { serviceid: id },
+    })
+
+    if (!existing) {
+      return { success: false, message: 'Service not found.' }
+    }
+
+    if (!existing.archivedAt) {
+      return {
+        success: true,
+        message: 'Service is already active.',
+        service: parseService(existing),
+      }
+    }
+
+    const restored = await (prisma as any).service.update({
+      where: { serviceid: id },
+      data: { archivedAt: null },
+    })
+
+    revalidateTag('services', 'max')
+
+    await recordAudit({
+      action: 'RESTORE',
+      entity: 'SERVICE',
+      entityId: id,
+      description: `Restored service "${restored.name}" from the archive.`,
+      metadata: { name: restored.name },
+    })
+
+    return {
+      success: true,
+      message: 'Service restored successfully.',
+      service: parseService(restored),
+    }
+  } catch (error) {
+    console.error('[restoreService | Prisma | Error]:', error)
+    return { success: false, message: 'Failed to restore service.' }
   }
 }

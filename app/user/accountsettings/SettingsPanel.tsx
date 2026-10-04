@@ -19,7 +19,6 @@ type SettingsUser = {
 const sections = [
   { id: 'account', label: 'Change Password' },
   { id: 'darkmode', label: 'Dark Mode' },
-  { id: 'display', label: 'Display Settings' },
   { id: 'contact', label: 'Contact' },
   { id: 'terms', label: 'Terms and Conditions' },
   { id: 'about', label: 'About Us' },
@@ -296,13 +295,6 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
               All patient data must be handled in accordance with applicable
               data protection laws. Unauthorized access or disclosure of patient
               information is strictly prohibited.
-            </p>
-            <p
-              className={`text-[15px] leading-relaxed m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#555]'}`}
-            >
-              PRAMIS reserves the right to update these terms at any time.
-              Users will be notified of any material changes via email or in-app
-              notification.
             </p>
           </>
         )

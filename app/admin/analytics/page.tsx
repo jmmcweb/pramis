@@ -1,18 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { toast } from 'sonner'
+import { FileDown, Loader2, X } from 'lucide-react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import {
   getAnalyticsStats,
   getAnalyticsYears,
+  getAnalyticsSectionRows,
   type AnalyticsStats,
   type AnalyticsBreakdown,
+  type AnalyticsDetailRow,
+  type AnalyticsDetailSection,
 } from '@/lib/actions/analytics'
 import {
   ANALYTICS_RANGES,
+  ANALYTICS_REPORT_SECTIONS,
+  ANALYTICS_DETAIL_COLUMNS,
+  DEFAULT_ANALYTICS_DETAIL_COLUMNS,
+  DEFAULT_ANALYTICS_REPORT_SECTIONS,
   isYearRangeKey,
   type AnalyticsRangeKey,
+  type AnalyticsReportSectionKey,
 } from '@/lib/constants/analytics'
+import { generateAnalyticsReportPdf } from '@/lib/analyticsReportPdf'
 
 type Category = { label: string; color: string }
 
@@ -60,6 +72,21 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
   const [years, setYears] = useState<number[]>([currentYear])
   const [stats, setStats] = useState<AnalyticsStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportSections, setReportSections] = useState<AnalyticsReportSectionKey[]>(
+    [...DEFAULT_ANALYTICS_REPORT_SECTIONS],
+  )
+  const { data: session } = useSession()
+
+  const [detail, setDetail] = useState<{
+    section: AnalyticsDetailSection
+    label: string | null
+    open: boolean
+  } | null>(null)
+  const [detailRows, setDetailRows] = useState<AnalyticsDetailRow[]>([])
+  const [detailTotal, setDetailTotal] = useState(0)
+  const [detailLoading, setDetailLoading] = useState(false)
 
   const byYear = isYearRangeKey(rangeKey)
 
@@ -109,6 +136,109 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
       cancelled = true
     }
   }, [rangeKey, year])
+
+  // Loads the individual records behind a chart for the drill-down modal.
+  const openDetails = async (section: AnalyticsDetailSection, label: string | null = null) => {
+    setDetail({ section, label, open: true })
+    setDetailLoading(true)
+    setDetailRows([])
+    setDetailTotal(0)
+
+    try {
+      const res = await getAnalyticsSectionRows(
+        section,
+        rangeKey,
+        isYearRangeKey(rangeKey) ? year : null,
+        label,
+      )
+      if (res.success) {
+        setDetailRows(res.rows)
+        setDetailTotal(res.totalMatched)
+      } else {
+        toast.error(res.message || 'Failed to load details.')
+      }
+    } catch {
+      toast.error('Failed to load details. Please try again.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  // Generates the PDF report for the filter that is currently selected. The
+  // statistics are re-fetched at click time so the report always reflects the
+  // active filter rather than a stale render.
+  const handleGenerateReport = async (sections: AnalyticsReportSectionKey[]) => {
+    if (generating) return
+
+    if (sections.length === 0) {
+      toast.error('Select at least one section to include in the report.')
+      return
+    }
+
+    setGenerating(true)
+
+    const selectedYear = isYearRangeKey(rangeKey) ? year : null
+    const filterLabel =
+      ANALYTICS_RANGES.find((r) => r.key === rangeKey)?.label ??
+      (selectedYear ? `Year ${selectedYear}` : 'Analytics Report')
+
+    try {
+      const res = await getAnalyticsStats(rangeKey, selectedYear)
+
+      if (!res.success || !res.stats) {
+        toast.error(res.message || 'Failed to generate the report.')
+        return
+      }
+
+      const name =
+        (session?.user?.name as string | undefined)?.trim() || 'Administrator'
+
+      let patientRows: AnalyticsDetailRow[] | undefined
+      let patientRowsTruncated = false
+      if (sections.includes('patientAppendix')) {
+        try {
+          const res = await getAnalyticsSectionRows(
+            'serviceShare',
+            rangeKey,
+            selectedYear,
+            null,
+          )
+          if (res.success) {
+            patientRows = res.rows
+            patientRowsTruncated = res.totalMatched > res.rows.length
+          }
+        } catch {
+          toast.error('Could not load the patient appendix.')
+        }
+      }
+
+      generateAnalyticsReportPdf(res.stats, {
+        rangeKey,
+        rangeLabel: res.stats.rangeLabel || filterLabel,
+        year: selectedYear,
+        generatedBy: name,
+        sections,
+        patientRows,
+        patientRowsTruncated,
+        appendixSection: 'serviceShare',
+      })
+
+      const count =
+        sections.length === ANALYTICS_REPORT_SECTIONS.length
+          ? 'all sections'
+          : `${sections.length} section${sections.length === 1 ? '' : 's'}`
+
+      toast.success(
+        `Report generated for ${res.stats.rangeLabel || filterLabel} (${count}).`,
+      )
+      setReportOpen(false)
+    } catch {
+      toast.error('Failed to generate the report. Please try again.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
 
   const fmt = (n: number) => n.toLocaleString()
   const total = stats?.total ?? 0
@@ -225,9 +355,8 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
   return (
     <div className="mb-8">
       {/* Header / Date Range */}
-      <div className="flex items-end justify-end gap-4 flex-wrap mb-6">
-
-        <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex flex-col items-end gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 items-center justify-end">
           {ANALYTICS_RANGES.map((r) => (
             <button
               key={r.key}
@@ -262,7 +391,34 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
               </select>
             </>
           )}
+
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            disabled={generating}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border border-[#4E69D3] bg-[#4E69D3] text-white transition-colors hover:bg-[#3F57B8] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {generating ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <FileDown size={16} />
+            )}
+            {generating ? 'Generating...' : 'Generate Report'}
+          </button>
         </div>
+
+        {stats && (
+          <p
+            className={`text-xs font-semibold ${
+              darkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}
+          >
+            Report will cover:{' '}
+            <span className="font-bold">
+              {stats.rangeLabel ?? 'selected filter'}
+            </span>
+          </p>
+        )}
       </div>
 
       {loading ? (
@@ -355,7 +511,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
               <div className={`${card} p-6`}>
-                <h3 className={title}>Appointment outcomes</h3>
+                <CardHeader
+                    darkMode={darkMode}
+                    title="Appointment outcomes"
+                    titleClass={title}
+                    onView={() => openDetails('outcomes')}
+                  />
 
                 {appointmentOutcomesData.length > 0 ? (
                   <div className="flex justify-center">
@@ -390,6 +551,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                         pct={r.pct}
                         color={r.color}
                         labelWidth="w-36"
+                        onClick={() => openDetails('reasons', r.label)}
                       />
                     ))}
                   </div>
@@ -417,6 +579,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                         pct={h.pct}
                         color={h.color}
                         labelWidth="w-32"
+                        onClick={() => openDetails('peakHours', h.label)}
                       />
                     ))}
                   </div>
@@ -442,7 +605,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div className={`${card} p-6`}>
-                <h3 className={title}>Service utilization</h3>
+                <CardHeader
+                    darkMode={darkMode}
+                    title="Service utilization"
+                    titleClass={title}
+                    onView={() => openDetails('serviceShare')}
+                  />
 
                 {serviceShareData.length > 0 ? (
                   <div className="flex flex-col gap-3">
@@ -469,7 +637,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
               </div>
 
               <div className={`${card} p-6`}>
-                <h3 className={title}>Age group distribution</h3>
+                <CardHeader
+                    darkMode={darkMode}
+                    title="Age group distribution"
+                    titleClass={title}
+                    onView={() => openDetails('ageGroups')}
+                  />
 
                 {ageGroupsData.some((g) => g.count > 0) ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-4">
@@ -523,7 +696,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
               <div className={`${card} p-6`}>
                 <div className="flex items-start justify-between gap-3 mb-5">
                   <div>
-                    <h3 className={title}>Disease / case reports</h3>
+                    <CardHeader
+                    darkMode={darkMode}
+                    title="Disease / case reports"
+                    titleClass={title}
+                    onView={() => openDetails('diseases')}
+                  />
                     <p className={`${sub} mt-1`}>
                       Most commonly recorded cases in the {rangeLabel}.
                     </p>
@@ -623,7 +801,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
               {/* Sex by Service */}
               <div className={`${card} p-6`}>
-                <h3 className={title}>Sex by service</h3>
+                <CardHeader
+                    darkMode={darkMode}
+                    title="Sex by service"
+                    titleClass={title}
+                    onView={() => openDetails('sexByService')}
+                  />
 
                 {(stats?.sexByService ?? []).length > 0 ? (
                   <div className="flex flex-col gap-4">
@@ -674,7 +857,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
               {/* Immunization */}
               <div className={`${card} p-6`}>
-                <h3 className={title}>Immunization activity</h3>
+                <CardHeader
+                    darkMode={darkMode}
+                    title="Immunization activity"
+                    titleClass={title}
+                    onView={() => openDetails('immunization')}
+                  />
 
                 {(stats?.immunization ?? []).length > 0 ? (
                   <div className="flex flex-col gap-3">
@@ -712,7 +900,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
               {/* Blood Type */}
               <div className={`${card} p-6`}>
-                <h3 className={title}>Blood type distribution</h3>
+                <CardHeader
+                    darkMode={darkMode}
+                    title="Blood type distribution"
+                    titleClass={title}
+                    onView={() => openDetails('bloodTypes')}
+                  />
 
                 {(stats?.bloodTypes ?? []).length > 0 ? (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
@@ -764,6 +957,404 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
             </div>
           </section>
         </>
+      )}
+
+      {detail?.open && (
+        <DetailsModal
+          darkMode={darkMode}
+          title={
+            detail.label
+              ? `${detail.label}`
+              : ANALYTICS_REPORT_SECTIONS.find((s) => s.key === detail.section)?.label ?? 'Details'
+          }
+          subtitle={rangeLabel}
+          section={detail.section}
+          rows={detailRows}
+          total={detailTotal}
+          loading={detailLoading}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
+      {reportOpen && (
+        <ReportSectionsDialog
+          darkMode={darkMode}
+          selected={reportSections}
+          busy={generating}
+          rangeLabel={stats?.rangeLabel ?? rangeLabel}
+          onToggle={(key) =>
+            setReportSections((prev) =>
+              prev.includes(key)
+                ? prev.filter((k) => k !== key)
+                : [...prev, key],
+            )
+          }
+          onSelectAll={() =>
+            setReportSections([...DEFAULT_ANALYTICS_REPORT_SECTIONS])
+          }
+          onClear={() => setReportSections([])}
+          onClose={() => setReportOpen(false)}
+          onConfirm={() => handleGenerateReport(reportSections)}
+        />
+      )}
+    </div>
+  )
+}
+
+function DetailsModal({
+  darkMode,
+  title,
+  subtitle,
+  section,
+  rows,
+  total,
+  loading,
+  onClose,
+}: {
+  darkMode: boolean
+  title: string
+  subtitle: string
+  section: AnalyticsDetailSection
+  rows: AnalyticsDetailRow[]
+  total: number
+  loading: boolean
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const columns =
+    ANALYTICS_DETAIL_COLUMNS[section] ?? DEFAULT_ANALYTICS_DETAIL_COLUMNS
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10)
+  }
+
+  const th = `px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide whitespace-nowrap ${
+    darkMode ? 'text-gray-400' : 'text-gray-500'
+  }`
+  const td = `px-3 py-2 text-[13px] whitespace-nowrap ${darkMode ? 'text-gray-200' : 'text-[#2A2E43]'}`
+
+  return (
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center p-3 sm:p-4">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="analytics-details-title"
+        className={`relative w-full max-w-5xl rounded-2xl border shadow-2xl flex flex-col max-h-[88vh] ${
+          darkMode ? 'bg-[#2d1b4e] border-white/10' : 'bg-white border-gray-200'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3 p-5 sm:p-6 pb-3">
+          <div>
+            <h2
+              id="analytics-details-title"
+              className={`text-lg font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}
+            >
+              {title}
+            </h2>
+            <p
+              className={`text-xs mt-1 mb-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+            >
+              {subtitle} ·{' '}
+              {loading
+                ? 'Loading records…'
+                : `${total.toLocaleString()} record${total === 1 ? '' : 's'}`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className={`rounded-lg p-1.5 transition ${
+              darkMode ? 'text-gray-400 hover:bg-white/10' : 'text-gray-400 hover:bg-gray-100'
+            }`}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-5 sm:px-6 pb-5 sm:pb-6 overflow-auto flex-1">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 gap-2">
+              <Loader2 size={20} className="animate-spin text-[#4E69D3]" />
+              <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Loading patient records…
+              </span>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p
+                className={`text-sm font-semibold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+              >
+                No records found
+              </p>
+              <p
+                className={`text-xs mt-1 mb-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+              >
+                There are no patient records for this selection.
+              </p>
+            </div>
+          ) : (
+            <>
+              {total > rows.length && (
+                <p
+                  className={`text-[11px] mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                >
+                  Showing the {rows.length.toLocaleString()} most recent of{' '}
+                  {total.toLocaleString()} records.
+                </p>
+              )}
+              <table className="w-full border-collapse">
+                <thead
+                  className={`sticky top-0 z-10 ${darkMode ? 'bg-[#2d1b4e]' : 'bg-white'}`}
+                >
+                  <tr className={`border-b ${darkMode ? 'border-white/10' : 'border-gray-200'}`}>
+                    {columns.map((c) => (
+                      <th
+                        key={c.key}
+                        className={`${th} ${c.align === 'right' ? 'text-right' : ''}`}
+                      >
+                        {c.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr
+                      key={r.key}
+                      className={`border-b ${darkMode ? 'border-white/5' : 'border-gray-100'}`}
+                    >
+                      {columns.map((c) => {
+                        const raw = (r as unknown as Record<string, unknown>)[c.key]
+                        const value =
+                          raw === null || raw === undefined || raw === '' ? '—' : String(raw)
+                        const isDate = c.key === 'date'
+                        const isLong = c.key === 'diagnosis'
+                        return (
+                          <td
+                            key={c.key}
+                            title={isLong ? value : undefined}
+                            className={`${td} ${c.align === 'right' ? 'text-right' : ''} ${
+                              isLong ? 'max-w-[280px] truncate' : ''
+                            } ${c.key === 'patientName' ? 'font-semibold' : ''}`}
+                          >
+                            {isDate ? fmtDate(value) : value}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReportSectionsDialog({
+  darkMode,
+  selected,
+  busy,
+  rangeLabel,
+  onToggle,
+  onSelectAll,
+  onClear,
+  onClose,
+  onConfirm,
+}: {
+  darkMode: boolean
+  selected: AnalyticsReportSectionKey[]
+  busy: boolean
+  rangeLabel: string
+  onToggle: (key: AnalyticsReportSectionKey) => void
+  onSelectAll: () => void
+  onClear: () => void
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  useEffect(() => {
+    if (!busy) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [busy, onClose])
+
+  const allSelected = selected.length === ANALYTICS_REPORT_SECTIONS.length
+
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center p-3 sm:p-4">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={busy ? undefined : onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="analytics-report-dialog-title"
+        className={`relative w-full max-w-lg rounded-2xl border shadow-2xl ${
+          darkMode ? 'bg-[#2d1b4e] border-white/10' : 'bg-white border-gray-200'
+        }`}
+      >
+        <div className="p-5 sm:p-6 pb-0">
+          <h2
+            id="analytics-report-dialog-title"
+            className={`text-lg font-bold m-0 ${
+              darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'
+            }`}
+          >
+            Generate analytics report
+          </h2>
+          <p
+            className={`text-xs mt-1 mb-0 ${
+              darkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}
+          >
+            Choose which sections to include. The report will cover{' '}
+            <span className="font-bold">{rangeLabel}</span>.
+          </p>
+        </div>
+
+        <div className="px-5 sm:px-6 py-4 max-h-[52vh] overflow-y-auto">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span
+              className={`text-xs font-semibold ${
+                darkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}
+            >
+              {selected.length} of {ANALYTICS_REPORT_SECTIONS.length} selected
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onSelectAll}
+                disabled={busy || allSelected}
+                className="text-xs font-bold text-[#4E69D3] hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={onClear}
+                disabled={busy || selected.length === 0}
+                className="text-xs font-bold text-[#4E69D3] hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {ANALYTICS_REPORT_SECTIONS.map((section) => {
+              const checked = selected.includes(section.key)
+              return (
+                <label
+                  key={section.key}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
+                    darkMode
+                      ? checked
+                        ? 'bg-[#1e1438] border-[#4E69D3]'
+                        : 'bg-transparent border-white/10 hover:border-white/25'
+                      : checked
+                        ? 'bg-indigo-50 border-[#4E69D3]'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                  } ${busy ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={busy}
+                    onChange={() => onToggle(section.key)}
+                    className="w-4 h-4 accent-[#4E69D3] cursor-pointer flex-shrink-0"
+                  />
+                  <span
+                    className={`text-[13px] font-semibold leading-tight ${
+                      darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'
+                    }`}
+                  >
+                    {section.label}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+
+        <div
+          className={`flex items-center justify-end gap-3 p-5 sm:p-6 pt-4 border-t ${
+            darkMode ? 'border-white/10' : 'border-gray-200'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className={`px-4 py-2.5 rounded-lg text-[14px] font-semibold cursor-pointer border transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+              darkMode
+                ? 'bg-[#1e1438] text-[#F9FAFB] border-white/10'
+                : 'bg-white text-gray-600 border-gray-200'
+            }`}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy || selected.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[14px] font-semibold cursor-pointer border border-[#4E69D3] bg-[#4E69D3] text-white transition-colors hover:bg-[#3F57B8] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {busy ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <FileDown size={16} />
+            )}
+            {busy ? 'Generating...' : 'Generate PDF'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Card title with an optional "View details" drill-down affordance.
+function CardHeader({
+  darkMode,
+  title,
+  titleClass,
+  onView,
+}: {
+  darkMode: boolean
+  title: string
+  titleClass: string
+  onView?: () => void
+}) {
+  return (
+    <div className="flex items-start justify-between gap-2 mb-1">
+      <h3 className={titleClass}>{title}</h3>
+      {onView && (
+        <button
+          type="button"
+          onClick={onView}
+          className="flex-shrink-0 text-[11px] font-bold text-[#4E69D3] hover:underline cursor-pointer"
+        >
+          View details
+        </button>
       )}
     </div>
   )
@@ -1134,7 +1725,6 @@ function DecisionRow({
 }
 
 
-// ── Shared bar row component ──
 function BarRow({
   darkMode,
   label,
@@ -1142,6 +1732,7 @@ function BarRow({
   pct,
   color,
   labelWidth,
+  onClick,
 }: {
   darkMode: boolean
   label: string
@@ -1149,9 +1740,28 @@ function BarRow({
   pct: number
   color: string
   labelWidth: string
+  onClick?: () => void
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onClick()
+              }
+            }
+          : undefined
+      }
+      title={onClick ? `View patients for ${label}` : undefined}
+      className={`flex items-center gap-3 ${
+        onClick ? 'cursor-pointer hover:opacity-80 transition-opacity rounded-lg' : ''
+      }`}
+    >
       <span
         className="w-3.5 h-3.5 rounded-full flex-shrink-0"
         style={{ background: color }}
@@ -1178,7 +1788,6 @@ function BarRow({
   )
 }
 
-// ── Donut chart ──
 function OutcomesDonut({
   darkMode,
   data,

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Pencil, Archive, Loader2, RotateCcw } from 'lucide-react'
 import { useDarkMode } from '@/app/staff/DarkModeContext'
 import {
   getEvents,
   createEvent,
   updateEvent,
-  deleteEvent,
+  archiveEvent,
+  restoreEvent,
   type EventItem,
 } from '@/lib/actions/event'
 
@@ -21,8 +22,9 @@ export type ArchiveItem = {
   date: string
   time: string
   type: string
-  status: 'Done' | 'Cancelled'
+  status?: 'Scheduled' | 'Done' | 'Cancelled'
   description?: string
+  archivedAt?: string | null
 }
 
 const typeColors: Record<string, { bg: string; color: string; label: string }> = {
@@ -70,7 +72,7 @@ export default function StaffEventsPage() {
 
   const [eventModal, setEventModal] = useState(false)
   const [eventEditItem, setEventEditItem] = useState<EventItem | null>(null)
-  const [deleteEventItem, setDeleteEventItem] = useState<EventItem | null>(null)
+  const [archiveEventItem, setArchiveEventItem] = useState<EventItem | null>(null)
   const [savingEvent, setSavingEvent] = useState(false)
 
   const today = new Date()
@@ -89,9 +91,9 @@ export default function StaffEventsPage() {
   })
 
   useEffect(() => {
-    document.body.style.overflow = (showArchive || eventModal || deleteEventItem !== null) ? 'hidden' : ''
+    document.body.style.overflow = (showArchive || eventModal || archiveEventItem !== null) ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [showArchive, eventModal, deleteEventItem])
+  }, [showArchive, eventModal, archiveEventItem])
 
   const loadData = useCallback(async () => {
     try {
@@ -272,29 +274,58 @@ export default function StaffEventsPage() {
     }
   }
 
-  const confirmDeleteEvent = async () => {
-    if (!deleteEventItem || !deleteEventItem.id) return
+  const confirmArchiveEvent = async () => {
+    if (!archiveEventItem || !archiveEventItem.id) return
     try {
-      const res = await deleteEvent(deleteEventItem.id)
+      const res = await archiveEvent(archiveEventItem.id)
       if (res.success) {
         setEvents(prev => {
           const next = { ...prev }
           for (const d of Object.keys(next)) {
-            next[d] = next[d].filter(e => e.id !== deleteEventItem.id)
+            next[d] = next[d].filter(e => e.id !== archiveEventItem.id)
             if (next[d].length === 0) delete next[d]
           }
           return next
         })
-        setArchive(prev => prev.filter(a => a.id !== deleteEventItem.id))
-        toast.success('Event deleted')
+        // The event now lives in the archive view rather than being gone, so
+        // drop any stale copy and add the freshly archived one.
+        setArchive(prev => {
+          const without = prev.filter(a => a.id !== archiveEventItem.id)
+          return res.event ? [res.event as ArchiveItem, ...without] : without
+        })
+        toast.success('Event archived')
       } else {
-        toast.error(res.message || 'Failed to delete event')
+        toast.error(res.message || 'Failed to archive event')
       }
     } catch (err) {
       console.error(err)
-      toast.error('Failed to delete event')
+      toast.error('Failed to archive event')
     } finally {
-      setDeleteEventItem(null)
+      setArchiveEventItem(null)
+    }
+  }
+
+  const restoreArchivedEvent = async (ev: ArchiveItem) => {
+    if (!ev.id) return
+    try {
+      const res = await restoreEvent(ev.id)
+      if (res.success && res.event) {
+        const restored = res.event
+        setArchive(prev => prev.filter(a => a.id !== restored.id))
+        if (restored.status === 'Scheduled') {
+          setEvents(prev => ({ ...prev, [restored.date]: [...(prev[restored.date] || []), restored] }))
+        } else {
+          // Done/Cancelled events are surfaced via the archive list rather than
+          // the calendar, so they go back there once archivedAt is cleared.
+          setArchive(prev => [restored as ArchiveItem, ...prev])
+        }
+        toast.success('Event restored')
+      } else {
+        toast.error(res.message || 'Failed to restore event')
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to restore event')
     }
   }
 
@@ -352,6 +383,7 @@ export default function StaffEventsPage() {
                         <th className={`pl-10 pr-6 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins border-b w-[22%]`}>Time</th>
                         <th className={`px-6 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins border-b w-[16%]`}>Type</th>
                         <th className={`px-6 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins border-b w-[10%]`}>Status</th>
+                        <th className={`px-6 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins border-b w-[14%]`}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -371,7 +403,17 @@ export default function StaffEventsPage() {
                               <span className={`text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{tc.label}</span>
                             </td>
                             <td className={`px-6 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}>
-                              <span className={`inline-block px-3 py-1.5 rounded-full text-[12px] font-bold ${ev.status === 'Done' ? 'bg-green-500/20 text-green-600' : 'bg-red-500/20 text-red-500'}`}>{ev.status}</span>
+                              <span className={`inline-block px-3 py-1.5 rounded-full text-[12px] font-bold ${ev.status === 'Done' ? 'bg-green-500/20 text-green-600' : ev.status === 'Cancelled' ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-600'}`}>{ev.status}</span>
+                            </td>
+                            <td className={`px-6 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}>
+                              {ev.archivedAt ? (
+                                <button onClick={() => restoreArchivedEvent(ev)} title="Restore event" className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold cursor-pointer border transition-colors ${darkMode ? 'bg-[#0f1438] text-green-400 border-[rgba(255,255,255,0.10)] hover:bg-[#1a2050]' : 'bg-white text-green-700 border-gray-200 hover:bg-green-50'}`}>
+                                  <RotateCcw size={12} />
+                                  Restore
+                                </button>
+                              ) : (
+                                <span className={`text-[13px] ${darkMode ? 'text-gray-600' : 'text-gray-400'}`}>—</span>
+                              )}
                             </td>
                           </tr>
                         )
@@ -446,24 +488,24 @@ export default function StaffEventsPage() {
         </div>
       )}
 
-      {/* Delete Event Confirmation Modal */}
-      {deleteEventItem !== null && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-[1000] p-3 sm:p-4" onClick={() => setDeleteEventItem(null)}>
+      {/* Archive Event Confirmation Modal */}
+      {archiveEventItem !== null && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-[1000] p-3 sm:p-4" onClick={() => setArchiveEventItem(null)}>
           <div className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white'} rounded-2xl w-full max-w-[420px] shadow-[0_20px_60px_rgba(0,0,0,0.25)] p-6`} onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-4">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${darkMode ? 'bg-[#0f1438]' : 'bg-red-50'}`}>
-                <Trash2 size={22} color="#EF4444" />
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${darkMode ? 'bg-[#0f1438]' : 'bg-amber-50'}`}>
+                <Archive size={22} color="#D97706" />
               </div>
               <div className="min-w-0">
-                <h2 className={`font-poppins text-xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} m-0`}>Delete Event?</h2>
+                <h2 className={`font-poppins text-xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} m-0`}>Archive Event?</h2>
                 <p className={`text-[14px] mt-1.5 mb-0 leading-relaxed ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Are you sure you want to delete <span className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{deleteEventItem.title}</span>? This action cannot be undone.
+                  Are you sure you want to archive <span className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{archiveEventItem.title}</span>? It will be hidden from the calendar, but you can restore it at any time from the Events Archive.
                 </p>
               </div>
             </div>
             <div className={`flex justify-end gap-3 mt-6 pt-4 border-t ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'}`}>
-              <button onClick={() => setDeleteEventItem(null)} className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Cancel</button>
-              <button onClick={confirmDeleteEvent} className="px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border-none transition-all bg-red-500 text-white hover:bg-red-600">Yes, Delete</button>
+              <button onClick={() => setArchiveEventItem(null)} className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Cancel</button>
+              <button onClick={confirmArchiveEvent} className="px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border-none transition-all bg-amber-500 text-white hover:bg-amber-600">Yes, Archive</button>
             </div>
           </div>
         </div>
@@ -514,8 +556,8 @@ export default function StaffEventsPage() {
                         <button onClick={e => { e.stopPropagation(); openEditEvent(ev) }} title="Edit event" className={`w-7 h-7 rounded-md cursor-pointer border transition-all flex items-center justify-center ${darkMode ? 'bg-[#0f1438] text-[#4E9FFF] border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}>
                           <Pencil size={12} />
                         </button>
-                        <button onClick={e => { e.stopPropagation(); setDeleteEventItem(ev) }} title="Delete event" className={`w-7 h-7 rounded-md cursor-pointer border transition-all flex items-center justify-center ${darkMode ? 'bg-[#0f1438] text-gray-400 border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-gray-500 border-gray-300 hover:bg-red-50 hover:text-red-500'}`}>
-                          <Trash2 size={12} />
+                        <button onClick={e => { e.stopPropagation(); setArchiveEventItem(ev) }} title="Archive event" className={`w-7 h-7 rounded-md cursor-pointer border transition-all flex items-center justify-center ${darkMode ? 'bg-[#0f1438] text-amber-400 border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-amber-600 border-gray-300 hover:bg-amber-50 hover:text-amber-700'}`}>
+                          <Archive size={12} />
                         </button>
                       </div>
                     </div>

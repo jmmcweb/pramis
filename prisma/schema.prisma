@@ -160,6 +160,7 @@ model Service {
   name         String
   description  String
   availability Boolean       @default(true)
+  archivedAt   DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   appointments Appointment[]
@@ -173,6 +174,7 @@ model Event {
   startDate   DateTime
   endDate     DateTime
   status      Boolean  @default(true)
+  archivedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

@@ -15,8 +15,15 @@ export type EventItem = {
   status?: 'Scheduled' | 'Done' | 'Cancelled'
   description?: string
   active?: boolean
+  archivedAt?: string | null
   createdAt?: Date
   updatedAt?: Date
+}
+
+function toIsoOrNull(value: unknown): string | null {
+  if (!value) return null
+  if (value instanceof Date) return value.toISOString()
+  return String(value)
 }
 
 // Fetches the list of events from the database. If no events are found, it seeds the database with default events. The function returns a structured response containing the success status, message, and arrays of EventItem objects representing all events, scheduled events, and archived events.
@@ -39,8 +46,8 @@ function parseEvent(e: any): EventItem {
 
   const isoDate =
     e.startDate instanceof Date
-      ? e.startDate.toISOString().split('T')[0]
-      : String(e.startDate).split('T')[0]
+      ? e.startDate.toISOString().slice(0, 10)
+      : String(e.startDate).slice(0, 10)
 
   return {
     id: e.eventid,
@@ -54,9 +61,18 @@ function parseEvent(e: any): EventItem {
       | 'Cancelled',
     description: meta.notes || '',
     active: e.status,
+    archivedAt: toIsoOrNull(e.archivedAt),
     createdAt: e.createdAt,
     updatedAt: e.updatedAt,
   }
+}
+
+// Converts a `YYYY-MM-DD` string into a UTC-midnight Date. Using local
+// midnight here would store a different calendar day for any server running
+// in a timezone ahead of UTC (e.g. Asia/Manila), which then made archived
+// events appear under the wrong date.
+function toUtcDate(isoDay: string): Date {
+  return new Date(`${isoDay}T00:00:00.000Z`)
 }
 
 // Formats the event description as a JSON string containing time, type, status, and notes. This function is used to standardize the event description before storing it in the database.
@@ -229,8 +245,17 @@ export async function getEvents() {
       const now = new Date()
       const created = []
       for (const item of defaultSeedEvents) {
-        const d = new Date(now)
-        d.setDate(d.getDate() + item.dateOffset)
+        const d = toUtcDate(
+          new Date(
+            Date.UTC(
+              now.getUTCFullYear(),
+              now.getUTCMonth(),
+              now.getUTCDate() + item.dateOffset,
+            ),
+          )
+            .toISOString()
+            .slice(0, 10),
+        )
         const isScheduled = item.status === 'Scheduled'
 
         const ev = await (prisma as any).event.create({
@@ -253,15 +278,20 @@ export async function getEvents() {
     }
 
     const parsed = rawEvents.map(parseEvent)
-    const scheduled = parsed.filter((e: any) => e.status === 'Scheduled')
+
+    // Soft-archived events (archivedAt set) are kept entirely out of the
+    // active lists. Completed/cancelled events that were never explicitly
+    // archived still show up in the archive view, as before.
     const archive = parsed.filter(
-      (e: any) => e.status === 'Done' || e.status === 'Cancelled',
+      (e: any) => e.archivedAt || e.status === 'Done' || e.status === 'Cancelled',
     )
+    const active = parsed.filter((e: any) => !e.archivedAt)
+    const scheduled = active.filter((e: any) => e.status === 'Scheduled')
 
     return {
       success: true,
       message: 'Events fetched successfully',
-      events: parsed,
+      events: active,
       scheduled,
       archive,
     }
@@ -299,7 +329,7 @@ export async function createEvent(data: {
     return { success: false, message: 'Date is required.' }
   }
 
-  const eventDate = new Date(`${data.date}T00:00:00`)
+  const eventDate = toUtcDate(data.date)
   if (isNaN(eventDate.getTime())) {
     return { success: false, message: 'Invalid date format.' }
   }
@@ -374,7 +404,7 @@ export async function updateEvent(data: {
     const updateData: any = {}
     if (data.title && data.title.trim()) updateData.name = data.title.trim()
     if (data.date) {
-      const eventDate = new Date(`${data.date}T00:00:00`)
+      const eventDate = toUtcDate(data.date)
       if (!isNaN(eventDate.getTime())) {
         updateData.startDate = eventDate
         updateData.endDate = eventDate
@@ -423,8 +453,7 @@ export async function updateEvent(data: {
   }
 }
 
-// Deletes an event from the database based on the provided event ID. The function checks user authorization and validates the input data before performing the deletion. It returns a structured response containing the success status and message indicating the result of the operation.
-export async function deleteEvent(id: string) {
+export async function archiveEvent(id: string) {
   const session = await requireUser()
   if (!session) {
     return { success: false, message: 'Unauthorized' }
@@ -437,25 +466,97 @@ export async function deleteEvent(id: string) {
   try {
     const existing = await (prisma as any).event.findUnique({
       where: { eventid: id },
-      select: { name: true },
     })
-    await (prisma as any).event.delete({
+
+    if (!existing) {
+      return { success: false, message: 'Event not found.' }
+    }
+
+    if (existing.archivedAt) {
+      return {
+        success: true,
+        message: 'Event is already archived.',
+        event: parseEvent(existing),
+      }
+    }
+
+    const archived = await (prisma as any).event.update({
       where: { eventid: id },
+      data: { archivedAt: new Date() },
     })
 
     revalidateTag('events', 'max')
 
     await recordAudit({
-      action: 'DELETE',
+      action: 'ARCHIVE',
       entity: 'EVENT',
       entityId: id,
-      description: `Deleted event "${existing?.name ?? id}".`,
-      metadata: { name: existing?.name ?? null },
+      description: `Archived event "${archived.name}".`,
+      metadata: { name: archived.name },
     })
 
-    return { success: true, message: 'Event deleted successfully from database.' }
+    return {
+      success: true,
+      message: 'Event archived successfully.',
+      event: parseEvent(archived),
+    }
   } catch (error) {
-    console.error('[deleteEvent | Prisma | Error]:', error)
-    return { success: false, message: 'Failed to delete event from database.' }
+    console.error('[archiveEvent | Prisma | Error]:', error)
+    return { success: false, message: 'Failed to archive event.' }
   }
 }
+
+export async function restoreEvent(id: string) {
+  const session = await requireUser()
+  if (!session) {
+    return { success: false, message: 'Unauthorized' }
+  }
+
+  if (!id) {
+    return { success: false, message: 'Event ID is required.' }
+  }
+
+  try {
+    const existing = await (prisma as any).event.findUnique({
+      where: { eventid: id },
+    })
+
+    if (!existing) {
+      return { success: false, message: 'Event not found.' }
+    }
+
+    if (!existing.archivedAt) {
+      return {
+        success: true,
+        message: 'Event is already active.',
+        event: parseEvent(existing),
+      }
+    }
+
+    const restored = await (prisma as any).event.update({
+      where: { eventid: id },
+      data: { archivedAt: null },
+    })
+
+    revalidateTag('events', 'max')
+
+    await recordAudit({
+      action: 'RESTORE',
+      entity: 'EVENT',
+      entityId: id,
+      description: `Restored event "${restored.name}" from the archive.`,
+      metadata: { name: restored.name },
+    })
+
+    return {
+      success: true,
+      message: 'Event restored successfully.',
+      event: parseEvent(restored),
+    }
+  } catch (error) {
+    console.error('[restoreEvent | Prisma | Error]:', error)
+    return { success: false, message: 'Failed to restore event.' }
+  }
+}
+
+
