@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 // Presentational pieces for /admin/backup. No data fetching or server-action
 // calls live here â€” BackupClient owns all of that.
@@ -40,7 +40,7 @@ export type TableRow = { table: string; current: number }
 
 export function formatDateTime(iso: string) {
   const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return { date: 'â€”', time: '' }
+  if (Number.isNaN(date.getTime())) return { date: '—', time: '' }
   return {
     date: date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -72,6 +72,51 @@ export function relativeTime(iso: string | null) {
   return rtf.format(Math.round(diffMs / ms), unit)
 }
 
+/** Formats elapsed time since a backup timestamp, e.g. "2 hrs, 15 mins ago". */
+export function formatTimeAgo(iso: string | null): string {
+  if (!iso) return 'Never'
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return 'Never'
+  const diffMs = Date.now() - then
+  if (diffMs < 0) return 'Just now'
+  const sec = Math.floor(diffMs / 1000)
+  if (sec < 60) return 'Just now'
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min} ${min === 1 ? 'min' : 'mins'} ago`
+  const hr = Math.floor(min / 60)
+  const remMin = min % 60
+  if (hr < 24) {
+    return remMin > 0
+      ? `${hr} ${hr === 1 ? 'hr' : 'hrs'}, ${remMin} ${remMin === 1 ? 'min' : 'mins'} ago`
+      : `${hr} ${hr === 1 ? 'hr' : 'hrs'} ago`
+  }
+  const days = Math.floor(hr / 24)
+  const remHr = hr % 24
+  if (days < 7) {
+    return remHr > 0
+      ? `${days} ${days === 1 ? 'day' : 'days'}, ${remHr} ${remHr === 1 ? 'hr' : 'hrs'} ago`
+      : `${days} ${days === 1 ? 'day' : 'days'} ago`
+  }
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`
+}
+
+/** Computes next due relative duration based on last automatic backup. */
+export function nextBackupDue(lastIso: string, intervalHours: number): string {
+  const then = new Date(lastIso).getTime()
+  if (Number.isNaN(then)) return '—'
+  const dueTime = then + intervalHours * 3600 * 1000
+  const diffMs = dueTime - Date.now()
+  if (diffMs <= 0) return 'Due now (on next activity)'
+  const min = Math.round(diffMs / 60000)
+  if (min < 60) return `in ~${min} min${min === 1 ? '' : 's'}`
+  const hr = Math.floor(min / 60)
+  const remMin = min % 60
+  if (remMin > 0) {
+    return `in ~${hr} hr${hr === 1 ? '' : 's'}, ${remMin} min${remMin === 1 ? '' : 's'}`
+  }
+  return `in ~${hr} hr${hr === 1 ? '' : 's'}`
+}
+
 const triggerTone: Record<string, string> = {
   MANUAL: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
   AUTOMATIC:
@@ -91,11 +136,13 @@ export function SummaryCard({
   icon,
   label,
   value,
+  subtext,
 }: {
   darkMode: boolean
   icon: React.ReactNode
   label: string
-  value: string
+  value: React.ReactNode
+  subtext?: React.ReactNode
 }) {
   return (
     <div className={card(darkMode)}>
@@ -112,14 +159,29 @@ export function SummaryCard({
           {label}
         </span>
       </div>
-      <p
-        className={cx(
-          'text-2xl font-bold truncate',
-          darkMode ? 'text-white' : 'text-[#1d4662]',
-        )}
-      >
-        {value}
-      </p>
+      {typeof value === 'string' ? (
+        <p
+          className={cx(
+            'text-2xl font-bold truncate',
+            darkMode ? 'text-white' : 'text-[#1d4662]',
+          )}
+          title={value}
+        >
+          {value}
+        </p>
+      ) : (
+        value
+      )}
+      {subtext && (
+        <div
+          className={cx(
+            'text-xs mt-1.5 font-medium',
+            darkMode ? 'text-gray-400' : 'text-gray-500',
+          )}
+        >
+          {subtext}
+        </div>
+      )}
     </div>
   )
 }
@@ -255,8 +317,11 @@ export function BackupTable({
                     <td
                       className={`px-4 py-3 whitespace-nowrap text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}
                     >
-                      <span className="block">{date}</span>
-                      <span className="block">{time}</span>
+                      <span className="block font-medium">{date}</span>
+                      <span className="block opacity-90">{time}</span>
+                      <span className="block text-[11px] opacity-75 mt-0.5">
+                        {formatTimeAgo(backup.createdAt)}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <BackupRowActions

@@ -6,8 +6,10 @@ import path from 'node:path'
 import {
   BACKUP_FILE_EXT,
   BACKUP_ID_FILE_RE,
+  BACKUP_MANIFEST_EXT,
   BACKUP_MIRROR_TO_DRIVE,
   GOOGLE_DRIVE_DIR,
+  GOOGLE_DRIVE_SUBDIR,
   cloudBackupDir,
   cloudManifestPath,
   cloudSnapshotPath,
@@ -17,6 +19,235 @@ import {
   type CloudResult,
   type CloudStatus,
 } from '@/lib/constants/backup'
+import {
+  deleteFiles,
+  downloadSnapshot,
+  gdriveAccountLabel,
+  isGdriveApiConfigured,
+  listSnapshots,
+  resolveFolderId,
+  testGdriveConnection,
+  uploadSnapshot,
+  type DriveFileRef,
+} from '@/lib/gdriveApi'
+import { importSnapshot, readSnapshotBytes } from '@/lib/backupStore'
+
+function backupIdFromFileName(name: string): string | null {
+  if (!name.endsWith(BACKUP_FILE_EXT)) return null
+  const id = name.slice(0, -BACKUP_FILE_EXT.length)
+  return BACKUP_ID_FILE_RE.test(id) ? id : null
+}
+
+function manifestFromDescription(description: string | null): CloudManifest | null {
+  if (!description) return null
+  try {
+    return JSON.parse(description) as CloudManifest
+  } catch {
+    return null
+  }
+}
+
+function toCloudFile(file: DriveFileRef): CloudBackupFile | null {
+  const backupId = backupIdFromFileName(file.name)
+  if (!backupId) return null
+
+  const manifest = manifestFromDescription(file.description)
+  return {
+    backupId,
+    label: manifest?.label ?? `Recovered ${backupId}`,
+    sizeBytes: manifest?.sizeBytes ?? file.sizeBytes,
+    modifiedAt: file.modifiedAt,
+    createdAt: manifest?.createdAt ?? file.modifiedAt,
+    rowCount:
+      manifest?.rowCount ??
+      Object.values(manifest?.tableCounts ?? {}).reduce((a, b) => a + b, 0),
+    hasManifest: Boolean(manifest),
+  }
+}
+
+
+let apiFolderId: string | null = null
+
+async function apiFolder(): Promise<string> {
+  if (apiFolderId) return apiFolderId
+  apiFolderId = await resolveFolderId(GOOGLE_DRIVE_SUBDIR)
+  return apiFolderId
+}
+
+const apiFileCache = new Map<string, Map<string, DriveFileRef>>()
+
+async function apiFilesFor(
+  backupId: string,
+): Promise<{ snapshot: DriveFileRef | null; manifest: DriveFileRef | null }> {
+  const folderId = await apiFolder()
+  let cache = apiFileCache.get(folderId)
+  if (!cache) {
+    const files = await listSnapshots(folderId, BACKUP_FILE_EXT)
+    cache = new Map(files.map((file) => [file.name, file]))
+    apiFileCache.set(folderId, cache)
+  }
+
+  let snapshot = cache.get(`${backupId}${BACKUP_FILE_EXT}`) ?? null
+  if (!snapshot) {
+    const files = await listSnapshots(folderId, BACKUP_FILE_EXT)
+    cache = new Map(files.map((file) => [file.name, file]))
+    apiFileCache.set(folderId, cache)
+    snapshot = cache.get(`${backupId}${BACKUP_FILE_EXT}`) ?? null
+  }
+
+  return {
+    snapshot,
+    manifest: cache.get(`${backupId}${BACKUP_MANIFEST_EXT}`) ?? null,
+  }
+}
+
+async function apiStatus(): Promise<CloudStatus> {
+  const folderId = await apiFolder()
+  const files = await listSnapshots(folderId, BACKUP_FILE_EXT)
+  apiFileCache.set(folderId, new Map(files.map((file) => [file.name, file])))
+
+  const listed = files
+    .map(toCloudFile)
+    .filter((file): file is CloudBackupFile => file !== null)
+
+  const totalBytes = listed.reduce((total, file) => total + file.sizeBytes, 0)
+
+  return {
+    enabled: BACKUP_MIRROR_TO_DRIVE,
+    root: 'Google Drive API',
+    directory: `${GOOGLE_DRIVE_SUBDIR} (folder ${folderId})`,
+    source: 'api',
+    available: true,
+    fileCount: listed.length,
+    totalBytes,
+    message: `Mirroring to Google Drive over the Drive API as ${gdriveAccountLabel()}.`,
+  }
+}
+
+async function apiPush(
+  backupId: string,
+  bytes: Buffer,
+  manifestJson: string | null,
+): Promise<CloudResult> {
+  try {
+    const folderId = await apiFolder()
+    const { snapshot } = await apiFilesFor(backupId)
+
+    await uploadSnapshot(
+      folderId,
+      `${backupId}${BACKUP_FILE_EXT}`,
+      bytes,
+      manifestJson,
+      snapshot?.id,
+    )
+
+    apiFileCache.delete(folderId)
+
+    return {
+      success: true,
+      message: `Uploaded ${backupId} to Google Drive.`,
+      backupId,
+    }
+  } catch (error) {
+    console.error('[cloudBackup | api push]:', error)
+    return {
+      success: false,
+      message: `Failed to upload ${backupId} to Google Drive: ${error instanceof Error ? error.message : String(error)}`,
+      backupId,
+    }
+  }
+}
+
+async function apiListFiles(): Promise<CloudBackupFile[]> {
+  try {
+    const folderId = await apiFolder()
+    const files = await listSnapshots(folderId, BACKUP_FILE_EXT)
+    apiFileCache.set(folderId, new Map(files.map((file) => [file.name, file])))
+
+    const listed = files
+      .map(toCloudFile)
+      .filter((file): file is CloudBackupFile => file !== null)
+
+    return listed.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  } catch (error) {
+    console.error('[cloudBackup | api list]:', error)
+    return []
+  }
+}
+
+async function apiRemove(backupId: string): Promise<CloudResult> {
+  try {
+    const { snapshot, manifest } = await apiFilesFor(backupId)
+    const toDelete = [snapshot?.id, manifest?.id].filter((id): id is string => Boolean(id))
+    if (toDelete.length > 0) {
+      await deleteFiles(toDelete)
+      const folderId = await apiFolder()
+      apiFileCache.delete(folderId)
+    }
+    return {
+      success: true,
+      message: `Removed ${backupId} from Google Drive.`,
+      backupId,
+    }
+  } catch (error) {
+    console.error('[cloudBackup | api remove]:', error)
+    return {
+      success: false,
+      message: `Failed to remove ${backupId} from Google Drive: ${error instanceof Error ? error.message : String(error)}`,
+      backupId,
+    }
+  }
+}
+
+async function apiPull(backupId: string): Promise<CloudResult> {
+  try {
+    const { snapshot } = await apiFilesFor(backupId)
+    if (!snapshot) {
+      return {
+        success: false,
+        message: `Backup ${backupId} was not found in Google Drive.`,
+        backupId,
+      }
+    }
+
+    const bytes = await downloadSnapshot(snapshot.id)
+    const manifest = manifestFromDescription(snapshot.description)
+
+    const imported = await importSnapshot(backupId, bytes, manifest as any)
+    if (!imported) {
+      return {
+        success: false,
+        message: `Backup ${backupId} was downloaded from Google Drive but could not be stored.`,
+        backupId,
+      }
+    }
+
+    return {
+      success: true,
+      message: `Fetched ${backupId} from Google Drive. It is now available to restore.`,
+      backupId,
+    }
+  } catch (error) {
+    console.error('[cloudBackup | api pull]:', error)
+    return {
+      success: false,
+      message: `Failed to fetch ${backupId} from Google Drive: ${error instanceof Error ? error.message : String(error)}`,
+      backupId,
+    }
+  }
+}
+
+/**
+ * The manifest sidecar is uploaded as a plain-JSON Drive file. It is staged under
+ * /tmp because the API layer takes a path-free payload and serverless has no
+ * writable working directory.
+ */
+async function apiManifestStagingPath(backupId: string): Promise<string> {
+  const dir = path.join(os.tmpdir(), 'meditrack-gdrive-manifests')
+  await fs.mkdir(dir, { recursive: true })
+  return path.join(dir, `${backupId}${BACKUP_MANIFEST_EXT}`)
+}
+
 
 function candidateRoots(): string[] {
   const home = os.homedir()
@@ -115,6 +346,24 @@ async function readDriveUsage(dir: string): Promise<{
 }
 
 export async function getCloudStatus(): Promise<CloudStatus> {
+  if (isGdriveApiConfigured()) {
+    try {
+      return await apiStatus()
+    } catch (error) {
+      console.error('[getCloudStatus | api error]:', error)
+      return {
+        enabled: BACKUP_MIRROR_TO_DRIVE,
+        root: 'Google Drive API',
+        directory: `${GOOGLE_DRIVE_SUBDIR}`,
+        source: 'api',
+        available: false,
+        fileCount: 0,
+        totalBytes: 0,
+        message: `Google Drive API connection failed: ${error instanceof Error ? error.message : String(error)}`,
+      }
+    }
+  }
+
   const { root, source } = resolveDriveRoot()
   const directory = root ? cloudBackupDir(root) : null
 
@@ -162,12 +411,44 @@ export async function getCloudStatus(): Promise<CloudStatus> {
     }
   }
 }
+
 export async function pushSnapshotToDrive(
   localDir: string,
   backupId: string,
   bytes?: Buffer,
   manifestJson?: unknown,
 ): Promise<CloudResult> {
+  if (isGdriveApiConfigured()) {
+    let payload = bytes
+    if (!payload) {
+      try {
+        payload = await readSnapshotBytes(backupId)
+      } catch {
+        const source = path.join(localDir, `${backupId}${BACKUP_FILE_EXT}`)
+        if (existsSync(source)) {
+          payload = await fs.readFile(source)
+        }
+      }
+    }
+
+    if (!payload) {
+      return {
+        success: false,
+        message: `Snapshot file for ${backupId} is missing.`,
+        backupId,
+      }
+    }
+
+    const manifestStr =
+      manifestJson !== undefined
+        ? (typeof manifestJson === 'string'
+            ? manifestJson
+            : JSON.stringify(manifestJson))
+        : null
+
+    return apiPush(backupId, payload, manifestStr)
+  }
+
   let dir: string
   try {
     dir = await ensureDriveDir()
@@ -234,6 +515,10 @@ export async function pushSnapshotToDrive(
 }
 
 export async function listDriveFiles(): Promise<CloudBackupFile[]> {
+  if (isGdriveApiConfigured()) {
+    return apiListFiles()
+  }
+
   const dir = getDriveDirectory()
   if (!dir) return []
 
@@ -277,6 +562,10 @@ export async function listDriveFiles(): Promise<CloudBackupFile[]> {
 }
 
 export async function removeFromDrive(backupId: string): Promise<CloudResult> {
+  if (isGdriveApiConfigured()) {
+    return apiRemove(backupId)
+  }
+
   const dir = getDriveDirectory()
   if (!dir) {
     return { success: false, message: 'No Google Drive folder is configured.', backupId }
@@ -320,6 +609,10 @@ export function registerFetchHook(hook: FetchHook): void {
 }
 
 export async function pullFromDrive(backupId: string): Promise<CloudResult> {
+  if (isGdriveApiConfigured()) {
+    return apiPull(backupId)
+  }
+
   if (!fetchHook) {
     return {
       success: false,

@@ -197,7 +197,7 @@ async function writeBackupFiles(
     BackupRecord,
     'backupId' | 'createdAt' | 'restoredAt' | 'sizeBytes' | 'checksum'
   >,
-): Promise<{ sizeBytes: number; checksum: string; storedInBlob: boolean }> {
+): Promise<{ sizeBytes: number; checksum: string; storedInBlob: boolean; gzipped: Buffer }> {
   const gzipped = gzipSync(Buffer.from(JSON.stringify(snapshot), 'utf8'), {
     level: 9,
   })
@@ -211,7 +211,7 @@ async function writeBackupFiles(
     createdAt: new Date().toISOString(),
   })
 
-  return { sizeBytes: gzipped.byteLength, checksum, storedInBlob }
+  return { sizeBytes: gzipped.byteLength, checksum, storedInBlob, gzipped }
 }
 
 async function readBackupFile(backupId: string): Promise<BackupSnapshot> {
@@ -323,7 +323,7 @@ export async function createBackup(
       createdByRole: input.actor?.role ?? null,
     }
 
-    const { sizeBytes, checksum, storedInBlob } = await writeBackupFiles(
+    const { sizeBytes, checksum, storedInBlob, gzipped } = await writeBackupFiles(
       backupId,
       snapshot,
       meta,
@@ -337,11 +337,26 @@ export async function createBackup(
       createdAt: new Date().toISOString(),
     })
 
+    const manifestPayload = {
+      backupId,
+      label: created?.label ?? meta.label,
+      note: meta.note ?? null,
+      trigger: meta.trigger,
+      sizeBytes,
+      rowCount,
+      tableCounts,
+      checksum,
+      createdAt: created?.createdAt ?? new Date().toISOString(),
+      createdByName: meta.createdByName ?? null,
+      createdByRole: meta.createdByRole ?? null,
+    }
+
     const cloud = BACKUP_MIRROR_TO_DRIVE
       ? await pushSnapshotToDrive(
           BACKUP_DIR,
           backupId,
-          storedInBlob ? await readSnapshotBytes(backupId) : undefined,
+          gzipped,
+          manifestPayload,
         )
       : undefined
 

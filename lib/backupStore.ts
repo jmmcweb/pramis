@@ -8,6 +8,7 @@ import {
   BACKUP_FILE_EXT,
   BACKUP_ID_FILE_RE,
   BACKUP_MANIFEST_EXT,
+  GOOGLE_DRIVE_SUBDIR,
   type BackupTrigger,
   type TableCounts,
 } from '@/lib/constants/backup'
@@ -18,6 +19,12 @@ import {
   listBlobSnapshots,
   putSnapshotInBlob,
 } from '@/lib/vercelBlob'
+import {
+  downloadSnapshot,
+  isGdriveApiConfigured,
+  listSnapshots,
+  resolveFolderId,
+} from '@/lib/gdriveApi'
 
 /** The sidecar manifest. Also the catalogue entry for one snapshot. */
 export type StoredManifest = {
@@ -47,7 +54,11 @@ function manifestPath(backupId: string): string {
 
 /** Creates the store folder if needed. */
 export async function ensureStoreDir(): Promise<void> {
-  await fs.mkdir(BACKUP_DIR, { recursive: true })
+  try {
+    await fs.mkdir(BACKUP_DIR, { recursive: true })
+  } catch (error) {
+    console.error('[ensureStoreDir | Error]:', error)
+  }
 }
 
 
@@ -58,9 +69,9 @@ export async function storeSnapshot(
 ): Promise<{ checksum: string; storedInBlob: boolean }> {
   const checksum = createHash('sha256').update(gzipped).digest('hex')
   const withChecksum: StoredManifest = { ...manifest, checksum }
-  await ensureStoreDir()
 
   try {
+    await ensureStoreDir()
     const temp = `${snapshotPath(backupId)}.tmp`
     await fs.writeFile(temp, gzipped)
     await fs.rename(temp, snapshotPath(backupId))
@@ -68,7 +79,10 @@ export async function storeSnapshot(
     return { checksum, storedInBlob: false }
   } catch (error) {
     console.error('[storeSnapshot | local write]:', error)
-    if (!isBlobConfigured()) throw error
+    if (!isBlobConfigured()) {
+      // If serverless read-only and no Blob configured, return checksum so upload to cloud mirror can proceed
+      return { checksum, storedInBlob: false }
+    }
 
     const uploaded = await putSnapshotInBlob(backupId, gzipped, withChecksum)
     if (!uploaded.success) throw new Error(uploaded.message)
@@ -125,6 +139,24 @@ export async function readSnapshotBytes(backupId: string): Promise<Buffer> {
 
   const blob = await getSnapshotFromBlob(backupId)
   if (blob) return blob
+
+  if (isGdriveApiConfigured()) {
+    try {
+      const folderId = await resolveFolderId(GOOGLE_DRIVE_SUBDIR)
+      const files = await listSnapshots(folderId, BACKUP_FILE_EXT)
+      const match = files.find((f) => f.name === `${backupId}${BACKUP_FILE_EXT}`)
+      if (match) {
+        const bytes = await downloadSnapshot(match.id)
+        try {
+          await ensureStoreDir()
+          await fs.writeFile(snapshotPath(backupId), bytes)
+        } catch {}
+        return bytes
+      }
+    } catch (error) {
+      console.error('[readSnapshotBytes | gdrive]:', error)
+    }
+  }
 
   throw new Error(`Snapshot file for ${backupId} was not found.`)
 }
@@ -195,6 +227,31 @@ export async function listManifests(): Promise<StoredManifest[]> {
     }
   }
 
+  if (isGdriveApiConfigured()) {
+    try {
+      const folderId = await resolveFolderId(GOOGLE_DRIVE_SUBDIR)
+      const driveFiles = await listSnapshots(folderId, BACKUP_FILE_EXT)
+      const seen = new Set(found.map((m) => m.backupId))
+      for (const file of driveFiles) {
+        if (!file.name.endsWith(BACKUP_FILE_EXT)) continue
+        const backupId = file.name.slice(0, -BACKUP_FILE_EXT.length)
+        if (!BACKUP_ID_FILE_RE.test(backupId)) continue
+        if (seen.has(backupId)) continue
+        seen.add(backupId)
+
+        let manifest: StoredManifest | null = null
+        if (file.description) {
+          try {
+            manifest = JSON.parse(file.description) as StoredManifest
+          } catch {}
+        }
+        found.push(manifest ?? recoveredManifest(backupId, file.sizeBytes))
+      }
+    } catch (error) {
+      console.error('[listManifests | gdrive]:', error)
+    }
+  }
+
   return found.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
 }
 
@@ -221,11 +278,6 @@ export async function importSnapshot(
   manifest: StoredManifest | null,
 ): Promise<StoredManifest> {
   const checksum = createHash('sha256').update(bytes).digest('hex')
-  await ensureStoreDir()
-
-  const temp = `${snapshotPath(backupId)}.tmp`
-  await fs.writeFile(temp, bytes)
-  await fs.rename(temp, snapshotPath(backupId))
 
   const resolved: StoredManifest = manifest
     ? { ...manifest, backupId, checksum }
@@ -235,6 +287,19 @@ export async function importSnapshot(
         restoredAt: null,
       }
 
-  await writeManifest(backupId, resolved)
+  try {
+    await ensureStoreDir()
+    const temp = `${snapshotPath(backupId)}.tmp`
+    await fs.writeFile(temp, bytes)
+    await fs.rename(temp, snapshotPath(backupId))
+    await writeManifest(backupId, resolved)
+  } catch (error) {
+    console.error('[importSnapshot | local write]:', error)
+    if (isBlobConfigured()) {
+      const uploaded = await putSnapshotInBlob(backupId, bytes, resolved)
+      if (!uploaded.success) throw new Error(uploaded.message)
+    }
+  }
+
   return resolved
 }

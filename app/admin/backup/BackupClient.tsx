@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
@@ -37,6 +37,9 @@ import {
   StoragePanel,
   SummaryCard,
   TableBreakdown,
+  formatDateTime,
+  formatTimeAgo,
+  nextBackupDue,
   relativeTime,
   type StorageRow,
   type TableRow,
@@ -242,7 +245,7 @@ export default function BackupClient({
         detail: status.available
           ? `${status.fileCount} snapshot(s) using ${formatBytes(status.totalBytes)}` +
             (status.enabled ? ' · mirroring on' : ' · mirroring off')
-          : 'Install Drive for Desktop, or set GOOGLE_DRIVE_DIR',
+          : status.message || 'Configure Google Drive credentials or set GOOGLE_DRIVE_DIR',
         tone: status.available ? (status.enabled ? 'good' : 'warn') : 'warn',
         action: {
           label: 'Sync all',
@@ -269,6 +272,14 @@ export default function BackupClient({
     overview.storageAvailable,
     busy,
   ])
+
+  const lastAuto = overview.lastAutomaticBackupAt
+    ? formatDateTime(overview.lastAutomaticBackupAt)
+    : null
+
+  const lastRestore = overview.lastRestoredAt
+    ? formatDateTime(overview.lastRestoredAt)
+    : null
 
   return (
     <div className="pb-10">
@@ -342,16 +353,88 @@ export default function BackupClient({
           darkMode={darkMode}
           icon={<Clock size={18} />}
           label="Last automatic backup"
-          value={relativeTime(overview.lastAutomaticBackupAt)}
+          value={
+            lastAuto ? (
+              <div>
+                <p
+                  className={cx(
+                    'text-base sm:text-lg font-bold leading-tight truncate',
+                    darkMode ? 'text-white' : 'text-[#1d4662]',
+                  )}
+                  title={`${lastAuto.date} at ${lastAuto.time}`}
+                >
+                  {lastAuto.date}
+                </p>
+                <p
+                  className={cx(
+                    'text-xs font-semibold mt-0.5',
+                    darkMode ? 'text-slate-300' : 'text-[#2A2E43]',
+                  )}
+                >
+                  {lastAuto.time}
+                </p>
+              </div>
+            ) : (
+              'Never'
+            )
+          }
+          subtext={
+            overview.lastAutomaticBackupAt ? (
+              <span
+                className={cx(
+                  'inline-flex items-center gap-1 font-medium',
+                  darkMode ? 'text-emerald-400' : 'text-emerald-600',
+                )}
+                title="Time elapsed from last automatic backup"
+              >
+                <Clock size={12} />
+                {formatTimeAgo(overview.lastAutomaticBackupAt)}
+              </span>
+            ) : undefined
+          }
         />
         <SummaryCard
           darkMode={darkMode}
           icon={<History size={18} />}
           label="Last restore"
           value={
-            overview.lastRestoredAt
-              ? relativeTime(overview.lastRestoredAt)
-              : 'Never'
+            lastRestore ? (
+              <div>
+                <p
+                  className={cx(
+                    'text-base sm:text-lg font-bold leading-tight truncate',
+                    darkMode ? 'text-white' : 'text-[#1d4662]',
+                  )}
+                  title={`${lastRestore.date} at ${lastRestore.time}`}
+                >
+                  {lastRestore.date}
+                </p>
+                <p
+                  className={cx(
+                    'text-xs font-semibold mt-0.5',
+                    darkMode ? 'text-slate-300' : 'text-[#2A2E43]',
+                  )}
+                >
+                  {lastRestore.time}
+                </p>
+              </div>
+            ) : (
+              'Never'
+            )
+          }
+          subtext={
+            overview.lastRestoredAt ? (
+              <span
+                className={cx(
+                  'inline-flex items-center gap-1 font-medium',
+                  darkMode ? 'text-sky-400' : 'text-sky-600',
+                )}
+                title="Time elapsed from last restore"
+              >
+                <History size={12} />
+                {formatTimeAgo(overview.lastRestoredAt)}
+              </span>
+            ) : undefined
           }
         />
         <SummaryCard
@@ -384,6 +467,48 @@ export default function BackupClient({
                 )}{' '}
                 weeks of history).
               </p>
+
+              {/* Automatic backup time log details */}
+              <div
+                className={cx(
+                  'mt-3.5 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border px-4 py-2.5 text-xs',
+                  darkMode
+                    ? 'border-white/10 bg-slate-900/40 text-slate-300'
+                    : 'border-gray-200 bg-gray-50/80 text-gray-700',
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={cx(darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                    Last automatic backup:
+                  </span>
+                  {overview.lastAutomaticBackupAt && lastAuto ? (
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {lastAuto.date} at {lastAuto.time}{' '}
+                      <span
+                        className={cx(
+                          'ml-1 font-medium',
+                          darkMode ? 'text-emerald-400' : 'text-emerald-600',
+                        )}
+                      >
+                        ({formatTimeAgo(overview.lastAutomaticBackupAt)})
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="font-medium text-gray-400">None recorded yet</span>
+                  )}
+                </div>
+
+                {overview.lastAutomaticBackupAt && (
+                  <div className="flex items-center gap-2 border-l pl-4 border-gray-300 dark:border-white/10">
+                    <span className={cx(darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                      Next check due:
+                    </span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {nextBackupDue(overview.lastAutomaticBackupAt, overview.autoBackupIntervalHours)}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <button

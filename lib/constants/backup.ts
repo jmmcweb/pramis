@@ -1,5 +1,6 @@
 
 
+import os from 'node:os'
 import path from 'node:path'
 
 export const BACKUP_TRIGGERS = ['MANUAL', 'AUTOMATIC', 'PRE_RESTORE'] as const
@@ -85,7 +86,9 @@ export const BACKUP_DIR = path.resolve(
   process.env.BACKUP_DIR ||
     (GOOGLE_DRIVE_DIR
       ? cloudBackupDir(GOOGLE_DRIVE_DIR)
-      : path.join(process.cwd(), 'backups')),
+      : (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+          ? path.join(os.tmpdir(), 'meditrack-backups')
+          : path.join(process.cwd(), 'backups'))),
 )
 
 export const BACKUP_DIR_IS_GOOGLE_DRIVE =
@@ -129,7 +132,7 @@ export function cloudManifestPath(dir: string, backupId: string): string {
 
 export const BACKUP_ID_FILE_RE = /^BKP-\d+$/
 
-export type CloudMirrorSource = 'env' | 'detected' | 'none'
+export type CloudMirrorSource = 'api' | 'env' | 'detected' | 'none'
 
 export type CloudStatus = {
   enabled: boolean
