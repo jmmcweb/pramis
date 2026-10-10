@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
-import { FileDown, Loader2, X } from 'lucide-react'
+import { ChevronDown, Eye, FileDown, Loader2, X } from 'lucide-react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import {
   getAnalyticsStats,
@@ -21,6 +21,7 @@ import {
   DEFAULT_ANALYTICS_DETAIL_COLUMNS,
   DEFAULT_ANALYTICS_REPORT_SECTIONS,
   isYearRangeKey,
+  analyticsDetailSectionLabel,
   type AnalyticsRangeKey,
   type AnalyticsReportSectionKey,
 } from '@/lib/constants/analytics'
@@ -90,6 +91,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
   const byYear = isYearRangeKey(rangeKey)
 
+  // The record count only makes sense for bounded filters (week / month /
+  // year). "All Time" has no date window, so its number is hidden.
+  const showRecordCount =
+    byYear ||
+    (ANALYTICS_RANGES.find((r) => r.key === rangeKey)?.days ?? 0) > 0
+
   // Load the list of selectable years once, when the year view is first opened.
   useEffect(() => {
     if (!byYear) return
@@ -122,9 +129,18 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
           rangeKey,
           isYearRangeKey(rangeKey) ? year : null,
         )
-        if (!cancelled && res.success && res.stats) setStats(res.stats)
+        if (cancelled) return
+        if (res.success && res.stats) {
+          setStats(res.stats)
+        } else {
+          setStats(null)
+          toast.error(res.message || 'Failed to load analytics data.')
+        }
       } catch {
-        if (!cancelled) setStats(null)
+        if (!cancelled) {
+          setStats(null)
+          toast.error('Failed to load analytics data. Please try again.')
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -255,7 +271,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
   const buildData = (
     rows: AnalyticsBreakdown[],
   ): Array<Category & { pct: number; count: number }> => {
-    const denom = total || 1
+    const denom = rows.reduce((sum, r) => sum + r.count, 0) || 1
 
     return rows.map((r, i) => ({
       label: r.label,
@@ -264,6 +280,9 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
       pct: parseFloat(((r.count / denom) * 100).toFixed(1)),
     }))
   }
+
+  const sumCounts = (items: Array<{ count: number }>) =>
+    items.reduce((sum, i) => sum + i.count, 0)
 
   const serviceShareData = buildData(stats?.serviceShare ?? [])
   const appointmentReasonsData = buildData(stats?.reasons ?? [])
@@ -299,30 +318,57 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
         : 0,
   }))
 
+  const bloodTypesData = buildData(stats?.bloodTypes ?? [])
+  const bloodTypesTotal = sumCounts(bloodTypesData)
+
+  const immunizationData = buildData(stats?.immunization ?? [])
+  const immunizationTotal = sumCounts(immunizationData)
+
+  const sexTotals = (stats?.sexByService ?? []).reduce(
+    (acc, s) => ({ male: acc.male + s.male, female: acc.female + s.female }),
+    { male: 0, female: 0 },
+  )
+  const sexTotal = sexTotals.male + sexTotals.female
+  const sexShare = (n: number) =>
+    sexTotal > 0 ? parseFloat(((n / sexTotal) * 100).toFixed(1)) : 0
+  const sexData: Array<Category & { pct: number; count: number }> = [
+    { label: 'Male', color: '#0EA5E9', count: sexTotals.male, pct: sexShare(sexTotals.male) },
+    {
+      label: 'Female',
+      color: '#818CF8',
+      count: sexTotals.female,
+      pct: sexShare(sexTotals.female),
+    },
+  ]
+
   const summary = [
     {
       label: 'Total Appointments',
       value: fmt(total),
       sub: rangeLabel,
       color: '#4E69D3',
+      onView: () => openDetails('serviceShare'),
     },
     {
       label: 'Completed',
       value: `${stats?.completionRate ?? 0}%`,
       sub: 'completion rate',
       color: '#10B981',
+      onView: () => openDetails('outcomes', 'Completed'),
     },
     {
       label: 'No-Shows',
       value: `${stats?.noShowRate ?? 0}%`,
       sub: 'of appointments',
       color: '#EF4444',
+      onView: () => openDetails('outcomes', 'No Show'),
     },
     {
       label: 'Repeat Visits',
       value: fmt(stats?.repeatVisits ?? 0),
       sub: `${(repeatRate * 100).toFixed(0)}% return rate`,
       color: '#EC4899',
+      onView: () => openDetails('repeatVisits'),
     },
   ]
 
@@ -491,6 +537,14 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                       style={{ backgroundColor: item.color }}
                     />
                   </div>
+                  <button
+                    type="button"
+                    onClick={item.onView}
+                    className="mt-3 text-[11px] font-bold hover:underline cursor-pointer text-left"
+                    style={{ color: item.color }}
+                  >
+                    View details
+                  </button>
                 </div>
               ))}
             </div>
@@ -502,6 +556,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
             stats={stats}
             rangeLabel={rangeLabel}
             total={total}
+            onView={(section, label) => openDetails(section, label ?? null)}
           />
 
           {/* 3. Appointment Operations */}
@@ -522,14 +577,13 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                   />
 
                 {appointmentOutcomesData.length > 0 ? (
-                  <div className="flex justify-center">
-                    <OutcomesDonut
-                      darkMode={darkMode}
-                      data={appointmentOutcomesData}
-                      total={total}
-                      centerLabel="Appointments"
-                    />
-                  </div>
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={appointmentOutcomesData}
+                    total={sumCounts(appointmentOutcomesData)}
+                    centerLabel="Appointments"
+                    onSelect={(item) => openDetails('outcomes', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -541,23 +595,21 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
               </div>
 
               <div className={`${card} p-6`}>
-                <h3 className={title}>Top appointment reasons</h3>
+                <CardHeader
+                  darkMode={darkMode}
+                  title="Top appointment reasons"
+                  titleClass={title}
+                  onView={() => openDetails('reasons')}
+                />
 
                 {appointmentReasonsData.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {appointmentReasonsData.slice(0, 7).map((r) => (
-                      <BarRow
-                        key={r.label}
-                        darkMode={darkMode}
-                        label={r.label}
-                        count={r.count}
-                        pct={r.pct}
-                        color={r.color}
-                        labelWidth="w-36"
-                        onClick={() => openDetails('reasons', r.label)}
-                      />
-                    ))}
-                  </div>
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={appointmentReasonsData}
+                    total={sumCounts(appointmentReasonsData)}
+                    centerLabel="Appointments"
+                    onSelect={(item) => openDetails('reasons', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -569,23 +621,21 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
               </div>
 
               <div className={`${card} p-6`}>
-                <h3 className={title}>Peak hours</h3>
+                <CardHeader
+                  darkMode={darkMode}
+                  title="Peak hours"
+                  titleClass={title}
+                  onView={() => openDetails('peakHours')}
+                />
 
                 {peakHoursData.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {peakHoursData.slice(0, 7).map((h) => (
-                      <BarRow
-                        key={h.label}
-                        darkMode={darkMode}
-                        label={h.label}
-                        count={h.count}
-                        pct={h.pct}
-                        color={h.color}
-                        labelWidth="w-32"
-                        onClick={() => openDetails('peakHours', h.label)}
-                      />
-                    ))}
-                  </div>
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={peakHoursData}
+                    total={sumCounts(peakHoursData)}
+                    centerLabel="Appointments"
+                    onSelect={(item) => openDetails('peakHours', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -616,19 +666,13 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                   />
 
                 {serviceShareData.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {serviceShareData.slice(0, 8).map((s) => (
-                      <BarRow
-                        key={s.label}
-                        darkMode={darkMode}
-                        label={s.label}
-                        count={s.count}
-                        pct={s.pct}
-                        color={s.color}
-                        labelWidth="w-40"
-                      />
-                    ))}
-                  </div>
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={serviceShareData}
+                    total={sumCounts(serviceShareData)}
+                    centerLabel="Appointments"
+                    onSelect={(item) => openDetails('serviceShare', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -648,33 +692,13 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                   />
 
                 {ageGroupsData.some((g) => g.count > 0) ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-4">
-                    {ageGroupsData.map((g) => (
-                      <div key={g.label}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className={`text-sm font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
-                            {g.label}
-                          </span>
-                          <span className={`text-xs font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {g.count.toLocaleString()} · {g.pct}%
-                          </span>
-                        </div>
-                        <div
-                          className={`h-2.5 rounded-full overflow-hidden ${
-                            darkMode ? 'bg-[#0f1438]' : 'bg-[#E8EAF6]'
-                          }`}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${g.pct}%`,
-                              background: g.color,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={ageGroupsData}
+                    total={ageGroupsTotal}
+                    centerLabel="Patients"
+                    onSelect={(item) => openDetails('ageGroups', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -719,31 +743,13 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                 </div>
 
                 {diseasesData.length > 0 ? (
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-7">
-                    <OutcomesDonut
-                      darkMode={darkMode}
-                      data={diseasesData}
-                      total={diseaseCases}
-                      centerLabel="Cases"
-                    />
-
-                    <div className="flex flex-col gap-3 w-full sm:w-auto">
-                      {diseasesData.slice(0, 7).map((d) => (
-                        <div key={d.label} className="flex items-center gap-3">
-                          <span
-                            className="w-3 h-3 rounded-full flex-shrink-0"
-                            style={{ background: d.color }}
-                          />
-                          <span className={`text-sm font-semibold flex-1 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
-                            {d.label}
-                          </span>
-                          <span className={`text-sm font-bold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                            {d.count.toLocaleString()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={diseasesData}
+                    total={diseaseCases}
+                    centerLabel="Cases"
+                    onSelect={(item) => openDetails('diseases', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -756,8 +762,16 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
 
               {stats?.pwdStats ? (
                 <div className={`${card} p-6`}>
-                  <h3 className={title}>PWD & senior citizen overview</h3>
-                  <br /><br />
+                  <CardHeader
+                    darkMode={darkMode}
+                    title="PWD & senior citizen overview"
+                    titleClass={title}
+                    onView={() => openDetails('pwd')}
+                  />
+                  <p className={`${sub} mt-1 mb-5`}>
+                    Registered PWD and senior citizens accounted for in the{' '}
+                    {rangeLabel}.
+                  </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <ProfileStat
@@ -766,6 +780,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                       value={stats.pwdStats.total}
                       pct={`${stats.pwdStats.pct}% of users`}
                       color="#4E69D3"
+                      onView={() => openDetails('pwd')}
                     />
                     <ProfileStat
                       darkMode={darkMode}
@@ -773,6 +788,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                       value={stats.pwdStats.seniorCitizens}
                       pct={`${stats.pwdStats.seniorPct}% of users`}
                       color="#F59E0B"
+                      onView={() => openDetails('senior')}
                     />
                   </div>
                 </div>
@@ -812,42 +828,59 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                   />
 
                 {(stats?.sexByService ?? []).length > 0 ? (
-                  <div className="flex flex-col gap-4">
-                    {stats!.sexByService.slice(0, 6).map((s) => {
-                      const serviceTotal = s.male + s.female || 1
-                      const malePct = Math.round((s.male / serviceTotal) * 100)
-                      const femalePct = 100 - malePct
-
-                      return (
-                        <div key={s.service}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-sm font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
-                              {s.service}
-                            </span>
-                            <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {serviceTotal.toLocaleString()}
-                            </span>
-                          </div>
-
-                          <div className="flex justify-between text-[11px] font-semibold mb-1.5">
-                            <span className="text-sky-500">Male {malePct}%</span>
-                            <span className="text-indigo-400">Female {femalePct}%</span>
-                          </div>
-
-                          <div className={`h-2.5 rounded-full overflow-hidden flex ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                            <div
-                              className="h-full bg-sky-500"
-                              style={{ width: `${malePct}%` }}
-                            />
-                            <div
-                              className="h-full bg-indigo-400"
-                              style={{ width: `${femalePct}%` }}
-                            />
-                          </div>
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={sexData}
+                    total={sexTotal}
+                    centerLabel="Patients"
+                    onSelect={(item) => openDetails('sexByService', item.label)}
+                    footer={
+                      <div
+                        className={`rounded-xl border p-3 ${
+                          darkMode
+                            ? 'bg-[#1e1438] border-white/10'
+                            : 'bg-gray-50 border-gray-100'
+                        }`}
+                      >
+                        <p
+                          className={`text-[11px] font-bold uppercase tracking-wide m-0 mb-2 ${
+                            darkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}
+                        >
+                          Patients by service
+                        </p>
+                        <div className="flex flex-col gap-1 max-h-[150px] overflow-y-auto pr-1">
+                          {stats!.sexByService.map((s) => (
+                            <button
+                              key={s.service}
+                              type="button"
+                              onClick={() => openDetails('sexByService', s.service)}
+                              title={`View patients for ${s.service}`}
+                              className={`flex items-center justify-between gap-3 w-full text-left rounded-lg px-2 py-1.5 cursor-pointer transition-colors ${
+                                darkMode ? 'hover:bg-white/10' : 'hover:bg-gray-100'
+                              }`}
+                            >
+                              <span
+                                className={`text-[12px] font-semibold truncate flex-1 ${
+                                  darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'
+                                }`}
+                              >
+                                {s.service}
+                              </span>
+                              <span className="text-[11px] font-bold whitespace-nowrap text-sky-500">
+                                M {s.male}
+                                <span className={darkMode ? 'text-gray-500' : 'text-gray-400'}>
+                                  {' '}
+                                  ·{' '}
+                                </span>
+                                <span className="text-indigo-400">F {s.female}</span>
+                              </span>
+                            </button>
+                          ))}
                         </div>
-                      )
-                    })}
-                  </div>
+                      </div>
+                    }
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -867,30 +900,14 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     onView={() => openDetails('immunization')}
                   />
 
-                {(stats?.immunization ?? []).length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {stats!.immunization.slice(0, 8).map((imm, i) => {
-                      const maxCount = Math.max(
-                        ...(stats!.immunization.map((item) => item.count)),
-                        1,
-                      )
-                      const pct = parseFloat(
-                        ((imm.count / maxCount) * 100).toFixed(1),
-                      )
-
-                      return (
-                        <BarRow
-                          key={imm.label}
-                          darkMode={darkMode}
-                          label={imm.label}
-                          count={imm.count}
-                          pct={pct}
-                          color={COLORS[i % COLORS.length]}
-                          labelWidth="w-28"
-                        />
-                      )
-                    })}
-                  </div>
+                {immunizationData.length > 0 ? (
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={immunizationData}
+                    total={immunizationTotal}
+                    centerLabel="Doses"
+                    onSelect={(item) => openDetails('immunization', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -910,44 +927,14 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     onView={() => openDetails('bloodTypes')}
                   />
 
-                {(stats?.bloodTypes ?? []).length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
-                    {stats!.bloodTypes.map((bt, i) => {
-                      const totalBt = stats!.bloodTypes.reduce(
-                        (sum, b) => sum + b.count,
-                        0,
-                      )
-
-                      const pct =
-                        totalBt > 0
-                          ? ((bt.count / totalBt) * 100).toFixed(1)
-                          : '0'
-
-                      return (
-                        <div
-                          key={bt.label}
-                          className={`flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border ${
-                            darkMode
-                              ? 'bg-[#1e1438] border-white/10'
-                              : 'bg-gray-50 border-gray-100'
-                          }`}
-                        >
-                          <span
-                            className="text-xl font-extrabold"
-                            style={{ color: COLORS[i % COLORS.length] }}
-                          >
-                            {bt.label}
-                          </span>
-                          <span className={`text-base font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
-                            {bt.count.toLocaleString()}
-                          </span>
-                          <span className={`text-[10px] font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {pct}%
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                {bloodTypesData.length > 0 ? (
+                  <PieBreakdown
+                    darkMode={darkMode}
+                    data={bloodTypesData}
+                    total={bloodTypesTotal}
+                    centerLabel="Patients"
+                    onSelect={(item) => openDetails('bloodTypes', item.label)}
+                  />
                 ) : (
                   <EmptyState
                     darkMode={darkMode}
@@ -965,16 +952,16 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
       {detail?.open && (
         <DetailsModal
           darkMode={darkMode}
-          title={
-            detail.label
-              ? `${detail.label}`
-              : ANALYTICS_REPORT_SECTIONS.find((s) => s.key === detail.section)?.label ?? 'Details'
+          title={analyticsDetailSectionLabel(detail.section)}
+          subtitle={
+            detail.label ? `${rangeLabel} · ${detail.label}` : rangeLabel
           }
-          subtitle={rangeLabel}
           section={detail.section}
+          category={detail.label}
           rows={detailRows}
           total={detailTotal}
           loading={detailLoading}
+          showCount={showRecordCount}
           onClose={() => setDetail(null)}
         />
       )}
@@ -1004,23 +991,151 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
   )
 }
 
+// ISO timestamp → "YYYY-MM-DD".
+const fmtIsoDate = (iso: string) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10)
+}
+
+// Complete patient details for one drill-down row: who the patient is, how to
+// reach them, and the visit that put them in the analytic being viewed.
+function PatientDetailCard({
+  darkMode,
+  row,
+  report,
+  category,
+}: {
+  darkMode: boolean
+  row: AnalyticsDetailRow
+  report: string
+  category: string | null
+}) {
+  const groups: { title: string; items: { label: string; value: string }[] }[] =
+    [
+      {
+        title: 'Patient details',
+        items: [
+          { label: 'Full name', value: row.patientName },
+          { label: 'Booked as', value: row.relation },
+          { label: 'Date of birth', value: row.birthdate ?? '—' },
+          { label: 'Age', value: row.age === null ? '—' : `${row.age}` },
+          { label: 'Sex', value: row.sex },
+          { label: 'Blood type', value: row.bloodType || '—' },
+          { label: 'Patient ref.', value: row.patientRef },
+        ],
+      },
+      {
+        title: 'Contact & address',
+        items: [
+          { label: 'Address', value: row.address },
+          { label: 'Contact number', value: row.contact },
+          { label: 'PhilHealth', value: row.philHealth },
+          { label: 'Religion', value: row.religion },
+        ],
+      },
+      {
+        title: `${report} record`,
+        items: [
+          ...(category ? [{ label: 'Matches', value: category }] : []),
+          { label: 'Service', value: row.service },
+          { label: 'Reason', value: row.reason },
+          { label: 'Outcome', value: row.outcome },
+          ...(row.disease && row.disease !== '—'
+            ? [{ label: 'Condition', value: row.disease }]
+            : []),
+          ...(row.diagnosis ? [{ label: 'Diagnosis', value: row.diagnosis }] : []),
+          { label: 'Visit date', value: fmtIsoDate(row.date) },
+          { label: 'Time slot', value: row.slot },
+          {
+            label: 'Booked on',
+            value: row.bookedOn ? fmtIsoDate(row.bookedOn) : '—',
+          },
+          {
+            label: 'Source',
+            value: row.source === 'WALK_IN' ? 'Walk-in' : 'Booking',
+          },
+          { label: 'Visits in range', value: String(row.visits ?? 1) },
+          { label: 'Recorded by', value: row.checkedBy || '—' },
+          { label: 'Appointment ref.', value: row.appointmentRef },
+        ],
+      },
+    ]
+
+  const panel = darkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200'
+  const label = darkMode ? 'text-gray-400' : 'text-gray-500'
+  const value = darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'
+
+  return (
+    <div
+      className={`px-4 py-4 border-t ${darkMode ? 'bg-white/[0.03]' : 'bg-gray-50'}`}
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {groups.map((g) => (
+          <div
+            key={g.title}
+            className={`rounded-xl border overflow-hidden ${panel}`}
+          >
+            <div
+              className={`px-3 py-2 text-[11px] font-bold uppercase tracking-wide border-b ${
+                darkMode
+                  ? 'border-white/10 bg-white/5 text-gray-400'
+                  : 'border-gray-200 bg-gray-100 text-gray-500'
+              }`}
+            >
+              {g.title}
+            </div>
+            <table className="w-full border-collapse">
+              <tbody>
+                {g.items.map((it) => (
+                  <tr
+                    key={it.label}
+                    className={`border-b last:border-b-0 ${
+                      darkMode ? 'border-white/5' : 'border-gray-100'
+                    }`}
+                  >
+                    <th
+                      scope="row"
+                      className={`px-3 py-1.5 text-left align-top whitespace-nowrap w-[42%] text-[12px] font-semibold font-normal ${label}`}
+                    >
+                      {it.label}
+                    </th>
+                    <td
+                      className={`px-3 py-1.5 text-[12px] font-bold break-words ${value}`}
+                    >
+                      {it.value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DetailsModal({
   darkMode,
   title,
   subtitle,
   section,
+  category,
   rows,
   total,
   loading,
+  showCount,
   onClose,
 }: {
   darkMode: boolean
   title: string
   subtitle: string
   section: AnalyticsDetailSection
+  category: string | null
   rows: AnalyticsDetailRow[]
   total: number
   loading: boolean
+  showCount: boolean
   onClose: () => void
 }) {
   useEffect(() => {
@@ -1031,13 +1146,14 @@ function DetailsModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  useEffect(() => setExpanded(null), [rows])
+
   const columns =
     ANALYTICS_DETAIL_COLUMNS[section] ?? DEFAULT_ANALYTICS_DETAIL_COLUMNS
 
-  const fmtDate = (iso: string) => {
-    const d = new Date(iso)
-    return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10)
-  }
+  const fmtDate = (iso: string) => fmtIsoDate(iso)
 
   const th = `px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide whitespace-nowrap ${
     darkMode ? 'text-gray-400' : 'text-gray-500'
@@ -1069,10 +1185,9 @@ function DetailsModal({
             <p
               className={`text-xs mt-1 mb-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
             >
-              {subtitle} ·{' '}
-              {loading
-                ? 'Loading records…'
-                : `${total.toLocaleString()} record${total === 1 ? '' : 's'}`}
+              {subtitle}
+              {showCount &&
+                ` · ${loading ? 'Loading records…' : `${total.toLocaleString()} record${total === 1 ? '' : 's'}`}`}
             </p>
           </div>
           <button
@@ -1110,14 +1225,21 @@ function DetailsModal({
             </div>
           ) : (
             <>
-              {total > rows.length && (
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                {showCount && total > rows.length && (
+                  <p
+                    className={`text-[11px] m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
+                    Showing the {rows.length.toLocaleString()} most recent of{' '}
+                    {total.toLocaleString()} records.
+                  </p>
+                )}
                 <p
-                  className={`text-[11px] mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  className={`text-[11px] m-0 font-semibold ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}
                 >
-                  Showing the {rows.length.toLocaleString()} most recent of{' '}
-                  {total.toLocaleString()} records.
+                  Use the View button to see the complete patient details.
                 </p>
-              )}
+              </div>
               <table className="w-full border-collapse">
                 <thead
                   className={`sticky top-0 z-10 ${darkMode ? 'bg-[#2d1b4e]' : 'bg-white'}`}
@@ -1131,34 +1253,108 @@ function DetailsModal({
                         {c.label}
                       </th>
                     ))}
+                    <th className={`${th} text-right`}>
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
-                    <tr
-                      key={r.key}
-                      className={`border-b ${darkMode ? 'border-white/5' : 'border-gray-100'}`}
-                    >
-                      {columns.map((c) => {
-                        const raw = (r as unknown as Record<string, unknown>)[c.key]
-                        const value =
-                          raw === null || raw === undefined || raw === '' ? '—' : String(raw)
-                        const isDate = c.key === 'date'
-                        const isLong = c.key === 'diagnosis'
-                        return (
-                          <td
-                            key={c.key}
-                            title={isLong ? value : undefined}
-                            className={`${td} ${c.align === 'right' ? 'text-right' : ''} ${
-                              isLong ? 'max-w-[280px] truncate' : ''
-                            } ${c.key === 'patientName' ? 'font-semibold' : ''}`}
-                          >
-                            {isDate ? fmtDate(value) : value}
+                  {rows.map((r) => {
+                    const isOpen = expanded === r.key
+                    return (
+                      <Fragment key={r.key}>
+                        <tr
+                          className={`border-b transition-colors ${
+                            darkMode
+                              ? 'border-white/5 hover:bg-white/5'
+                              : 'border-gray-100 hover:bg-gray-50'
+                          } ${isOpen ? (darkMode ? 'bg-white/5' : 'bg-gray-50') : ''}`}
+                        >
+                          {columns.map((c) => {
+                            const raw = (r as unknown as Record<string, unknown>)[c.key]
+                            const value =
+                              raw === null || raw === undefined || raw === ''
+                                ? '—'
+                                : String(raw)
+                            const isDate = c.key === 'date'
+                            const isLong = c.key === 'diagnosis'
+                            const isWide =
+                              c.key === 'address' ||
+                              c.key === 'philHealth' ||
+                              c.key === 'relation'
+                            return (
+                              <td
+                                key={c.key}
+                                title={isLong || isWide ? value : undefined}
+                                className={`${td} ${c.align === 'right' ? 'text-right' : ''} ${
+                                  isLong
+                                    ? 'max-w-[280px] truncate'
+                                    : isWide
+                                      ? 'max-w-[220px] truncate'
+                                      : ''
+                                } ${c.key === 'patientName' ? 'font-semibold' : ''}`}
+                              >
+                                {isDate ? fmtDate(value) : value}
+                              </td>
+                            )
+                          })}
+                          <td className={`${td} text-right whitespace-nowrap`}>
+                            <button
+                              type="button"
+                              onClick={() => setExpanded(isOpen ? null : r.key)}
+                              aria-expanded={isOpen}
+                              aria-label={
+                                isOpen
+                                  ? `Hide details for ${String(
+                                      (r as unknown as Record<string, unknown>)
+                                        .patientName ?? 'patient',
+                                    )}`
+                                  : `View details for ${String(
+                                      (r as unknown as Record<string, unknown>)
+                                        .patientName ?? 'patient',
+                                    )}`
+                              }
+                              title={isOpen ? 'Hide details' : 'View details'}
+                              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer ${
+                                isOpen
+                                  ? darkMode
+                                    ? 'bg-[#4E69D3]/25 text-[#B9C6FF] hover:bg-[#4E69D3]/35'
+                                    : 'bg-[#4E69D3]/10 text-[#4E69D3] hover:bg-[#4E69D3]/20'
+                                  : darkMode
+                                    ? 'bg-white/10 text-gray-200 hover:bg-white/20'
+                                    : 'bg-gray-100 text-[#1d4662] hover:bg-gray-200'
+                              }`}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              {isOpen ? 'Hide' : 'View'}
+                              <ChevronDown
+                                size={14}
+                                className={`transition-transform ${
+                                  isOpen ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
                           </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
+                        </tr>
+                        {isOpen && (
+                          <tr
+                            className={`border-b ${
+                              darkMode ? 'border-white/5' : 'border-gray-100'
+                            }`}
+                          >
+                            <td colSpan={columns.length + 1} className="p-0">
+                              <PatientDetailCard
+                                darkMode={darkMode}
+                                row={r}
+                                report={title}
+                                category={category}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </>
@@ -1485,12 +1681,14 @@ function ProfileStat({
   value,
   pct,
   color,
+  onView,
 }: {
   darkMode: boolean
   label: string
   value: number
   pct: string
   color: string
+  onView?: () => void
 }) {
   return (
     <div className={`rounded-2xl border p-5 ${
@@ -1509,6 +1707,15 @@ function ProfileStat({
       <div className="text-xs font-semibold mt-1" style={{ color }}>
         {pct}
       </div>
+      {onView && (
+        <button
+          type="button"
+          onClick={onView}
+          className="mt-3 text-[11px] font-bold text-[#4E69D3] hover:underline cursor-pointer p-0 border-0 bg-transparent"
+        >
+          View details
+        </button>
+      )}
     </div>
   )
 }
@@ -1521,11 +1728,13 @@ function DecisionSupport({
   stats,
   rangeLabel,
   total,
+  onView,
 }: {
   darkMode: boolean
   stats: AnalyticsStats | null
   rangeLabel: string
   total: number
+  onView: (section: AnalyticsDetailSection, label?: string | null) => void
 }) {
   const noShowRate = stats?.noShowRate ?? 0
   const cancellationRate = stats?.cancellationRate ?? 0
@@ -1549,13 +1758,6 @@ function DecisionSupport({
     (a, b) => b.count - a.count,
   )[0]
 
-  type Indicator = {
-    label: string
-    value: string
-    detail: string
-    status: "attention" | "watch" | "normal"
-  }
-
   const indicators: Indicator[] = [
     {
       label: "No-show rate",
@@ -1572,6 +1774,7 @@ function DecisionSupport({
           : noShowRate >= 8
             ? "watch"
             : "normal",
+      onView: () => onView("outcomes", "No Show"),
     },
     {
       label: "Cancellation rate",
@@ -1588,6 +1791,7 @@ function DecisionSupport({
           : cancellationRate >= 8
             ? "watch"
             : "normal",
+      onView: () => onView("outcomes", "Cancelled"),
     },
     {
       label: "Completion rate",
@@ -1604,6 +1808,7 @@ function DecisionSupport({
           : completionRate < 85
             ? "watch"
             : "normal",
+      onView: () => onView("outcomes", "Completed"),
     },
     {
       label: "Walk-in share",
@@ -1616,191 +1821,301 @@ function DecisionSupport({
         total && walkIns / total >= 0.4
           ? "watch"
           : "normal",
+      onView: () => onView("walkIns"),
     },
   ]
 
-  const statusClass = (status: Indicator["status"]) => {
-    if (status === "attention") {
-      return darkMode
-        ? "bg-red-950/30 border-red-500/30"
-        : "bg-red-50 border-red-200"
-    }
-    if (status === "watch") {
-      return darkMode
-        ? "bg-amber-950/30 border-amber-500/30"
-        : "bg-amber-50 border-amber-200"
-    }
-    return darkMode
-      ? "bg-emerald-950/20 border-emerald-500/20"
-      : "bg-emerald-50 border-emerald-200"
-  }
+  const demandSignals: SignalRow[] = [
+    {
+      label: "Most used service",
+      value: topService
+        ? `${topService.label} (${topService.count.toLocaleString()})`
+        : "No data",
+      onView: topService
+        ? () => onView("serviceShare", topService.label)
+        : undefined,
+    },
+    {
+      label: "Most common appointment reason",
+      value: topReason
+        ? `${topReason.label} (${topReason.count.toLocaleString()})`
+        : "No data",
+      onView: topReason ? () => onView("reasons", topReason.label) : undefined,
+    },
+    {
+      label: "Busiest time",
+      value: topHour
+        ? `${topHour.label} (${topHour.count.toLocaleString()})`
+        : "No data",
+      onView: topHour ? () => onView("peakHours", topHour.label) : undefined,
+    },
+  ]
 
-  const statusText = (status: Indicator["status"]) => {
-    if (status === "attention") return "Attention"
-    if (status === "watch") return "Monitor"
-    return "Normal"
-  }
-
-  const statusTextClass = (status: Indicator["status"]) => {
-    if (status === "attention")
-      return darkMode ? "text-red-300" : "text-red-700"
-    if (status === "watch")
-      return darkMode ? "text-amber-300" : "text-amber-700"
-    return darkMode ? "text-emerald-300" : "text-emerald-700"
-  }
+  const healthSignals: SignalRow[] = [
+    {
+      label: "Most recorded condition",
+      value: topDisease
+        ? `${topDisease.label} (${topDisease.count.toLocaleString()})`
+        : "No case data",
+      onView: topDisease ? () => onView("diseases", topDisease.label) : undefined,
+    },
+    {
+      label: "Recorded cases",
+      value: (stats?.diseaseCases ?? 0).toLocaleString(),
+      onView:
+        (stats?.diseaseCases ?? 0) > 0 ? () => onView("diseases") : undefined,
+    },
+    {
+      label: "Repeat visits",
+      value: repeatVisits.toLocaleString(),
+      onView: repeatVisits > 0 ? () => onView("repeatVisits") : undefined,
+    },
+  ]
 
   return (
     <div className={`${darkMode ? "bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]" : "bg-white border-[rgba(15,60,95,0.10)]"} p-6 rounded-[18px] border mb-[22px]`}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className={`text-xl font-bold m-0 ${darkMode ? "text-[#F9FAFB]" : "text-[#2A2E43]"}`}>
+            Decision support
+          </h3>
+          <p className={`m-0 text-[14px] mt-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+            Automated indicators for the {rangeLabel}. These are not medical diagnoses.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onView("serviceShare")}
+          className="flex-shrink-0 text-[11px] font-bold text-[#4E69D3] hover:underline cursor-pointer"
+        >
+          View details
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <h4 className={`text-sm font-bold m-0 mb-3 ${darkMode ? "text-[#F9FAFB]" : "text-[#2A2E43]"}`}>
+          Performance indicators
+        </h4>
+        <IndicatorTable darkMode={darkMode} rows={indicators} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className={`rounded-2xl border p-4 ${darkMode ? "bg-[#1e1438] border-white/10" : "bg-gray-50 border-gray-100"}`}>
           <h4 className={`text-sm font-bold m-0 mb-3 ${darkMode ? "text-[#F9FAFB]" : "text-[#2A2E43]"}`}>
             Demand signals
           </h4>
-          <div className="space-y-3">
-            <DecisionRow
-              darkMode={darkMode}
-              label="Most used service"
-              value={topService ? `${topService.label} (${topService.count.toLocaleString()})` : "No data"}
-            />
-            <DecisionRow
-              darkMode={darkMode}
-              label="Most common appointment reason"
-              value={topReason ? `${topReason.label} (${topReason.count.toLocaleString()})` : "No data"}
-            />
-            <DecisionRow
-              darkMode={darkMode}
-              label="Busiest time"
-              value={topHour ? `${topHour.label} (${topHour.count.toLocaleString()})` : "No data"}
-            />
-          </div>
+          <SignalTable darkMode={darkMode} rows={demandSignals} />
         </div>
 
         <div className={`rounded-2xl border p-4 ${darkMode ? "bg-[#1e1438] border-white/10" : "bg-gray-50 border-gray-100"}`}>
           <h4 className={`text-sm font-bold m-0 mb-3 ${darkMode ? "text-[#F9FAFB]" : "text-[#2A2E43]"}`}>
             Health monitoring signals
           </h4>
-          <div className="space-y-3">
-            <DecisionRow
-              darkMode={darkMode}
-              label="Most recorded condition"
-              value={
-                topDisease
-                  ? `${topDisease.label} (${topDisease.count.toLocaleString()})`
-                  : "No case data"
-              }
-            />
-            <DecisionRow
-              darkMode={darkMode}
-              label="Recorded cases"
-              value={`${(stats?.diseaseCases ?? 0).toLocaleString()}`}
-            />
-            <DecisionRow
-              darkMode={darkMode}
-              label="Repeat visits"
-              value={`${repeatVisits.toLocaleString()}`}
-            />
-          </div>
+          <SignalTable darkMode={darkMode} rows={healthSignals} />
         </div>
       </div>
     </div>
   )
 }
 
-function DecisionRow({
-  darkMode,
-  label,
-  value,
-}: {
-  darkMode: boolean
+type SignalRow = {
   label: string
   value: string
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-        {label}
-      </span>
-      <span className={`text-xs font-bold text-right ${darkMode ? "text-gray-200" : "text-gray-700"}`}>
-        {value}
-      </span>
-    </div>
-  )
+  onView?: () => void
 }
 
-
-function BarRow({
+function SignalTable({
   darkMode,
-  label,
-  count,
-  pct,
-  color,
-  labelWidth,
-  onClick,
+  rows,
 }: {
   darkMode: boolean
-  label: string
-  count: number
-  pct: number
-  color: string
-  labelWidth: string
-  onClick?: () => void
+  rows: SignalRow[]
 }) {
+  const th = `px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide whitespace-nowrap ${
+    darkMode ? "text-gray-400" : "text-gray-500"
+  }`
+  const td = `px-3 py-2.5 text-[13px] ${
+    darkMode ? "text-gray-300" : "text-[#2A2E43]"
+  }`
+
   return (
-    <div
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onClick()
-              }
-            }
-          : undefined
-      }
-      title={onClick ? `View patients for ${label}` : undefined}
-      className={`flex items-center gap-3 ${
-        onClick ? 'cursor-pointer hover:opacity-80 transition-opacity rounded-lg' : ''
-      }`}
-    >
+    <table className="w-full border-collapse">
+      <thead>
+        <tr className={`border-b ${darkMode ? "border-white/10" : "border-gray-200"}`}>
+          <th className={th}>Signal</th>
+          <th className={`${th} text-right`}>Value</th>
+          <th className={`${th} text-right`}>
+            <span className="sr-only">Actions</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr
+            key={row.label}
+            className={`border-b last:border-b-0 ${
+              darkMode ? "border-white/5" : "border-gray-100"
+            }`}
+          >
+            <td
+              className={`${td} font-medium whitespace-nowrap ${
+                darkMode ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              {row.label}
+            </td>
+            <td className={`${td} text-right font-bold`}>{row.value}</td>
+            <td className={`${td} text-right`}>
+              {row.onView ? (
+                <button
+                  type="button"
+                  onClick={row.onView}
+                  className={`text-[11px] font-bold whitespace-nowrap hover:underline cursor-pointer p-0 border-0 bg-transparent ${
+                    darkMode ? "text-[#8FA5F5]" : "text-[#4E69D3]"
+                  }`}
+                >
+                  View details
+                </button>
+              ) : (
+                <span className={`text-[11px] ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
+                  —
+                </span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+/** One row of the decision-support performance-indicator table. */
+type Indicator = {
+  label: string
+  value: string
+  detail: string
+  status: "attention" | "watch" | "normal"
+  /** Drill-down to the patients behind this indicator. */
+  onView: () => void
+}
+
+function IndicatorTable({
+  darkMode,
+  rows,
+}: {
+  darkMode: boolean
+  rows: Indicator[]
+}) {
+  const th = `px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide whitespace-nowrap ${
+    darkMode ? "text-gray-400" : "text-gray-500"
+  }`
+  const td = `px-3 py-2.5 text-[13px] align-top ${
+    darkMode ? "text-gray-300" : "text-[#2A2E43]"
+  }`
+
+  const statusBadge = (status: Indicator["status"]) => {
+    const map = {
+      attention: {
+        text: "Attention",
+        className: darkMode
+          ? "bg-red-950/40 text-red-300 border-red-500/30"
+          : "bg-red-50 text-red-700 border-red-200",
+      },
+      watch: {
+        text: "Monitor",
+        className: darkMode
+          ? "bg-amber-950/40 text-amber-300 border-amber-500/30"
+          : "bg-amber-50 text-amber-700 border-amber-200",
+      },
+      normal: {
+        text: "Normal",
+        className: darkMode
+          ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/30"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200",
+      },
+    }[status]
+    return (
       <span
-        className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-        style={{ background: color }}
-      />
-      <span
-        className={`${labelWidth} flex-shrink-0 text-[15px] font-semibold truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+        className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${map.className}`}
       >
-        {label}
+        {map.text}
       </span>
-      <div
-        className={`flex-1 h-2.5 rounded-full overflow-hidden ${darkMode ? 'bg-[#0f1438]' : 'bg-[#E8EAF6]'}`}
-      >
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <span
-        className={`w-32 flex-shrink-0 text-right text-[15px] whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
-      >
-        {pct}% &middot; {count}
-      </span>
-    </div>
+    )
+  }
+
+  return (
+    <table className="w-full border-collapse">
+      <thead>
+        <tr className={`border-b ${darkMode ? "border-white/10" : "border-gray-200"}`}>
+          <th className={th}>Indicator</th>
+          <th className={`${th} text-right`}>Value</th>
+          <th className={th}>Status</th>
+          <th className={th}>Assessment</th>
+          <th className={`${th} text-right`}>
+            <span className="sr-only">Actions</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr
+            key={row.label}
+            className={`border-b last:border-b-0 ${
+              darkMode ? "border-white/5" : "border-gray-100"
+            }`}
+          >
+            <td
+              className={`${td} font-medium whitespace-nowrap ${
+                darkMode ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              {row.label}
+            </td>
+            <td className={`${td} text-right font-bold whitespace-nowrap`}>
+              {row.value}
+            </td>
+            <td className={td}>{statusBadge(row.status)}</td>
+            <td
+              className={`${td} max-w-[420px] ${
+                darkMode ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              {row.detail}
+            </td>
+            <td className={`${td} text-right`}>
+              <button
+                type="button"
+                onClick={row.onView}
+                className={`text-[11px] font-bold whitespace-nowrap hover:underline cursor-pointer p-0 border-0 bg-transparent ${
+                  darkMode ? "text-[#8FA5F5]" : "text-[#4E69D3]"
+                }`}
+              >
+                View details
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
-function OutcomesDonut({
+
+
+
+function PieBreakdown({
   darkMode,
   data,
   total,
-  centerLabel = 'Appointments',
+  centerLabel = 'Total',
+  onSelect,
+  footer,
 }: {
   darkMode: boolean
   data: Array<Category & { pct: number; count: number }>
   total: number
   centerLabel?: string
+  onSelect?: (item: Category & { pct: number; count: number }) => void
+  footer?: ReactNode
 }) {
   const r = 80
   const C = 2 * Math.PI * r
@@ -1809,7 +2124,8 @@ function OutcomesDonut({
   let acc = 0
 
   return (
-    <div className="relative w-[260px] h-[260px] flex-shrink-0">
+    <div className="flex flex-col gap-4">
+    <div className="relative w-[230px] h-[230px] flex-shrink-0 self-center">
       <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
         <circle
           cx="100"
@@ -1836,7 +2152,10 @@ function OutcomesDonut({
               className="cursor-pointer transition-opacity duration-150"
               onMouseEnter={() => setHovered(o.label)}
               onMouseLeave={() => setHovered(null)}
-            />
+              onClick={() => onSelect?.(o)}
+            >
+              <title>{`View patients for ${o.label}`}</title>
+            </circle>
           )
           acc += len
           return seg
@@ -1877,6 +2196,68 @@ function OutcomesDonut({
           </>
         )}
       </div>
+      </div>
+
+      <div className="flex flex-col gap-0.5 max-h-[260px] overflow-y-auto pr-1">
+        {data.map((o) => (
+          <button
+            key={o.label}
+            type="button"
+            onClick={() => onSelect?.(o)}
+            disabled={!onSelect}
+            title={onSelect ? `View patients for ${o.label}` : undefined}
+            className={`flex items-center gap-2.5 w-full text-left rounded-lg px-2 py-1.5 transition-colors ${
+              onSelect ? 'cursor-pointer' : 'cursor-default'
+            } ${darkMode ? 'hover:bg-white/10' : 'hover:bg-gray-100'} ${
+              hovered === o.label
+                ? darkMode
+                  ? 'bg-white/10'
+                  : 'bg-gray-100'
+                : ''
+            }`}
+            onMouseEnter={() => setHovered(o.label)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <span
+              className="w-3 h-3 rounded-full flex-shrink-0"
+              style={{ background: o.color }}
+            />
+            <span
+              className={`flex-1 min-w-0 text-[13px] font-semibold truncate ${
+                darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'
+              }`}
+            >
+              {o.label}
+            </span>
+            <span
+              className={`text-[13px] font-bold whitespace-nowrap ${
+                darkMode ? 'text-gray-200' : 'text-gray-700'
+              }`}
+            >
+              {o.count.toLocaleString()}
+            </span>
+            <span
+              className={`w-12 text-right text-[12px] font-semibold whitespace-nowrap ${
+                darkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}
+            >
+              {o.pct}%
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {footer}
+
+      {onSelect && (
+        <p
+          className={`text-[11px] font-semibold m-0 ${
+            darkMode ? 'text-gray-500' : 'text-gray-400'
+          }`}
+        >
+          Select a slice or a category to view the patients behind it.
+        </p>
+      )}
     </div>
   )
 }

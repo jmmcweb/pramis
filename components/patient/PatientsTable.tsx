@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
-  Plus,
   Edit3,
   Eye,
   X,
@@ -307,13 +306,6 @@ export default function PatientsTable({
       : 'border-gray-200 text-gray-800 bg-gray-100'
   } rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] box-border`
 
-  const openAdd = () => {
-    setEditingId(null)
-    setForm(emptyForm)
-    setFormError(null)
-    setShowModal(true)
-  }
-
   const openEdit = (p: PatientListItem) => {
     setEditingId(p.id)
     setForm({
@@ -483,14 +475,6 @@ export default function PatientsTable({
               } outline-none focus:border-[#4E69D3]`}
             />
           </div>
-          <button
-            onClick={openAdd}
-            disabled={isPending}
-            className="inline-flex items-center justify-center gap-1.5 px-[18px] py-2.5 bg-[#4E69D3] text-white border-none rounded-lg text-[15px] font-semibold font-poppins cursor-pointer hover:bg-[#4A6BC4] transition-colors disabled:opacity-50"
-          >
-            <Plus size={18} strokeWidth={2.5} />
-            <span>Add Patient</span>
-          </button>
         </div>
 
         <div className="overflow-x-auto rounded-xl">

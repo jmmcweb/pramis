@@ -8,6 +8,7 @@ import {
   ANALYTICS_RANGES,
   isYearRangeKey,
   type AnalyticsRangeKey,
+  type AnalyticsDetailSection,
 } from '@/lib/constants/analytics'
 
 export type AnalyticsBreakdown = { label: string; count: number }
@@ -212,8 +213,12 @@ export async function getAnalyticsStats(
         status: true,
         source: true,
         userId: true,
+        patientId: true,
+        familyMemberId: true,
         service: { select: { name: true } },
-        patient: { select: { sex: true, name: true } },
+        patient: {
+          select: { sex: true, name: true, patientid: true, bloodType: true },
+        },
         user: { select: { profile: { select: { firstName: true, lastName: true } } } },
       },
     })
@@ -429,9 +434,21 @@ export async function getAnalyticsStats(
       }
     }
 
-    // Sex breakdown per top-5 services
+    // Sex breakdown per top-5 services. Distinct patients with visits in the
+    // window only: a patient with several visits counts once per service
+    // rather than once per appointment (per the same visits-only rule the
+    // age-group chart uses). `patientId` is authoritative, so family-member
+    // visits resolve to the member's own identity instead of the booking
+    // account, and overlapping appointment/patient records collapse here.
     const sexServiceMap = new Map<string, { male: number; female: number }>()
+    const seenSexPatients = new Set<string>()
     for (const r of rows) {
+      const owner =
+        String(r.patientId ?? r.familyMemberId ?? r.userId ?? '').trim() ||
+        String(r.patient?.patientid ?? '').trim()
+      if (!owner) continue
+      if (seenSexPatients.has(owner)) continue
+      seenSexPatients.add(owner)
       const name = r.service?.name ?? 'Others'
       const sex = String(r.patient?.sex ?? '').toLowerCase()
       const entry = sexServiceMap.get(name) ?? { male: 0, female: 0 }
@@ -612,38 +629,77 @@ export async function getAnalyticsStats(
       console.error('[getAnalyticsStats | medicalHistory | Error]:', mhError)
     }
 
-    // Blood type distribution from patient records
     let bloodTypes: AnalyticsBreakdown[] = []
     try {
-      const bloodTypeRows = await (prisma as any).patient.groupBy({
-        by: ['bloodType'],
-        _count: { bloodType: true },
-        where: { bloodType: { not: null } },
-      })
-      bloodTypes = bloodTypeRows
-        .filter((r: any) => r.bloodType)
-        .map((r: any) => ({
-          label: r.bloodType as string,
-          count: r._count.bloodType as number,
-        }))
-        .sort(
-          (a: AnalyticsBreakdown, b: AnalyticsBreakdown) => b.count - a.count,
-        )
+      const seenBtPatients = new Set<string>()
+      const btCounts = new Map<string, number>()
+      for (const r of rows) {
+        const patient = r.patient
+        const sexKey =
+          String(patient?.sex ?? '').trim().toUpperCase()
+        const personName = patient?.name ?? ''
+        const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
+        const owner =
+          String(r.patientId ?? r.familyMemberId ?? r.userId ?? '').trim() ||
+          String(
+            patient?.patientid ??
+            r.familyMemberId ??
+            `${sexKey}||${nameKey}`,
+          ).trim()
+        if (!owner) continue
+        if (seenBtPatients.has(owner)) continue
+        seenBtPatients.add(owner)
+        const bt = String(r.patient?.bloodType ?? '').trim().toUpperCase()
+        if (!bt) continue
+        btCounts.set(bt, (btCounts.get(bt) ?? 0) + 1)
+      }
+      bloodTypes = [...btCounts.entries()]
+        .map(([label, count]) => ({ label, count }))
+        .sort((a: AnalyticsBreakdown, b: AnalyticsBreakdown) => b.count - a.count)
     } catch (btErr) {
       console.error('[getAnalyticsStats | bloodTypes | Error]:', btErr)
     }
 
-    // Age group distribution from ALL patients (not range-filtered — demographic)
     let ageGroups: AnalyticsBreakdown[] = []
     try {
-      const patients = await (prisma as any).patient.findMany({
-        select: { birthdate: true },
-        where: { birthdate: { not: null } },
-      })
+      const seenAgePatients = new Set<string>()
       const ageGroupMap = new Map<string, number>()
       for (const label of AGE_GROUP_ORDER) ageGroupMap.set(label, 0)
-      for (const p of patients) {
-        const age = computeAge(p.birthdate)
+      const ageAppointments = await (prisma as any).appointment.findMany({
+        where,
+        select: {
+          patientId: true,
+          familyMemberId: true,
+          userId: true,
+          patient: { select: { patientid: true, birthdate: true, name: true, sex: true } },
+          familyMember: { select: { familymemberid: true, birthdate: true, name: true, sex: true } },
+          user: { select: { profile: { select: { firstName: true, lastName: true, birthdate: true, sex: true } } } },
+        },
+      })
+      for (const appt of ageAppointments) {
+        const patient = appt.patient
+        const member = appt.familyMember
+        const profile = appt.user?.profile ?? null
+        const birthdate = patient?.birthdate ?? member?.birthdate ?? profile?.birthdate ?? null
+        if (!birthdate) continue
+        const isoDob = new Date(birthdate).toISOString().slice(0, 10)
+        const personName =
+          member?.name ??
+          patient?.name ??
+          `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
+        const sexKey = String(member?.sex ?? patient?.sex ?? profile?.sex ?? '').trim().toUpperCase()
+        const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
+        const owner =
+          String(appt.patientId ?? appt.familyMemberId ?? appt.userId ?? '').trim() ||
+          String(
+            patient?.patientid ??
+            member?.familymemberid ??
+            `${sexKey}||${nameKey}||${isoDob}`
+          ).trim()
+        if (!owner) continue
+        if (seenAgePatients.has(owner)) continue
+        seenAgePatients.add(owner)
+        const age = computeAge(birthdate)
         if (age !== null) {
           const label = ageGroupLabel(age)
           ageGroupMap.set(label, (ageGroupMap.get(label) ?? 0) + 1)
@@ -736,31 +792,45 @@ export async function getAnalyticsStats(
 
 export type AnalyticsDetailRow = {
   key: string
+  appointmentRef: string
   patientName: string
+  relation: string
   age: number | null
+  birthdate: string | null
   sex: string
+  address: string
+  contact: string
+  bloodType: string
+  philHealth: string
+  religion: string
+  patientRef: string
   service: string
   reason: string
   outcome: string
   category: string
   date: string
+  bookedOn: string | null
+  source: string
   diagnosis: string
-  /** Blood type, shown for the blood-type report. */
-  bloodType: string
   /** Human-readable appointment time slot, shown for the peak-hours report. */
   slot: string
   /** Classified medical condition, shown for the disease report. */
   disease: string
   /** Clinician who recorded the visit, shown for the disease report. */
   checkedBy: string
+  /** Visits the same patient has inside the window (repeat-visit report). */
+  visits: number | null
 }
 
-export type AnalyticsDetailSection = 'serviceShare' | 'reasons' | 'outcomes' | 'peakHours' | 'ageGroups' | 'diseases' | 'sexByService' | 'immunization' | 'bloodTypes'
+// The section keys live with the other analytics constants so the page and the
+// server action agree on the drill-down vocabulary.
+export type { AnalyticsDetailSection } from '@/lib/constants/analytics'
 
 /**
  * Returns the individual records behind a chart so the admin can drill into the
- * patients behind an aggregate. `label` narrows the result to a single bar
- * (e.g. only "Hypertension" cases); omit it to get every record in the section.
+ * patients behind an aggregate. `label` narrows the result to a single category
+ * (e.g. only "Hypertension" cases, or only male patients); omit it to get every
+ * record in the section.
  * Results are capped so a "All Time" range cannot exhaustively return the table.
  */
 export async function getAnalyticsSectionRows(
@@ -795,13 +865,76 @@ export async function getAnalyticsSectionRows(
       select: {
         appointmentid: true,
         appointmentAt: true,
+        createdAt: true,
         status: true,
+        source: true,
         userId: true,
         familyMemberId: true,
+        patientId: true,
         service: { select: { name: true } },
-        patient: { select: { name: true, birthdate: true, sex: true, bloodType: true } },
-        user: { select: { profile: { select: { firstName: true, lastName: true } } } },
-        familyMember: { select: { name: true, sex: true, birthdate: true, bloodType: true } },
+        patient: {
+          select: {
+            patientid: true,
+            name: true,
+            birthdate: true,
+            sex: true,
+            bloodType: true,
+            religion: true,
+            phoneNumber: true,
+            houseNumber: true,
+            purok: true,
+            barangay: true,
+            city: true,
+            province: true,
+            zipCode: true,
+          },
+        },
+        user: {
+          select: {
+            profile: {
+              select: {
+                firstName: true,
+                middleName: true,
+                lastName: true,
+                suffix: true,
+                birthdate: true,
+                sex: true,
+                bloodType: true,
+                religion: true,
+                phoneNumber: true,
+                houseNumber: true,
+                purok: true,
+                barangay: true,
+                city: true,
+                province: true,
+                zipCode: true,
+                philHealthNo: true,
+                isPwd: true,
+                validIdType: true,
+                membershipType: true,
+              },
+            },
+          },
+        },
+        familyMember: {
+          select: {
+            familymemberid: true,
+            name: true,
+            relation: true,
+            sex: true,
+            birthdate: true,
+            bloodType: true,
+            religion: true,
+            phone: true,
+            houseNumber: true,
+            purok: true,
+            barangay: true,
+            city: true,
+            province: true,
+            zipCode: true,
+            philHealthNo: true,
+          },
+        },
         medicalHistory: {
           select: { diagnosis: true, bloodPressure: true, checkedBy: { select: { firstName: true, lastName: true } } },
         },
@@ -817,39 +950,155 @@ export async function getAnalyticsSectionRows(
       NO_SHOW: 'No Show',
     }
 
+    const visitCounts = new Map<string, number>()
+    for (const a of appointments) {
+      const patient = a.patient
+      const member = a.familyMember
+      const profile = a.user?.profile
+      const sexKey =
+        String(patient?.sex ?? member?.sex ?? profile?.sex ?? '').trim().toUpperCase()
+      const personName =
+        member?.name ??
+        patient?.name ??
+        `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
+      const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
+      const isoDob = patient?.birthdate ?? member?.birthdate ?? profile?.birthdate ?? null
+      const dobStamp = isoDob ? new Date(isoDob).toISOString().slice(0, 10) : null
+      const owner =
+        String(a.patientId ?? a.familyMemberId ?? a.userId ?? '').trim() ||
+        String(
+          patient?.patientid ??
+          member?.familymemberid ??
+          `${sexKey}||${nameKey}||${dobStamp}`,
+        ).trim()
+      visitCounts.set(owner, (visitCounts.get(owner) ?? 0) + 1)
+    }
+
+    const joinAddress = (...parts: Array<unknown>) =>
+      parts
+        .map((p) => String(p ?? '').trim())
+        .filter(Boolean)
+        .join(', ')
+
+    const fullName = (p: any) =>
+      [p?.firstName, p?.middleName, p?.lastName, p?.suffix]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+
     const mapped = appointments.map((a: any) => {
       const service = a.service?.name ?? 'Others'
       const mh = a.medicalHistory
       const profile = a.user?.profile
+      const patient = a.patient
+      const member = a.familyMember
       const patientName =
-        a.patient?.name ||
-        a.familyMember?.name ||
-        [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim() ||
+        patient?.name ||
+        member?.name ||
+        fullName(profile) ||
         'Unnamed patient'
-      const birthdate = a.patient?.birthdate ?? a.familyMember?.birthdate ?? null
+      const birthdate =
+        patient?.birthdate ?? member?.birthdate ?? profile?.birthdate ?? null
       const age = computeAge(birthdate ? new Date(birthdate) : null)
+      const sexKey =
+        String(patient?.sex ?? member?.sex ?? profile?.sex ?? '').trim().toUpperCase()
+      const personName =
+        member?.name ?? patient?.name ?? `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
+      const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
+      const isoDob = birthdate ? new Date(birthdate).toISOString().slice(0, 10) : null
       const statusKey = String(a.status ?? '').toUpperCase()
       const outcome = outcomeLabels[statusKey] ?? statusKey
+      const owner =
+        String(a.patientId ?? a.familyMemberId ?? a.userId ?? '').trim() ||
+        String(
+          patient?.patientid ??
+          member?.familymemberid ??
+          `${sexKey}||${nameKey}||${isoDob}`
+        ).trim()
+      const idType = String(profile?.validIdType ?? '').toLowerCase()
+      const membership = String(profile?.membershipType ?? '').toLowerCase()
+
+      const home = patient ?? member ?? null
+      const address =
+        joinAddress(
+          home?.houseNumber,
+          home?.purok,
+          home?.barangay,
+          home?.city,
+          home?.province,
+          home?.zipCode,
+        ) ||
+        joinAddress(
+          profile?.houseNumber,
+          profile?.purok,
+          profile?.barangay,
+          profile?.city,
+          profile?.province,
+          profile?.zipCode,
+        )
+      const contact = String(
+        patient?.phoneNumber ?? member?.phone ?? profile?.phoneNumber ?? '',
+      ).trim()
+      const philHealth = String(
+        member?.philHealthNo ?? profile?.philHealthNo ?? '',
+      ).trim()
+      const religion = String(
+        patient?.religion ?? member?.religion ?? profile?.religion ?? '',
+      ).trim()
+      const relation = member?.relation
+        ? `Family member (${member.relation})`
+        : a.userId
+          ? 'Self (account holder)'
+          : 'Patient record'
+      const patientRef = String(
+        patient?.patientid ?? member?.familymemberid ?? a.patientId ?? '',
+      ).trim()
 
       return {
         key: String(a.appointmentid),
+        appointmentRef: String(a.appointmentid),
         patientName,
+        relation,
         age,
-        sex: String(a.patient?.sex ?? a.familyMember?.sex ?? '').trim() || '—',
+        birthdate: birthdate
+          ? new Date(birthdate).toISOString().slice(0, 10)
+          : null,
+        sex:
+          String(patient?.sex ?? member?.sex ?? profile?.sex ?? '').trim() ||
+          '—',
+        address: address || '—',
+        contact: contact || '—',
+        bloodType: String(
+          patient?.bloodType ?? member?.bloodType ?? profile?.bloodType ?? '',
+        ).trim(),
+        philHealth: philHealth || '—',
+        religion: religion || '—',
+        patientRef: patientRef || '—',
         service,
         reason: reasonFromService(service),
         outcome,
         disease: classifyMedicalCase(mh?.diagnosis, mh?.bloodPressure, service),
-        bloodType: String(a.patient?.bloodType ?? a.familyMember?.bloodType ?? '').trim(),
         ageGroup: age === null ? null : ageGroupLabel(age),
         hour: a.appointmentAt
           ? `${String(new Date(a.appointmentAt).getUTCHours()).padStart(2, '0')}:00`
           : '',
         date: new Date(a.appointmentAt).toISOString(),
+        bookedOn: a.createdAt ? new Date(a.createdAt).toISOString() : null,
         diagnosis: String(mh?.diagnosis ?? '').trim(),
         checkedBy: mh?.checkedBy
           ? [mh.checkedBy.firstName, mh.checkedBy.lastName].filter(Boolean).join(' ').trim()
           : '',
+        source: String(a.source ?? '').trim().toUpperCase(),
+        visits: visitCounts.get(owner) ?? 1,
+        isPwd:
+          profile?.isPwd === true ||
+          idType.includes('pwd') ||
+          membership.includes('pwd'),
+        isSenior:
+          idType.includes('senior') ||
+          membership.includes('senior') ||
+          (age !== null && age >= 60),
+        owner,
       }
     })
 
@@ -858,6 +1107,10 @@ export async function getAnalyticsSectionRows(
     const eq = (value: unknown) => !!label && norm(value) === norm(label)
 
     const matches = (r: (typeof mapped)[number]) => {
+      if (section === 'repeatVisits') return r.visits > 1
+      if (section === 'walkIns') return r.source === 'WALK_IN'
+      if (section === 'pwd') return r.isPwd
+      if (section === 'senior') return r.isSenior
       if (!label) return true
       switch (section) {
         case 'serviceShare':
@@ -874,6 +1127,8 @@ export async function getAnalyticsSectionRows(
         case 'diseases':
           return norm(r.disease) === norm(label)
         case 'sexByService':
+          if (norm(label) === 'male' || norm(label) === 'female')
+            return norm(r.sex) === norm(label)
           return norm(r.service) === norm(label)
         case 'immunization':
           return norm(r.service).includes('immuniz') || norm(r.service).includes('vaccin')
@@ -886,11 +1141,26 @@ export async function getAnalyticsSectionRows(
 
     const filtered = mapped.filter(matches)
 
-    const rows: AnalyticsDetailRow[] = filtered.slice(0, DETAIL_LIMIT).map((r) => ({
+    const seen = new Set<string>()
+    const deduplicated = filtered.filter((r) => {
+      if (seen.has(r.owner)) return false
+      seen.add(r.owner)
+      return true
+    })
+
+    const rows: AnalyticsDetailRow[] = deduplicated.slice(0, DETAIL_LIMIT).map((r) => ({
       key: r.key,
       patientName: r.patientName,
+      relation: r.relation,
       age: r.age,
+      birthdate: r.birthdate,
       sex: r.sex,
+      address: r.address,
+      contact: r.contact,
+      bloodType: r.bloodType || '—',
+      philHealth: r.philHealth,
+      religion: r.religion,
+      patientRef: r.patientRef,
       service: r.service,
       reason: r.reason,
       outcome: r.outcome,
@@ -899,20 +1169,30 @@ export async function getAnalyticsSectionRows(
           ? (r.disease ?? '')
           : section === 'ageGroups'
             ? (r.ageGroup ?? '')
-            : r.outcome,
+            : section === 'repeatVisits'
+              ? `${r.visits} visits`
+              : section === 'pwd'
+                ? 'PWD'
+                : section === 'senior'
+                  ? 'Senior citizen'
+                  : section === 'walkIns'
+                    ? 'Walk-in'
+                    : r.outcome,
       date: r.date,
+      bookedOn: r.bookedOn,
+      source: r.source,
       diagnosis: r.diagnosis,
-      bloodType: r.bloodType || '—',
       slot: r.hour ? getSlotLabel(r.hour) : '—',
       disease: r.disease || '—',
       checkedBy: r.checkedBy || '—',
+      visits: r.visits ?? 1,
     }))
 
     return {
       success: true,
       message: 'Rows fetched.',
       rows,
-      totalMatched: filtered.length,
+      totalMatched: deduplicated.length,
       rangeLabel,
     }
   } catch (error) {

@@ -123,10 +123,13 @@ const EMPTY_STATS: AuditLogStats = {
   staff: 0,
 }
 
-function buildWhere(filters: AuditLogFilters) {
+function buildWhere(
+  filters: AuditLogFilters,
+  { includeSearch = true }: { includeSearch?: boolean } = {},
+) {
   const where: any = {}
   const search = filters.search?.trim()
-  if (search) {
+  if (search && includeSearch) {
     where.OR = [
       { description: { contains: search, mode: 'insensitive' } },
       { actorName: { contains: search, mode: 'insensitive' } },
@@ -183,11 +186,17 @@ export async function getAuditLogs(
 
   try {
     const where = buildWhere(filters)
+    const statsWhere = buildWhere(filters, { includeSearch: false })
 
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
 
-    const [total, rows, admins, staff, today] = await Promise.all([
+    const todayWhere: any = {
+      ...statsWhere,
+      createdAt: { ...(statsWhere.createdAt ?? {}), gte: startOfToday },
+    }
+
+    const [total, rows, statsTotal, admins, staff, today] = await Promise.all([
       (prisma as any).auditLog.count({ where }),
       (prisma as any).auditLog.findMany({
         where,
@@ -195,13 +204,14 @@ export async function getAuditLogs(
         skip: (safePage - 1) * PER_PAGE,
         take: PER_PAGE,
       }),
+      (prisma as any).auditLog.count({ where: statsWhere }),
       (prisma as any).auditLog.count({
-        where: { actorRole: { in: ['SUPERADMIN', 'ADMIN'] } },
+        where: { ...statsWhere, actorRole: { in: ['SUPERADMIN', 'ADMIN'] } },
       }),
-      (prisma as any).auditLog.count({ where: { actorRole: 'MEDSTAFF' } }),
       (prisma as any).auditLog.count({
-        where: { createdAt: { gte: startOfToday } },
+        where: { ...statsWhere, actorRole: 'MEDSTAFF' },
       }),
+      (prisma as any).auditLog.count({ where: todayWhere }),
     ])
 
     const logs: AuditLogItem[] = rows.map((row: any) => ({
@@ -220,7 +230,7 @@ export async function getAuditLogs(
       page: safePage,
       perPage: PER_PAGE,
       totalPages: Math.max(1, Math.ceil(total / PER_PAGE)),
-      stats: { total, today, admins, staff },
+      stats: { total: statsTotal, today, admins, staff },
     }
   } catch (error) {
     console.error('[getAuditLogs | Prisma | Error]:', error)

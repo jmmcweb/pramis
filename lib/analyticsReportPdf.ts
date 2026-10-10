@@ -1017,7 +1017,7 @@ const renderAnalyticsReport = (
   if (has('ageGroups')) {
     sectionHeading('Age group distribution', 'ageGroups')
     caption(
-      'Patient register basis: covers every registered patient with a birthdate on file, not only those seen during the period.',
+      'Total of Patients per Age Group',
     )
     const ageTotal = stats.ageGroups.reduce((s, g) => s + g.count, 0)
     if (ageTotal > 0) {

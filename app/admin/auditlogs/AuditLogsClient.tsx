@@ -1,17 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   Search,
+  X,
   ChevronLeft,
   ChevronRight,
   Inbox,
 } from 'lucide-react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import {
-  AUDIT_ACTIONS,
-  AUDIT_ENTITIES,
   AUDIT_ACTION_LABELS,
   AUDIT_ENTITY_LABELS,
   AUDIT_ROLE_LABELS,
@@ -20,8 +19,6 @@ import type {
   AuditLogResult,
   AuditLogFilters,
 } from '@/lib/actions/audit'
-
-const ROLES = ['ADMIN', 'MEDSTAFF']
 
 function formatDateTime(iso: string) {
   const date = new Date(iso)
@@ -83,6 +80,10 @@ export default function AuditLogsClient({
   const [filters, setFilters] = useState<AuditLogFilters>(initialFilters)
   const [searchInput, setSearchInput] = useState(initialFilters.search ?? '')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastPushedSearchRef = useRef<string | null>(null)
+  const filtersRef = useRef<AuditLogFilters>(filters)
+  filtersRef.current = filters
 
   const applyNavigation = useCallback(
     (nextFilters: AuditLogFilters, page: number) => {
@@ -96,6 +97,12 @@ export default function AuditLogsClient({
 
   // Keep local state in sync when the URL changes (back/forward navigation).
   useEffect(() => {
+    const urlSearch = searchParams.get('search') || ''
+    if (lastPushedSearchRef.current === urlSearch) {
+      lastPushedSearchRef.current = null
+    } else {
+      setSearchInput(urlSearch)
+    }
     setFilters({
       search: searchParams.get('search') || undefined,
       action: searchParams.get('action') || undefined,
@@ -104,25 +111,63 @@ export default function AuditLogsClient({
       from: searchParams.get('from') || undefined,
       to: searchParams.get('to') || undefined,
     })
-    setSearchInput(searchParams.get('search') || '')
   }, [searchParams])
 
-  const activeFilterCount = useMemo(
-    () =>
-      Object.entries(filters).filter(
-        ([key, value]) => value && value !== 'ALL' && key !== 'search',
-      ).length,
-    [filters],
-  )
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [])
 
   const submitFilters = (next: AuditLogFilters, page = 1) => {
     setFilters(next)
     applyNavigation(next, page)
   }
 
-  const resetFilters = () => {
+  // Runs the search immediately (Enter key).
+  const runSearchNow = (value: string) => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current)
+      searchTimerRef.current = null
+    }
+    const trimmed = value.trim()
+    lastPushedSearchRef.current = trimmed
+    submitFilters({ ...filtersRef.current, search: trimmed || undefined })
+  }
+
+  // Clears the search box and returns to the unfiltered list.
+  const clearSearch = () => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current)
+      searchTimerRef.current = null
+    }
     setSearchInput('')
+    lastPushedSearchRef.current = ''
     submitFilters({})
+  }
+
+  const applyFilterChange = (patch: AuditLogFilters, page = 1) => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current)
+      searchTimerRef.current = null
+    }
+    const search = searchInput.trim()
+    lastPushedSearchRef.current = search
+    submitFilters({ ...filtersRef.current, ...patch, search: search || undefined }, page)
+  }
+
+  // Clears only the date range, keeping the search text the user typed.
+  const resetDateRange = () => {
+    applyFilterChange({ from: undefined, to: undefined })
+  }
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      searchTimerRef.current = null
+      runSearchNow(value)
+    }, 350)
   }
 
   const selectClass = `w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-sky-400 ${
@@ -195,117 +240,91 @@ export default function AuditLogsClient({
         ))}
       </section>
 
-      {/* Filters */}
+      {/* Search */}
       <section className={`${cardClass} p-4`}>
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            submitFilters({ ...filters, search: searchInput.trim() || undefined })
-          }}
-        >
-          <div className="flex flex-col gap-3 md:flex-row">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search description, actor, or reference ID…"
-                className={`${selectClass} pl-9`}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
-              >
-                Apply
-              </button>
-              <button
-                type="button"
-                onClick={resetFilters}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
-                  darkMode
-                    ? 'border-slate-600 text-slate-300 hover:bg-slate-700'
-                    : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <select
-              aria-label="Filter by action"
-              value={filters.action ?? 'ALL'}
-              onChange={(event) =>
-                submitFilters({ ...filters, action: event.target.value })
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(event) => handleSearchChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                runSearchNow(searchInput)
               }
-              className={selectClass}
+            }}
+            placeholder="Search description, actor, or reference ID…"
+            className={`${selectClass} pl-9 ${searchInput ? 'pr-10' : ''}`}
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              aria-label="Clear search"
+              title="Clear search"
+              className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 transition ${
+                darkMode
+                  ? 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+              }`}
             >
-              <option value="ALL">All Actions</option>
-              {AUDIT_ACTIONS.map((action) => (
-                <option key={action} value={action}>
-                  {AUDIT_ACTION_LABELS[action] ?? action}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Filter by entity"
-              value={filters.entity ?? 'ALL'}
-              onChange={(event) =>
-                submitFilters({ ...filters, entity: event.target.value })
-              }
-              className={selectClass}
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="audit-from-date"
+              className={`text-xs font-medium ${
+                darkMode ? 'text-slate-400' : 'text-slate-500'
+              }`}
             >
-              <option value="ALL">All Entities</option>
-              {AUDIT_ENTITIES.map((entity) => (
-                <option key={entity} value={entity}>
-                  {AUDIT_ENTITY_LABELS[entity] ?? entity}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Filter by role"
-              value={filters.role ?? 'ALL'}
-              onChange={(event) =>
-                submitFilters({ ...filters, role: event.target.value })
-              }
-              className={selectClass}
-            >
-              <option value="ALL">All Roles</option>
-              {ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {AUDIT_ROLE_LABELS[role] ?? role}
-                </option>
-              ))}
-            </select>
+              From date
+            </label>
             <input
-              aria-label="From date"
+              id="audit-from-date"
               type="date"
               value={filters.from ?? ''}
               onChange={(event) =>
-                submitFilters({ ...filters, from: event.target.value || undefined })
-              }
-              className={selectClass}
-            />
-            <input
-              aria-label="To date"
-              type="date"
-              value={filters.to ?? ''}
-              onChange={(event) =>
-                submitFilters({ ...filters, to: event.target.value || undefined })
+                applyFilterChange({ from: event.target.value || undefined })
               }
               className={selectClass}
             />
           </div>
-          {activeFilterCount > 0 && (
-            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
-            </p>
-          )}
-        </form>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="audit-to-date"
+              className={`text-xs font-medium ${
+                darkMode ? 'text-slate-400' : 'text-slate-500'
+              }`}
+            >
+              To date
+            </label>
+            <input
+              id="audit-to-date"
+              type="date"
+              value={filters.to ?? ''}
+              onChange={(event) =>
+                applyFilterChange({ to: event.target.value || undefined })
+              }
+              className={selectClass}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={resetDateRange}
+            disabled={!filters.from && !filters.to}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              darkMode
+                ? 'border-slate-600 text-slate-300 hover:bg-slate-700'
+                : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Reset
+          </button>
+        </div>
       </section>
 
       {/* Logs table */}

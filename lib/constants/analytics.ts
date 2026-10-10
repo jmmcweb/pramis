@@ -44,6 +44,35 @@ export type AnalyticsReportSectionKey =
 export const DEFAULT_ANALYTICS_REPORT_SECTIONS: AnalyticsReportSectionKey[] =
   ANALYTICS_REPORT_SECTIONS.map((s) => s.key)
 
+export const ANALYTICS_DETAIL_SECTIONS = [
+  { key: 'serviceShare', label: 'Service utilization' },
+  { key: 'reasons', label: 'Top appointment reasons' },
+  { key: 'outcomes', label: 'Appointment outcomes' },
+  { key: 'peakHours', label: 'Peak hours' },
+  { key: 'ageGroups', label: 'Age group distribution' },
+  { key: 'diseases', label: 'Disease / case reports' },
+  { key: 'sexByService', label: 'Sex by service' },
+  { key: 'immunization', label: 'Immunization activity' },
+  { key: 'bloodTypes', label: 'Blood type distribution' },
+  { key: 'repeatVisits', label: 'Repeat visits' },
+  { key: 'walkIns', label: 'Walk-in appointments' },
+  { key: 'pwd', label: 'PWD patients' },
+  { key: 'senior', label: 'Senior citizen patients' },
+] as const
+
+export type AnalyticsDetailSection =
+  (typeof ANALYTICS_DETAIL_SECTIONS)[number]['key']
+
+/** Human-readable title for a drill-down section. */
+export function analyticsDetailSectionLabel(
+  section: AnalyticsDetailSection,
+): string {
+  return (
+    ANALYTICS_DETAIL_SECTIONS.find((s) => s.key === section)?.label ??
+    'Patient details'
+  )
+}
+
 export type AnalyticsDetailColumn = {
   key: string
   label: string
@@ -119,14 +148,54 @@ export const ANALYTICS_DETAIL_COLUMNS: Record<
     { key: 'service', label: 'Service' },
     { key: 'date', label: 'Date' },
   ],
+  repeatVisits: [
+    { key: 'patientName', label: 'Patient' },
+    { key: 'visits', label: 'Visits', align: 'right' },
+    { key: 'age', label: 'Age', align: 'right' },
+    { key: 'sex', label: 'Sex' },
+    { key: 'service', label: 'Service' },
+    { key: 'date', label: 'Last visit' },
+  ],
+  walkIns: [
+    { key: 'patientName', label: 'Patient' },
+    { key: 'age', label: 'Age', align: 'right' },
+    { key: 'sex', label: 'Sex' },
+    { key: 'service', label: 'Service' },
+    { key: 'outcome', label: 'Outcome' },
+    { key: 'date', label: 'Date' },
+  ],
+  pwd: [
+    { key: 'patientName', label: 'Patient' },
+    { key: 'age', label: 'Age', align: 'right' },
+    { key: 'sex', label: 'Sex' },
+    { key: 'service', label: 'Service' },
+    { key: 'date', label: 'Date' },
+  ],
+  senior: [
+    { key: 'patientName', label: 'Patient' },
+    { key: 'age', label: 'Age', align: 'right' },
+    { key: 'sex', label: 'Sex' },
+    { key: 'service', label: 'Service' },
+    { key: 'date', label: 'Date' },
+  ],
 }
 
 export const DEFAULT_ANALYTICS_DETAIL_COLUMNS: AnalyticsDetailColumn[] = [
   { key: 'patientName', label: 'Patient' },
   { key: 'age', label: 'Age', align: 'right' },
   { key: 'sex', label: 'Sex' },
+  { key: 'bloodType', label: 'Blood type' },
   { key: 'service', label: 'Service' },
+  { key: 'address', label: 'Address' },
+  { key: 'contact', label: 'Contact' },
   { key: 'date', label: 'Date' },
+]
+
+export const ANALYTICS_PATIENT_DETAIL_COLUMNS: AnalyticsDetailColumn[] = [
+  { key: 'address', label: 'Address' },
+  { key: 'contact', label: 'Contact' },
+  { key: 'bloodType', label: 'Blood type' },
+  { key: 'philHealth', label: 'PhilHealth' },
 ]
 
 export const ANALYTICS_APPENDIX_COLUMNS: AnalyticsDetailColumn[] = [
