@@ -172,7 +172,10 @@ export async function getTodayQueues(): Promise<{
       }
       // Priority queue: Senior Citizens & PWD patients, even for legacy rows
       // stored as WALKIN before auto-priority existed.
-      if (kind === 'priority' && (entry.priority === 'SENIOR' || entry.priority === 'PWD')) {
+      if (
+        kind === 'priority' &&
+        (entry.priority === 'SENIOR' || entry.priority === 'PWD')
+      ) {
         priority.push(entry)
       } else if (kind === 'walkin') {
         walkins.push(entry)
@@ -206,7 +209,8 @@ export async function addToQueue(_prevState: any, formData: FormData) {
   // A picked account / family member that has no Patient row yet is queued by
   // its account identity; the PTN-#### is generated here on first queueing.
   const userIdInput = formData.get('userId')?.toString().trim() || ''
-  const familyMemberIdInput = formData.get('familyMemberId')?.toString().trim() || ''
+  const familyMemberIdInput =
+    formData.get('familyMemberId')?.toString().trim() || ''
   const lane = formData.get('lane')?.toString().trim() || ''
   const priority = formData.get('priority')?.toString().trim() || ''
   const serviceId = formData.get('serviceId')?.toString().trim() || ''
@@ -240,9 +244,6 @@ export async function addToQueue(_prevState: any, formData: FormData) {
         return { success: false, message: 'Verified patient no longer exists.' }
       }
     } else {
-      // The picked person has a login account but no Patient row yet. Reuse one
-      // if a parallel queueing already created it, otherwise generate the
-      // PTN-#### now and seed the record from the profile / family member.
       const familyMemberId = familyMemberIdInput || null
       const source = await (prisma as any).user.findFirst({
         where: { id: userIdInput },
@@ -254,11 +255,19 @@ export async function addToQueue(_prevState: any, formData: FormData) {
         },
       })
       if (!source) {
-        return { success: false, message: 'The selected account no longer exists.' }
+        return {
+          success: false,
+          message: 'The selected account no longer exists.',
+        }
       }
-      const familyMember = familyMemberId ? (source.familyMembers?.[0] ?? null) : null
+      const familyMember = familyMemberId
+        ? (source.familyMembers?.[0] ?? null)
+        : null
       if (familyMemberId && !familyMember) {
-        return { success: false, message: 'The selected family member no longer exists.' }
+        return {
+          success: false,
+          message: 'The selected family member no longer exists.',
+        }
       }
 
       patient = await (prisma as any).patient.findFirst({
@@ -280,7 +289,9 @@ export async function addToQueue(_prevState: any, formData: FormData) {
             name: displayName || null,
             birthdate: details?.birthdate ?? null,
             sex: details?.sex ?? null,
-            phoneNumber: (familyMember ? familyMember.phone : profile?.phoneNumber) ?? null,
+            phoneNumber:
+              (familyMember ? familyMember.phone : profile?.phoneNumber) ??
+              null,
             houseNumber: details?.houseNumber ?? null,
             purok: details?.purok ?? null,
             barangay: details?.barangay ?? null,
@@ -350,7 +361,6 @@ export async function addToQueue(_prevState: any, formData: FormData) {
     })
 
     revalidateTag('queues', 'max')
-    // A freshly generated Patient row also invalidates the patient listings.
     if (generatedPatientId) revalidateTag('patients', 'max')
 
     await recordAudit({
@@ -367,8 +377,9 @@ export async function addToQueue(_prevState: any, formData: FormData) {
       },
     })
 
-    // Staff need the new ID to read out / write down for a first-time queueing.
-    const idNotice = generatedPatientId ? ` Patient ID: ${patient.patientid}.` : ''
+    const idNotice = generatedPatientId
+      ? ` Patient ID: ${patient.patientid}.`
+      : ''
     return {
       success: true,
       message:

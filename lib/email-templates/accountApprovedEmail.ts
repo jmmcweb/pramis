@@ -1,7 +1,7 @@
+// This file contains the HTML content for the account approved email template.
+
 import { APP_BASE_URL, APP_NAME } from '@/config/constants'
 
-// Body content for the email sent to a patient/user when an admin approves
-// their account. Wrapped by defaultEmailTemplate() in lib/mailer.ts.
 export function accountApprovedEmailContent(firstName?: string | null): string {
   const greeting = firstName ? `Hi ${firstName},` : 'Hi,'
 

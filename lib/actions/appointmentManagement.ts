@@ -29,10 +29,6 @@ function generateTempPassword(): string {
   return out
 }
 
-// Emails the freshly generated login of a new walk-in. The temporary password
-// is deliberately only delivered this way — it is never handed back to the
-// admin UI. Returns whether the message actually went out so the caller can
-// warn the patient differently when SMTP fails.
 async function sendWalkInCredentials({
   email,
   tempPassword,
@@ -241,13 +237,8 @@ export type PatientLookup = {
   isSenior: boolean
   isPwd: boolean
   age: number
-  // Identity of the underlying login account / family member this lookup came
-  // from. Always set for rows read off the Patient table.
   userId?: string | null
   familyMemberId?: string | null
-  // True when the person exists as an account (or as a family member of one)
-  // but has no Patient row yet, so patientId is blank. addToQueue generates
-  // the PTN-#### when such a candidate is actually queued.
   pendingPatientRecord?: boolean
 }
 
@@ -272,7 +263,9 @@ function toPatientLookup(row: any): PatientLookup {
     name,
     barangay: profile?.barangay ?? row?.barangay ?? '',
     hasAccount: Boolean(row.userId),
-    birthdate: birthdate ? new Date(birthdate).toISOString().split('T')[0] : null,
+    birthdate: birthdate
+      ? new Date(birthdate).toISOString().split('T')[0]
+      : null,
     isSenior: age >= 60,
     isPwd: profile?.isPwd === true || row?.familyMember?.isPwd === true,
     age,
@@ -281,13 +274,16 @@ function toPatientLookup(row: any): PatientLookup {
   }
 }
 
-// Builds a lookup for someone who has a login account (or is a family member of
-// one) but no Patient row yet, so there is no PTN-#### to show or look up. The
-// name / birthdate / PWD data comes from the profile or the family member, which
-// is the same source a Patient row would have been populated from.
 function toAccountLookup(
   profile: any,
-  opts: { userId: string; familyMemberId?: string | null; name?: string; birthdate?: any; isPwd?: boolean; barangay?: string | null },
+  opts: {
+    userId: string
+    familyMemberId?: string | null
+    name?: string
+    birthdate?: any
+    isPwd?: boolean
+    barangay?: string | null
+  },
 ): PatientLookup {
   const name =
     opts.name ||
@@ -301,7 +297,9 @@ function toAccountLookup(
     name,
     barangay: opts.barangay ?? profile?.barangay ?? '',
     hasAccount: true,
-    birthdate: birthdate ? new Date(birthdate).toISOString().split('T')[0] : null,
+    birthdate: birthdate
+      ? new Date(birthdate).toISOString().split('T')[0]
+      : null,
     isSenior: age >= 60,
     isPwd: opts.isPwd === true || profile?.isPwd === true,
     age,
@@ -369,8 +367,7 @@ export async function searchPatientsByName(query: string): Promise<{
   const session = await requireAdmin()
   if (!session) {
     const staff = await requireStaff()
-    if (!staff)
-      return { success: false, message: 'Unauthorized', patients: [] }
+    if (!staff) return { success: false, message: 'Unauthorized', patients: [] }
   }
 
   const q = query.trim()
@@ -385,8 +382,6 @@ export async function searchPatientsByName(query: string): Promise<{
   const digits = q.replace(/^PTN-/i, '').trim()
   const looksLikeId = /^\d+$/.test(digits)
 
-  // Each typed word must match somewhere in the patient's name so multi-word
-  // entries work regardless of the stored "LASTNAME, FIRSTNAME" order.
   const nameFilters = q
     .split(/\s+/)
     .filter(Boolean)
@@ -417,9 +412,6 @@ export async function searchPatientsByName(query: string): Promise<{
       ],
     }))
 
-  // Accounts (and their family members) that have no Patient row yet still need
-  // to be findable by name: the PTN-#### is only generated once they are
-  // actually queued, so until then they exist only as a login + profile.
   const profileNameFilters = q
     .split(/\s+/)
     .filter(Boolean)
@@ -775,10 +767,6 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
         description: `Your walk-in ${service.name} visit has been registered. Please proceed to the health center.`,
       })
     }
-
-    // A new walk-in's login is only ever delivered by email — the temporary
-    // password is never returned to the browser, so it cannot leak on screen,
-    // in logs, or through the client payload.
     if (accountEmail && tempPassword) {
       credentialsEmailed = await sendWalkInCredentials({
         email: accountEmail,
@@ -820,7 +808,9 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
 // Loads a single booked appointment as a ScheduleAppointmentView so the queue
 // board can open the full ITR form before the visit is marked done. This is
 // the scheduled-visit counterpart of getWalkInAppointmentView.
-export async function getScheduledAppointmentView(appointmentId: string): Promise<{
+export async function getScheduledAppointmentView(
+  appointmentId: string,
+): Promise<{
   success: boolean
   message: string
   appointment: ScheduleAppointmentView | null

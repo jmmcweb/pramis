@@ -2,21 +2,38 @@
 
 import { useActionState, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { BadgeCheck, Cake, Check, ChevronDown, HeartHandshake, Loader2, MapPin, Pencil, Phone, Plus, Trash2, UserRound, Users, VenusAndMars, X } from 'lucide-react'
+import {
+  BadgeCheck,
+  Cake,
+  Check,
+  ChevronDown,
+  HeartHandshake,
+  Loader2,
+  MapPin,
+  Pencil,
+  Phone,
+  Plus,
+  Trash2,
+  UserRound,
+  Users,
+  VenusAndMars,
+  X,
+} from 'lucide-react'
 import { deleteFamilyMember, saveFamilyMember } from '@/lib/actions/me'
-import { BLOOD_TYPES, FIXED_ADDRESS, PUROKS, splitHouseAndPurok } from '@/src/data/patientInfo'
+import {
+  BLOOD_TYPES,
+  FIXED_ADDRESS,
+  PUROKS,
+  splitHouseAndPurok,
+} from '@/src/data/patientInfo'
 import type { FamilyMemberRow, MyProfileView } from '@/src/data/patientInfo'
 import { FAMILY_MEMBER_OPTIONS } from '@/src/data/itrAdult'
 
-// Relations offered in the Relation dropdown, reusing the ITR's canonical list
-// so family members and ITR records stay consistent.
 const RELATIONS = FAMILY_MEMBER_OPTIONS.map((option) => option.value)
 
 const rowInputClass =
   'w-full rounded-xl border border-line bg-white px-3 py-2 text-sm font-semibold text-body shadow-[inset_0_1px_2px_rgb(15_88_139/0.06)] outline-none transition-all placeholder:font-normal placeholder:text-muted/70 focus:border-brand focus:ring-4 focus:ring-brand/15 dark:bg-white/[0.04]'
 
-// Small caption rendered above each input so every field in the family member
-// form has a persistent, visible label (placeholders alone disappear while typing).
 function FieldLabel({
   htmlFor,
   children,
@@ -73,7 +90,9 @@ function SectionCard({
             {title}
           </h2>
           {subtitle && (
-            <p className="truncate text-xs font-medium text-muted">{subtitle}</p>
+            <p className="truncate text-xs font-medium text-muted">
+              {subtitle}
+            </p>
           )}
         </div>
         {typeof count === 'number' && (
@@ -194,18 +213,14 @@ function MemberCard({
   // button only ever appears while adding a new member or editing one.
   if (!isNew && !isEditing) {
     const details = [
-      member.relation
-        ? { icon: HeartHandshake, text: member.relation }
-        : null,
+      member.relation ? { icon: HeartHandshake, text: member.relation } : null,
       member.phone ? { icon: Phone, text: member.phone } : null,
       member.birthdate ? { icon: Cake, text: member.birthdate } : null,
       member.sex ? { icon: VenusAndMars, text: member.sex } : null,
       member.houseNumber || member.purok
         ? {
             icon: MapPin,
-            text: [member.houseNumber, member.purok]
-              .filter(Boolean)
-              .join(', '),
+            text: [member.houseNumber, member.purok].filter(Boolean).join(', '),
           }
         : null,
     ].filter(Boolean) as { icon: typeof Phone; text: string }[]
@@ -221,7 +236,10 @@ function MemberCard({
               {member.name || 'Unnamed member'}
             </p>
             <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-muted">
-              <BadgeCheck className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+              <BadgeCheck
+                className="h-3.5 w-3.5 text-emerald-500"
+                aria-hidden="true"
+              />
               {member.relation || 'Family member'}
             </p>
           </div>
@@ -321,7 +339,10 @@ function MemberCard({
           >
             <option value="">Select relation</option>
             {Array.from(
-              new Set([...RELATIONS, ...(member.relation ? [member.relation] : [])]),
+              new Set([
+                ...RELATIONS,
+                ...(member.relation ? [member.relation] : []),
+              ]),
             ).map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -392,9 +413,7 @@ function MemberCard({
 
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2">
-          <FieldLabel htmlFor={`${uid}-houseNumber`}>
-            Street
-          </FieldLabel>
+          <FieldLabel htmlFor={`${uid}-houseNumber`}>Street</FieldLabel>
           <input
             id={`${uid}-houseNumber`}
             name="houseNumber"
@@ -431,7 +450,10 @@ function MemberCard({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-xl bg-surface/70 px-3 py-2 dark:bg-white/[0.03]">
-        <MapPin className="h-3.5 w-3.5 shrink-0 text-brand" aria-hidden="true" />
+        <MapPin
+          className="h-3.5 w-3.5 shrink-0 text-brand"
+          aria-hidden="true"
+        />
         <span className="text-[11px] font-semibold text-body">
           {FIXED_ADDRESS.barangay}, {FIXED_ADDRESS.municipality},{' '}
           {FIXED_ADDRESS.province} {FIXED_ADDRESS.zipCode}
@@ -457,16 +479,14 @@ function MemberCard({
 
       <div className="grid grid-cols-2 gap-2 mt-3">
         <div>
-          <FieldLabel htmlFor={`${uid}-isPwd`}>Is the family member a PWD?</FieldLabel>
+          <FieldLabel htmlFor={`${uid}-isPwd`}>
+            Is the family member a PWD?
+          </FieldLabel>
           <select
             id={`${uid}-isPwd`}
             name="isPwd"
             defaultValue={
-              member.isPwd === true
-                ? 'Yes'
-                : member.isPwd === false
-                  ? 'No'
-                  : ''
+              member.isPwd === true ? 'Yes' : member.isPwd === false ? 'No' : ''
             }
             className={`${rowInputClass} cursor-pointer`}
           >
@@ -541,7 +561,6 @@ function MemberCard({
           />
         </div>
       </div>
-
 
       <div className="mt-3 flex gap-2">
         <button
@@ -619,8 +638,8 @@ export default function FamilyMembersSection({
             </p>
 
             <p className="mx-auto mt-1 max-w-[26ch] text-xs leading-relaxed text-muted">
-              Add a family member to keep their information
-              available for patient records.
+              Add a family member to keep their information available for
+              patient records.
             </p>
           </div>
         )}
@@ -646,4 +665,3 @@ export default function FamilyMembersSection({
     </SectionCard>
   )
 }
-

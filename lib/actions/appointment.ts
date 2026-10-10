@@ -41,8 +41,6 @@ const VALID_STATUSES = [
   'NO_SHOW',
 ]
 
-// Emails the patient a "booking received, pending approval" confirmation.
-// Never throws — a mail failure must not roll back a successful booking.
 async function sendBookingConfirmation({
   to,
   patientName,
@@ -1066,7 +1064,8 @@ export async function notifyAppointment(
         appointmentId,
         patientName,
         serviceName,
-        channel: notified && emailed ? 'IN_APP+EMAIL' : notified ? 'IN_APP' : 'EMAIL',
+        channel:
+          notified && emailed ? 'IN_APP+EMAIL' : notified ? 'IN_APP' : 'EMAIL',
       },
     })
 

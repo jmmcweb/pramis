@@ -25,9 +25,6 @@ function statusLabel(status: string) {
   return 'Pending'
 }
 
-// Emails the account holder that their application was approved.
-// Never throws: the approval itself must succeed even when SMTP is
-// unavailable, so failures are logged and reported back to the admin.
 async function sendApprovalEmail({
   email,
   firstName,
@@ -127,8 +124,6 @@ export async function PUT(request: Request) {
         },
       })
 
-      // Emails are sent sequentially so a large batch cannot exhaust the
-      // SMTP pool; one failure never blocks the rest.
       let emailsSent = 0
       const emailFailures: { email: string; reason: string }[] = []
 
@@ -155,7 +150,10 @@ export async function PUT(request: Request) {
           if (emailSent) {
             emailsSent += 1
           } else {
-            emailFailures.push({ email: u.email, reason: emailError ?? 'Unknown' })
+            emailFailures.push({
+              email: u.email,
+              reason: emailError ?? 'Unknown',
+            })
           }
         }
 
@@ -254,7 +252,11 @@ export async function PUT(request: Request) {
       })
     }
 
-    return NextResponse.json({ success: true, emailSent, ...(emailError ? { emailError } : {}) })
+    return NextResponse.json({
+      success: true,
+      emailSent,
+      ...(emailError ? { emailError } : {}),
+    })
   } catch (error) {
     console.error('Approval update failed:', error)
     return NextResponse.json(
