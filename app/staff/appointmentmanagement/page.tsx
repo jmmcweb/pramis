@@ -30,7 +30,9 @@ export default async function StaffAppointmentManagementPage() {
   ])
 
   const today = todayISO()
-  const ACTIVE_TODAY = ['PENDING', 'APPROVED', 'COMPLETED']
+  // Today's board: waiting (APPROVED) + in consultation. COMPLETED lives only
+  // in history once the medical record is saved.
+  const ACTIVE_TODAY = ['PENDING', 'APPROVED', 'IN_CONSULTATION']
   const todays = scheduleRes.appointments.filter(
     a => a.dateISO === today && ACTIVE_TODAY.includes(a.status),
   )

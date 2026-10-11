@@ -17,6 +17,7 @@ const PER_PAGE = 10
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
   PENDING: { bg: '#FEF3C7', color: '#92400E' },
   APPROVED: { bg: '#DCFCE7', color: '#166534' },
+  IN_CONSULTATION: { bg: '#E0F2FE', color: '#0369A1' },
   COMPLETED: { bg: '#DBEAFE', color: '#1E40AF' },
   CANCELLED: { bg: '#FEE2E2', color: '#B91C1C' },
   NO_SHOW: { bg: '#EDE9FE', color: '#6D28D9' },
@@ -55,7 +56,12 @@ export default function AppointmentsScheduleClient({
 
 
   const today = useMemo(
-    () => appointments.filter((a) => a.dateISO === todayISO),
+    () =>
+      appointments.filter(
+        (a) =>
+          a.dateISO === todayISO &&
+          (a.status === 'APPROVED' || a.status === 'IN_CONSULTATION'),
+      ),
     [appointments, todayISO],
   )
 
@@ -239,10 +245,14 @@ export default function AppointmentsScheduleClient({
           <div className="flex flex-wrap gap-2">
             <button
               className={btnPrimary}
-              onClick={() => setRecordFor(a)}
+              onClick={() =>
+                runAction(a.id, () =>
+                  updateAppointmentStatus(a.id, 'IN_CONSULTATION'),
+                )
+              }
               disabled={isPending}
             >
-              Complete & Record
+              Start Consultation
             </button>
 
             <button
@@ -267,6 +277,27 @@ export default function AppointmentsScheduleClient({
               disabled={isPending}
             >
               Cancel
+            </button>
+          </div>
+        )
+
+      case 'IN_CONSULTATION':
+        return (
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={btnPrimary}
+              onClick={() => setRecordFor(a)}
+              disabled={isPending}
+            >
+              {a.hasMedicalRecord ? 'View / Edit Record' : 'Enter Record'}
+            </button>
+
+            <button
+              className={btnNotify}
+              onClick={() => notify(a)}
+              disabled={isPending}
+            >
+              Notify
             </button>
           </div>
         )
@@ -617,6 +648,78 @@ export default function AppointmentsScheduleClient({
             onPage={setUpcomingPage}
           />
         )}
+      </section>
+
+
+      {/* In Consultation — medstaff started these visits; admin enters the
+          record here. Saving the record marks COMPLETED → history only. */}
+      <section className={cardClass}>
+        <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className={sectionTitle}>In Consultation</h2>
+
+            <p className={sectionDescription}>
+              {
+                appointments.filter(
+                  (a) =>
+                    a.dateISO === todayISO && a.status === 'IN_CONSULTATION',
+                ).length
+              }{' '}
+              visit(s) waiting for the medical record
+            </p>
+          </div>
+        </div>
+
+        <div
+          className={`overflow-hidden rounded-xl border ${tableBorder}`}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] border-collapse">
+              <TableHeader includeDate={false} />
+
+              <tbody>
+                {appointments.filter(
+                  (a) =>
+                    a.dateISO === todayISO && a.status === 'IN_CONSULTATION',
+                ).length === 0 ? (
+                  <EmptyState
+                    message="No patients in consultation right now."
+                    colSpan={5}
+                  />
+                ) : (
+                  appointments
+                    .filter(
+                      (a) =>
+                        a.dateISO === todayISO && a.status === 'IN_CONSULTATION',
+                    )
+                    .map((a) => (
+                      <tr key={a.id} className={rowClass}>
+                        <td className="px-5 py-4">{renderPatient(a)}</td>
+
+                        <td
+                          className={`px-5 py-4 text-sm font-medium ${cellText}`}
+                        >
+                          <span className="line-clamp-2">{a.serviceName}</span>
+                        </td>
+
+                        <td
+                          className={`px-5 py-4 text-sm font-medium whitespace-nowrap ${cellText}`}
+                        >
+                          {a.timeLabel}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <StatusBadge status={a.status} />
+                        </td>
+
+                        <td className="px-5 py-4">{renderActions(a)}</td>
+                      </tr>
+                    ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
 

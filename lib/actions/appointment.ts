@@ -36,6 +36,7 @@ import type {
 const VALID_STATUSES = [
   'PENDING',
   'APPROVED',
+  'IN_CONSULTATION',
   'COMPLETED',
   'CANCELLED',
   'NO_SHOW',
@@ -833,6 +834,12 @@ export async function updateAppointmentStatus(
   if (!VALID_STATUSES.includes(status)) {
     return { success: false, message: 'Invalid status.' }
   }
+  if (status === 'COMPLETED') {
+    return {
+      success: false,
+      message: 'Save the medical record to complete this visit.',
+    }
+  }
 
   try {
     const appointment = await (prisma as any).appointment.findUnique({
@@ -854,7 +861,7 @@ export async function updateAppointmentStatus(
       `${String(appointment.appointmentAt.getUTCHours()).padStart(2, '0')}:00`,
     )}`
 
-    if (status === 'COMPLETED' && !appointment.patientId) {
+    if ((status === 'COMPLETED' || status === 'IN_CONSULTATION') && !appointment.patientId) {
       let patient = await (prisma as any).patient.findFirst({
         where: {
           userId: appointment.userId,
@@ -905,6 +912,10 @@ export async function updateAppointmentStatus(
       APPROVED: {
         title: 'Appointment Approved',
         description: `Your ${serviceName} appointment for ${forName} on ${whenLabel} has been approved.`,
+      },
+      IN_CONSULTATION: {
+        title: 'Now In Consultation',
+        description: `The ${serviceName} visit for ${forName} on ${whenLabel} is now in consultation.`,
       },
       COMPLETED: {
         title: 'Visit Completed',

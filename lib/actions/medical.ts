@@ -437,16 +437,40 @@ export async function saveMedicalRecord(_prevState: any, formData: FormData) {
       await (prisma as any).appointment.update({
         where: { appointmentid: appointmentId },
         data: { status: 'COMPLETED', patientId },
-      })
+      });
     } else if (appointment.patientId !== patientId) {
       await (prisma as any).appointment.update({
         where: { appointmentid: appointmentId },
         data: { patientId },
-      })
+      });
     }
 
-    revalidateTag('appointments', 'max')
-    revalidateTag('patients', 'max')
+    // Correct flow: this save is what removes the visit from the
+    // queue/appointment board — COMPLETED lives only in history from here.
+    // Any matching walk-in queue rows (WAITING or IN_CONSULTATION) for this
+    // patient today are flipped to DONE so they disappear from the board too.
+    try {
+      const at = new Date(appointment.appointmentAt);
+      const dayStart = new Date(
+        Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()),
+      );
+      const dayEnd = new Date(dayStart);
+      dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+      await (prisma as any).walkInQueue.updateMany({
+        where: {
+          patientId,
+          status: { in: ['WAITING', 'IN_CONSULTATION'] },
+          createdAt: { gte: dayStart, lt: dayEnd },
+        },
+        data: { status: 'DONE' },
+      });
+    } catch (err) {
+      console.error('[saveMedicalRecord | queue sync | Error]:', err);
+    }
+
+    revalidateTag('appointments', 'max');
+    revalidateTag('patients', 'max');
+    revalidateTag('queues', 'max');
 
     const serviceName = appointment.service?.name ?? 'appointment'
     const forName = appointment.familyMember?.name ?? 'you'

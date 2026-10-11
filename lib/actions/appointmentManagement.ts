@@ -908,7 +908,7 @@ export async function getWalkInAppointmentView(qid: string): Promise<{
       where: {
         patientId: entry.patientId,
         source: 'WALKIN',
-        status: { in: ['APPROVED', 'COMPLETED'] },
+        status: { in: ['APPROVED', 'IN_CONSULTATION', 'COMPLETED'] },
         appointmentAt: { gte: start, lt: end },
       },
       orderBy: { appointmentAt: 'desc' },
@@ -940,7 +940,8 @@ export async function getWalkInAppointmentView(qid: string): Promise<{
           serviceId,
           source: 'WALKIN',
           appointmentAt: new Date(),
-          status: 'APPROVED',
+          // Mirror the queue: a visit already in consultation opens chartable.
+          status: entry.status === 'IN_CONSULTATION' ? 'IN_CONSULTATION' : 'APPROVED',
         },
         include: BOARD_INCLUDE,
       })

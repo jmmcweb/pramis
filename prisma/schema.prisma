@@ -21,6 +21,7 @@ enum AccountStatus {
 enum AppointmentStatus {
   PENDING
   APPROVED
+  IN_CONSULTATION
   COMPLETED
   CANCELLED
   NO_SHOW

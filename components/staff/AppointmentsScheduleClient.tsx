@@ -17,6 +17,7 @@ const PER_PAGE = 10
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
   PENDING: { bg: '#FEF3C7', color: '#92400E' },
   APPROVED: { bg: '#DCFCE7', color: '#166534' },
+  IN_CONSULTATION: { bg: '#E0F2FE', color: '#0369A1' },
   COMPLETED: { bg: '#DBEAFE', color: '#1E40AF' },
   CANCELLED: { bg: '#FEE2E2', color: '#B91C1C' },
   NO_SHOW: { bg: '#EDE9FE', color: '#6D28D9' },
@@ -126,15 +127,36 @@ export default function AppointmentsScheduleClient({
       case 'APPROVED':
         return (
           <div className="flex gap-2 flex-wrap">
-            {/* Completing opens the post-consultation record form. */}
-            <button className={btnPrimary} onClick={() => setRecordFor(a)}>
-              Complete & Record
+            {/* Medstaff hands the visit to admin: IN_CONSULTATION surfaces in
+                admin for charting; only saving the record completes it. */}
+            <button
+              className={btnPrimary}
+              onClick={() =>
+                runAction(a.id, () =>
+                  updateAppointmentStatus(a.id, 'IN_CONSULTATION'),
+                )
+              }
+            >
+              Start Consultation
             </button>
             <button className={btnNotify} onClick={() => notify(a)}>
               Notify
             </button>
             <button className={btnRed} onClick={() => cancel(a)}>
               Cancel
+            </button>
+          </div>
+        )
+      case 'IN_CONSULTATION':
+        return (
+          <div className="flex gap-2">
+            <span
+              className={`text-xs font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+            >
+              In consultation — waiting for the record
+            </span>
+            <button className={btnNotify} onClick={() => notify(a)}>
+              Notify
             </button>
           </div>
         )

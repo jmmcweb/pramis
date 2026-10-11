@@ -58,8 +58,11 @@ export default function QueueingClient({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const [inConsultation, setInConsultation] = useState(new Set<string>())
-  const [completedIds, setCompletedIds] = useState(new Set<string>())
+  const safeQueues: TodayQueues = {
+    scheduled: Array.isArray(queues?.scheduled) ? queues.scheduled : [],
+    walkins: Array.isArray(queues?.walkins) ? queues.walkins : [],
+    priority: Array.isArray(queues?.priority) ? queues.priority : [],
+  }
 
   const [showAdd, setShowAdd] = useState(false)
   const [lane, setLane] = useState<Lane>('WALKIN')
@@ -109,51 +112,45 @@ export default function QueueingClient({
     })
   }
 
-  // Completing a scheduled visit marks it COMPLETED without requiring ITR input in queueing
+  // Correct flow for scheduled visits: APPROVED -> IN_CONSULTATION (medstaff
+  // starts it, admin charts it) -> COMPLETED only by saving the medical
+  // record. The queueing board never completes a visit directly.
   const advanceScheduled = (entry: QueueEntry) => {
-    if (!inConsultation.has(entry.id)) {
-      setInConsultation((prev) => new Set(prev).add(entry.id))
-      toast.success('Consultation started.')
+    if (isPending) return
+    if (entry.status === 'IN_CONSULTATION') {
+      toast.error(
+        'This visit is in consultation — enter the record from Appointments to complete it.',
+      )
       return
     }
-    if (isPending) return
-    setInConsultation((prev) => {
-      const next = new Set(prev)
-      next.delete(entry.id)
-      return next
-    })
-    setCompletedIds((prev) => new Set(prev).add(entry.id))
-    runAction(() => updateAppointmentStatus(entry.id, 'COMPLETED'))
+    runAction(() =>
+      updateAppointmentStatus(
+        entry.appointmentId ?? entry.id,
+        'IN_CONSULTATION',
+      ),
+    )
   }
 
   const scheduledStatus = (entry: QueueEntry): QueueEntry['status'] =>
-    entry.status === 'DONE' || completedIds.has(entry.id)
-      ? 'DONE'
-      : inConsultation.has(entry.id)
-        ? 'IN_CONSULTATION'
-        : 'WAITING'
+    entry.status
 
   const advanceQueued = (entry: QueueEntry) => {
     if (entry.id.startsWith('APT-')) {
       advanceScheduled(entry)
       return
     }
-    if (entry.status === 'WAITING') {
-      runAction(() => advanceQueueEntry(entry.id))
+    // Walk-ins: WAITING -> IN_CONSULTATION only. Saving the record is what
+    // completes them; the board never jumps straight to DONE.
+    if (entry.status !== 'WAITING') {
+      toast.error(
+        'This visit is in consultation — save the medical record to complete it.',
+      )
       return
     }
-    if (isPending || entry.status !== 'IN_CONSULTATION') return
-    setCompletedIds((prev) => new Set(prev).add(entry.id))
-    runAction(() => advanceQueueEntry(entry.id))
+    runAction(() => advanceQueueEntry(entry.qid ?? entry.id))
   }
 
-  const isEntryActive = (entry: QueueEntry) => {
-    if (completedIds.has(entry.id)) return false
-    const status = entry.id.startsWith('APT-')
-      ? scheduledStatus(entry)
-      : entry.status
-    return status !== 'DONE'
-  }
+  const isEntryActive = (entry: QueueEntry) => entry?.status !== 'DONE'
 
   // Applies the DB-derived lane: senior (60+) or PWD (profile.isPwd) go PRIORITY.
   const applyPatientLookup = (p: PatientLookup) => {
@@ -319,12 +316,12 @@ export default function QueueingClient({
   const fieldLabel = `block text-[13px] font-bold mb-1.5 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`
   const fieldInput = `w-full px-3.5 py-2.5 rounded-lg text-[15px] outline-none transition-colors border ${darkMode ? 'bg-[#0f1438] text-[#F9FAFB] placeholder-gray-500 border-[rgba(255,255,255,0.15)] focus:border-[#4E69D3]' : 'bg-white text-gray-800 placeholder-gray-400 border-gray-200 focus:border-[#4E69D3]'}`
 
-  const activePriority = queues.priority.filter(
+  const activePriority = safeQueues.priority.filter(
     (q) =>
       (q.priority === 'SENIOR' || q.priority === 'PWD') && isEntryActive(q),
   )
-  const activeScheduled = queues.scheduled.filter(isEntryActive)
-  const activeWalkins = queues.walkins.filter(isEntryActive)
+  const activeScheduled = safeQueues.scheduled.filter(isEntryActive)
+  const activeWalkins = safeQueues.walkins.filter(isEntryActive)
 
   return (
     <div>
@@ -396,8 +393,8 @@ export default function QueueingClient({
                 onRemove={() =>
                   runAction(() =>
                     q.id.startsWith('APT-')
-                      ? cancelAppointment(q.id)
-                      : removeQueueEntry(q.id),
+                      ? cancelAppointment(q.appointmentId ?? q.id)
+                      : removeQueueEntry(q.qid ?? q.id),
                   )
                 }
               />
@@ -449,7 +446,11 @@ export default function QueueingClient({
                   item={{ ...q, status: scheduledStatus(q) }}
                   busy={isPending}
                   onAdvance={() => advanceScheduled(q)}
-                  onRemove={() => runAction(() => cancelAppointment(q.id))}
+                  onRemove={() =>
+                    runAction(() =>
+                      cancelAppointment(q.appointmentId ?? q.id),
+                    )
+                  }
                 />
               ))
             )}
@@ -495,8 +496,8 @@ export default function QueueingClient({
                   onRemove={() =>
                     runAction(() =>
                       q.id.startsWith('APT-')
-                        ? cancelAppointment(q.id)
-                        : removeQueueEntry(q.id),
+                        ? cancelAppointment(q.appointmentId ?? q.id)
+                        : removeQueueEntry(q.qid ?? q.id),
                     )
                   }
                 />

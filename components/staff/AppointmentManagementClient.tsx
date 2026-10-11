@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation'
 import { useDarkMode } from '@/app/staff/DarkModeContext'
 import { now, addDays, toISO, fmtLong } from '@/src/lib/dateUtils'
 import { notifyAppointment } from '@/lib/actions/appointmentManagement'
+import { cancelAppointment } from '@/lib/actions/appointment'
 import {
   advanceQueueEntry,
-  markQueueDone,
   removeQueueEntry,
   type QueueEntry,
   type TodayQueues,
@@ -135,12 +135,23 @@ function Card({
         </span>
       </div>
       <div className="flex justify-between gap-[18px]">
-        <button
-          className={`bg-transparent ${darkMode ? 'text-[#F9FAFB] border-white/30 hover:bg-white/10' : 'text-[#4E69D3] border-[#4E69D3] hover:bg-[#EEF0FB]'} px-4 py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors`}
-          onClick={() => onViewRecord(patient)}
+        <span
+          className={`px-4 py-2 rounded-md text-xs font-semibold ${
+            patient.status === 'IN_CONSULTATION'
+              ? darkMode
+                ? 'bg-blue-500/20 text-blue-300'
+                : 'bg-[#E0F2FE] text-[#0369A1]'
+              : darkMode
+                ? 'text-gray-400'
+                : 'text-gray-500'
+          }`}
         >
-          {patient.hasMedicalRecord ? 'View/Edit Record' : 'Fill Record'}
-        </button>
+          {patient.status === 'IN_CONSULTATION'
+            ? 'In consultation — waiting for the record'
+            : patient.hasMedicalRecord
+              ? 'Record saved'
+              : 'Approved — start from the queue'}
+        </span>
         <button
           className={`px-5 py-2.5 rounded-md text-sm font-semibold border-none cursor-pointer transition-colors ${notified ? 'bg-green-600 text-white' : 'bg-[#4E69D3] text-white hover:bg-[#3D56B8]'}`}
           onClick={() => onNotify(patient)}
@@ -241,7 +252,11 @@ function ListCard({
         className={`self-end bg-transparent ${darkMode ? 'text-[#F9FAFB] border-white/30 hover:bg-white/10' : 'text-[#4E69D3] border-[#4E69D3] hover:bg-[#EEF0FB]'} px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors`}
         onClick={() => onViewRecord(patient)}
       >
-        {patient.hasMedicalRecord ? 'View/Edit Record' : 'Fill Record'}
+        {patient.status === 'IN_CONSULTATION'
+          ? 'Waiting for admin record'
+          : patient.hasMedicalRecord
+            ? 'View Record'
+            : 'View Details'}
       </button>
     </div>
   )
@@ -481,12 +496,16 @@ export default function AppointmentManagementClient({
   }
 
   const advanceQueued = (entry: QueueEntry) => {
-    if (entry.status === 'WAITING') {
-      runAction(() => advanceQueueEntry(entry.id))
+    if (isPending) return
+    // Correct flow: WAITING -> IN_CONSULTATION only. IN_CONSULTATION visits
+    // are completed by saving the medical record (admin), never from here.
+    if (entry.status !== 'WAITING') {
+      toast.error(
+        'This visit is in consultation — save the medical record to complete it.',
+      )
       return
     }
-    if (isPending || entry.status !== 'IN_CONSULTATION') return
-    runAction(() => markQueueDone(entry.id))
+    runAction(() => advanceQueueEntry(entry.qid ?? entry.id))
   }
 
   useEffect(() => {
@@ -571,7 +590,13 @@ export default function AppointmentManagementClient({
                     item={q}
                     busy={isPending}
                     onAdvance={() => advanceQueued(q)}
-                    onRemove={() => runAction(() => removeQueueEntry(q.id))}
+                    onRemove={() =>
+                      runAction(() =>
+                        q.id.startsWith('APT-')
+                          ? cancelAppointment(q.appointmentId ?? q.id)
+                          : removeQueueEntry(q.qid ?? q.id),
+                      )
+                    }
                   />
                 ))
             )}
