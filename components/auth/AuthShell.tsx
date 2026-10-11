@@ -35,7 +35,7 @@ export default function AuthShell({
     <div className="min-h-dvh flex flex-col lg:flex-row">
       <LeftPanel />
 
-      <div className="flex-1 relative z-10 bg-white lg:h-dvh lg:overflow-y-auto no-scrollbar shadow-[-18px_0_36px_0_rgba(107,114,128,0.4),18px_0_36px_0_rgba(107,114,128,0.4)]">
+      <div className="flex-1 relative z-10 bg-white lg:h-dvh lg:overflow-y-auto no-scrollbar shadow-[0_0_60px_rgba(107,114,128,0.25)] lg:shadow-[-14px_0_44px_-12px_rgba(107,114,128,0.3)]">
         <div className="min-h-full flex flex-col items-center justify-center px-4 py-6 lg:py-5">
           <div
             className={`w-full flex flex-col ${cardClassName ?? 'max-w-md'}`}
@@ -54,7 +54,7 @@ export default function AuthShell({
                 {tab && (
                   <nav
                     aria-label="Account"
-                    className="flex bg-mist rounded-xl p-1 border border-line shadow-[-12px_0_30px_-10px_rgba(107,114,128,0.25),12px_0_30px_-10px_rgba(107,114,128,0.25)]"
+                    className="flex bg-mist rounded-xl p-1 border border-line shadow-sm"
                   >
                     {TABS.map(({ key, href, label }) => (
                       <Link
@@ -77,14 +77,14 @@ export default function AuthShell({
 
             {step !== undefined && <HeartbeatProgress step={step} />}
 
-            <div className="font-inter bg-white border border-line rounded-2xl shadow-[-12px_0_30px_-10px_rgba(107,114,128,0.25),12px_0_30px_-10px_rgba(107,114,128,0.25)] p-6 md:p-8 w-full flex flex-col">
-              <h1 className="font-roboto text-[26px] md:text-[28px] font-bold tracking-tight leading-tight text-ink">
+            <div className="font-inter bg-white border border-line rounded-2xl shadow-[0_10px_30px_-12px_rgba(15,88,139,0.18)] p-5 sm:p-6 md:p-8 w-full flex flex-col">
+              <h1 className="font-roboto text-[24px] sm:text-[26px] md:text-[28px] font-bold tracking-tight leading-tight text-ink">
                 {title}
               </h1>
               <span className="mt-3 block h-[3px] w-12 rounded-full bg-brand" />
 
               {subtitle && (
-                <p className="font-inter text-[12px] leading-normal tracking-normal text-slate mt-4 whitespace-nowrap max-w-full overflow-hidden text-ellipsis">
+                <p className="font-inter text-[13px] leading-normal tracking-normal text-slate mt-4 max-w-full text-balance">
                   {subtitle}
                 </p>
               )}

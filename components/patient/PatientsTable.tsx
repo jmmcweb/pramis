@@ -176,7 +176,7 @@ function VisitCard({
             className={`rounded-lg px-3 py-2 ${darkMode ? 'bg-[#2d1b4e]' : 'bg-white border border-gray-200'}`}
           >
             <span
-              className={`block text-[11px] font-semibold uppercase tracking-[0.5px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+              className={`block text-xs font-semibold uppercase tracking-[0.5px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
             >
               {m.label}
             </span>

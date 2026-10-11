@@ -241,7 +241,7 @@ const HeartbeatProgress = ({ step }: HeartbeatProgressProps) => {
             return (
               <span
                 key={s.label}
-                className={`text-center font-inter text-[9px] font-bold uppercase tracking-[0.1em] transition-colors duration-300 ${
+                className={`text-center font-inter text-[10px] font-bold uppercase tracking-[0.05em] transition-colors duration-300 ${
                   done || current ? 'text-brand' : 'text-slate/40'
                 }`}
               >

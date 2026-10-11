@@ -40,18 +40,22 @@ export default function Home() {
 
       <header className="sticky top-0 z-20 bg-black/30 backdrop-blur">
         <div className="max-w-7xl mx-auto px-5 md:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
             <img
-              src="/meditrack-logo.png"
-              alt="MediTrack"
+              src="/logo.png"
+              alt="PRAMIS"
               className="w-12 h-12 md:w-16 md:h-16 object-contain"
             />
-            <div className="flex flex-col leading-none">
+            <div className="flex flex-col items-end justify-center leading-none w-fit">
               <span className="font-bebas text-3xl md:text-[42px] text-white tracking-wide">
                 PRAMIS
               </span>
-              <span className="font-asap text-xs md:text-sm text-[#7fb6e6] tracking-[0.129em] md:tracking-[0.164em] whitespace-nowrap -mt-3">
-                Stay On Track With Us
+              <span className="w-full flex justify-between font-asap text-[10px] md:text-[13px] text-[#7fb6e6] tracking-normal whitespace-nowrap mt-1">
+                <span>Stay</span>
+                <span>On</span>
+                <span>Track</span>
+                <span>With</span>
+                <span>Us</span>
               </span>
             </div>
           </div>

@@ -158,7 +158,7 @@ export default function AppointmentOverviewCard({
                       : ''}
                   </span>
                   <span
-                    className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold ${
                       STATUS_STYLES[appointment.status] ?? STATUS_STYLES.PENDING
                     }`}
                   >

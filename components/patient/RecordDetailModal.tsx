@@ -92,7 +92,7 @@ export default function RecordDetailModal({
         <div className="px-6 py-5 max-h-[70vh] overflow-y-auto space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-surface rounded-xl p-3">
-              <p className="text-[10px] font-bold uppercase text-muted m-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                 Patient
               </p>
               <p className="text-sm font-semibold text-body m-0 mt-0.5">
@@ -100,7 +100,7 @@ export default function RecordDetailModal({
               </p>
             </div>
             <div className="bg-surface rounded-xl p-3">
-              <p className="text-[10px] font-bold uppercase text-muted m-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                 Attending
               </p>
               <p className="text-sm font-semibold text-body m-0 mt-0.5">
@@ -119,7 +119,7 @@ export default function RecordDetailModal({
                     key={detail.label}
                     className="bg-surface rounded-xl px-3 py-2"
                   >
-                    <p className="text-[10px] font-bold uppercase text-muted m-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                       {detail.label}
                     </p>
                     <p className="text-sm font-semibold text-body m-0 mt-0.5 break-words">
@@ -141,7 +141,7 @@ export default function RecordDetailModal({
                     key={v.label}
                     className="bg-surface rounded-xl px-3 py-2"
                   >
-                    <p className="text-[10px] font-bold uppercase text-muted m-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                       {v.label}
                     </p>
                     <p className="text-sm font-semibold text-body m-0 mt-0.5">
@@ -159,7 +159,7 @@ export default function RecordDetailModal({
             <div className="space-y-2">
               {record.chiefComplaints && (
                 <div className="bg-surface rounded-xl p-3">
-                  <p className="text-[10px] font-bold uppercase text-muted m-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                     Complaints
                   </p>
                   <p className="text-sm text-body m-0 mt-1">
@@ -168,14 +168,14 @@ export default function RecordDetailModal({
                 </div>
               )}
               <div className="bg-surface rounded-xl p-3">
-                <p className="text-[10px] font-bold uppercase text-muted m-0">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                   Diagnosis
                 </p>
                 <p className="text-sm text-body m-0 mt-1">{record.diagnosis}</p>
               </div>
               {record.medications && (
                 <div className="bg-surface rounded-xl p-3">
-                  <p className="text-[10px] font-bold uppercase text-muted m-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                     Medications
                   </p>
                   <p className="text-sm text-body m-0 mt-1">
@@ -193,7 +193,7 @@ export default function RecordDetailModal({
               <div className="bg-surface rounded-xl p-3 grid grid-cols-2 gap-2">
                 {record.placeDelivered && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase text-muted m-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                       Place
                     </p>
                     <p className="text-sm font-semibold text-body m-0 mt-0.5">
@@ -203,7 +203,7 @@ export default function RecordDetailModal({
                 )}
                 {record.birthWeight && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase text-muted m-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                       Weight
                     </p>
                     <p className="text-sm font-semibold text-body m-0 mt-0.5">
@@ -225,7 +225,7 @@ export default function RecordDetailModal({
                     key={imm.label}
                     className="bg-surface rounded-xl px-3 py-2"
                   >
-                    <p className="text-[10px] font-bold uppercase text-muted m-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-muted m-0">
                       {imm.label}
                     </p>
                     <p className="text-sm font-semibold text-body m-0 mt-0.5">

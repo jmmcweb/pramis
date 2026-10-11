@@ -17,6 +17,7 @@ import {
   getSnapshotFromBlob,
   isBlobConfigured,
   listBlobSnapshots,
+  putManifestInBlob,
   putSnapshotInBlob,
 } from '@/lib/vercelBlob'
 import {
@@ -62,6 +63,15 @@ export async function ensureStoreDir(): Promise<void> {
 }
 
 
+/**
+ * True when running on a serverless platform whose filesystem is wiped between
+ * executions. On these platforms a snapshot that only lands on disk is not a
+ * backup — it must also reach a durable store (Vercel Blob).
+ */
+function runningOnServerless(): boolean {
+  return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)
+}
+
 export async function storeSnapshot(
   backupId: string,
   gzipped: Buffer,
@@ -70,24 +80,41 @@ export async function storeSnapshot(
   const checksum = createHash('sha256').update(gzipped).digest('hex')
   const withChecksum: StoredManifest = { ...manifest, checksum }
 
+  let storedLocally = false
   try {
     await ensureStoreDir()
     const temp = `${snapshotPath(backupId)}.tmp`
     await fs.writeFile(temp, gzipped)
     await fs.rename(temp, snapshotPath(backupId))
     await writeManifest(backupId, withChecksum)
-    return { checksum, storedInBlob: false }
+    storedLocally = true
   } catch (error) {
     console.error('[storeSnapshot | local write]:', error)
-    if (!isBlobConfigured()) {
-      // If serverless read-only and no Blob configured, return checksum so upload to cloud mirror can proceed
-      return { checksum, storedInBlob: false }
-    }
-
-    const uploaded = await putSnapshotInBlob(backupId, gzipped, withChecksum)
-    if (!uploaded.success) throw new Error(uploaded.message)
-    return { checksum, storedInBlob: true }
   }
+
+  // Mirror every snapshot to Vercel Blob whenever it is configured. On
+  // serverless the Blob copy is mandatory: the local disk (e.g. Vercel /tmp)
+  // disappears between executions, so an ephemeral copy alone must fail the
+  // backup loudly instead of pretending it succeeded.
+  let storedInBlob = false
+  if (isBlobConfigured()) {
+    const uploaded = await putSnapshotInBlob(backupId, gzipped, withChecksum)
+    storedInBlob = uploaded.success
+    if (!storedInBlob) {
+      console.error('[storeSnapshot | blob upload]:', uploaded.message)
+      if (!storedLocally || runningOnServerless()) {
+        throw new Error(uploaded.message)
+      }
+    }
+  }
+
+  if (!storedLocally && !storedInBlob) {
+    // No durable store accepted the snapshot. Return the checksum anyway so
+    // the caller can still mirror the bytes to Google Drive.
+    return { checksum, storedInBlob: false }
+  }
+
+  return { checksum, storedInBlob }
 }
 
 export async function writeManifest(
@@ -121,15 +148,29 @@ export async function patchManifest(
   if (!current) return null
 
   const next = { ...current, ...patch }
+  let storedLocally = true
   try {
     await writeManifest(backupId, next)
   } catch (error) {
     console.error('[patchManifest | local write]:', error)
-    const bytes = await getSnapshotFromBlob(backupId)
-    if (!bytes) throw error
-    const uploaded = await putSnapshotInBlob(backupId, bytes, next)
-    if (!uploaded.success) throw new Error(uploaded.message)
+    storedLocally = false
   }
+
+  if (isBlobConfigured()) {
+    // Keep the Blob manifest in sync so fresh serverless executions — which
+    // only see the Blob copy — read the same index as this instance.
+    const uploaded = await putManifestInBlob(backupId, next)
+    if (!uploaded.success && (!storedLocally || runningOnServerless())) {
+      throw new Error(
+        storedLocally
+          ? uploaded.message
+          : `The manifest for ${backupId} could not be updated in any store.`,
+      )
+    }
+  } else if (!storedLocally) {
+    throw new Error(`The manifest for ${backupId} could not be updated.`)
+  }
+
   return next
 }
 
@@ -287,18 +328,34 @@ export async function importSnapshot(
         restoredAt: null,
       }
 
+  let storedLocally = false
   try {
     await ensureStoreDir()
     const temp = `${snapshotPath(backupId)}.tmp`
     await fs.writeFile(temp, bytes)
     await fs.rename(temp, snapshotPath(backupId))
     await writeManifest(backupId, resolved)
+    storedLocally = true
   } catch (error) {
     console.error('[importSnapshot | local write]:', error)
-    if (isBlobConfigured()) {
-      const uploaded = await putSnapshotInBlob(backupId, bytes, resolved)
-      if (!uploaded.success) throw new Error(uploaded.message)
+  }
+
+  let storedInBlob = false
+  if (isBlobConfigured()) {
+    const uploaded = await putSnapshotInBlob(backupId, bytes, resolved)
+    storedInBlob = uploaded.success
+    if (!storedInBlob) {
+      console.error('[importSnapshot | blob upload]:', uploaded.message)
+      if (!storedLocally || runningOnServerless()) {
+        throw new Error(uploaded.message)
+      }
     }
+  }
+
+  if (!storedLocally && !storedInBlob) {
+    throw new Error(
+      `The snapshot for ${backupId} could not be stored on this deployment.`,
+    )
   }
 
   return resolved

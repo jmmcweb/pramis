@@ -207,7 +207,10 @@ All loaded from `.env.local` (pulled via `vercel env pull`):
 | `DATABASE_URL_UNPOOLED` | Direct Neon connection (migrations) |
 | `NEXTAUTH_SECRET` | JWT signing key |
 | `NEXTAUTH_URL` | Base URL for auth callbacks |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob API token |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob API token — required for durable backups on Vercel; snapshots are mirrored under the `meditrack-backups/` prefix |
+| `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` | Google Drive service-account JSON (alternative: `GOOGLE_DRIVE_SA_CLIENT_EMAIL` + `GOOGLE_DRIVE_SA_PRIVATE_KEY`) used to mirror backups via the Drive API |
+| `GOOGLE_DRIVE_FOLDER_ID` | Drive folder shared with the service account as Editor (OAuth alternative: `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` / `GOOGLE_DRIVE_REFRESH_TOKEN`) |
+| `CRON_SECRET` | Bearer token for the weekly `/api/admin/backup/auto` cron (Vercel sends it as `Authorization: Bearer …`) |
 | `SMTP_HOST` | Brevo SMTP host (`smtp-relay.brevo.com`) |
 | `SMTP_USER` | Brevo **SMTP login** (`xxxxx@smtp-brevo.com`) — not the account email |
 | `SMTP_KEY` | Brevo **SMTP key** — not the REST API key |
@@ -265,6 +268,30 @@ sender in whichever account you use.
 4. Deploy
 
 The Vercel Blob storage domain is allowlisted in `next.config.ts` for use with `<Image>`.
+
+### Cloud backups on Vercel
+
+The serverless filesystem is wiped between function runs, so a backup only
+survives if it reaches a durable store. Two checks mirror the app's own
+connection logic:
+
+```bash
+npm run blob:check    # Vercel Blob token + list + write/read round-trip
+npm run gdrive:check  # Google Drive API credentials and folder access
+```
+
+At least one of the following must be configured in the Vercel environment:
+
+- `BLOB_READ_WRITE_TOKEN` (recommended — snapshots are mirrored there automatically), or
+- the Google Drive API credentials (`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` **or**
+  `GOOGLE_DRIVE_CLIENT_ID`/`GOOGLE_DRIVE_CLIENT_SECRET`/`GOOGLE_DRIVE_REFRESH_TOKEN`)
+  plus `GOOGLE_DRIVE_FOLDER_ID`.
+
+`GOOGLE_DRIVE_DIR` (Google Drive for Desktop folder) only works locally and is
+ignored on deployments where the path does not exist. If neither store is
+configured, **Back up now** fails with an explicit error instead of writing a
+snapshot that would be lost. On the admin Backup page the Vercel Blob row has a
+**Push all** button to backfill existing snapshots into Blob.
 
 ---
 

@@ -232,24 +232,28 @@ function SidebarContent({
 
   return (
     <>
-      <div className="flex items-center gap-3 pl-4">
+      <div className="flex items-center gap-1.5 pl-4">
         <div className="w-[68px] h-[68px] flex-shrink-0">
           <img
-            src="/meditrack-logo.png"
-            alt="MediTrack"
+            src="/logo.png"
+            alt="PRAMIS"
             className="w-full h-full object-contain"
           />
         </div>
-        <div>
+        <div className="flex flex-col items-end justify-center min-w-0 w-fit">
           <h1
-            className={`font-bebas text-[36px] lg:text-[50px] leading-none m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
+            className={`font-bebas text-[36px] lg:text-[50px] leading-none tracking-[0.03em] m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
           >
             PRAMIS
           </h1>
           <p
-            className={`font-asap text-[17px] tracking-[2px] leading-none -mt-1.5 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
+            className={`w-full flex justify-between font-asap text-[11px] lg:text-[15px] tracking-normal leading-none whitespace-nowrap mt-1 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
           >
-            Stay On Track With Us
+            <span>Stay</span>
+            <span>On</span>
+            <span>Track</span>
+            <span>With</span>
+            <span>Us</span>
           </p>
         </div>
       </div>

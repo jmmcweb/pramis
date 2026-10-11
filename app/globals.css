@@ -131,6 +131,13 @@ html[data-font-size='large'] {
   body {
     font-family: var(--font-inter);
     font-size: 16px;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: rgb(15 88 139 / 0.18);
   }
 
   body {
@@ -147,13 +154,23 @@ html[data-font-size='large'] {
   h5,
   h6 {
     @apply font-bold;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 
   form {
     input,
     select,
     textarea {
-      @apply p-2 ring-0 outline-none border border-tertiary;
+      @apply p-2 ring-0 outline-none border border-tertiary rounded-lg transition-shadow;
+    }
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      box-shadow: 0 0 0 3px rgb(15 88 139 / 0.12);
     }
     select,
     input[type='date'] {

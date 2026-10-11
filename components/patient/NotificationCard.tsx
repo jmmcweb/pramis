@@ -25,7 +25,7 @@ export default function NotificationCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 mb-1">
           <span
-            className="text-[10px] font-bold text-white px-2 py-0.5 rounded-full uppercase tracking-[0.5px]"
+            className="text-[11px] font-bold text-white px-2 py-0.5 rounded-full uppercase tracking-[0.5px]"
             style={{ background: categoryColors[notification.category] }}
           >
             {notification.category}
@@ -40,7 +40,7 @@ export default function NotificationCard({
         <p className="text-[13px] text-muted leading-relaxed my-1">
           {notification.description}
         </p>
-        <span className="text-[11px] text-faint">{notification.time}</span>
+        <span className="text-xs text-faint">{notification.time}</span>
       </div>
     </article>
   )

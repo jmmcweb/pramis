@@ -5,13 +5,13 @@ import FormForgotPassword from '@/components/forms/FormForgotPassword'
 const ForgotPassword = () => {
   return (
     <AuthShell
-      title="Forgot password"
+      title="Forgot Password"
       subtitle="Enter your email and we'll send you a password reset link."
       footer={
         <>
           Remembered it?{' '}
           <Link href="/login" className="auth-link">
-            Back to log in
+            Back to Log In
           </Link>
         </>
       }

@@ -52,7 +52,7 @@ export default function PatientBottomNavigation() {
               ) : (
                 <item.icon className="w-6 h-6" aria-hidden="true" />
               )}
-              <span className={`text-[11px] ${isActive ? 'font-bold' : 'font-medium'}`}>
+              <span className={`text-xs ${isActive ? 'font-bold' : 'font-medium'}`}>
                 {item.label}
               </span>
             </Link>

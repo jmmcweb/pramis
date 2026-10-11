@@ -78,7 +78,7 @@ const ResidenceDetails = () => {
     <AuthShell
       step={2}
       animate={false}
-      title="Residence details"
+      title="Residence Details"
       cardClassName="lg:max-w-2xl"
       subtitle="Where should we route your care and prescriptions?"
       backHref="/signup"
@@ -86,14 +86,14 @@ const ResidenceDetails = () => {
         <>
           Already have an account?{' '}
           <Link href="/login" className="auth-link">
-            Log in
+            Log In
           </Link>
         </>
       }
     >
       <form ref={formRef} onSubmit={handleNext} noValidate className="flex flex-col gap-5">
         <Field
-          label="Street address"
+          label="Street Address"
           name="street"
           placeholder="123 Mabini Street"
           value={street}
@@ -169,7 +169,7 @@ const ResidenceDetails = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field
-            label="ZIP / Postal code"
+            label="ZIP / Postal Code"
             name="zip"
             inputMode="numeric"
             value={lockedZip}

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Check, Eye, EyeOff, X } from 'lucide-react'
 import AuthShell from '@/components/auth/AuthShell'
 import Field from '@/components/auth/Field'
@@ -48,6 +49,7 @@ const Signup = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
 
   const [errors, setErrors] = useState<Errors>({})
 
@@ -99,7 +101,7 @@ const Signup = () => {
             />
           </div>
           <p className={`mt-1 text-[12px] font-medium ${strength.text}`}>
-            Password strength: {strength.label}
+            Password Strength: {strength.label}
           </p>
         </div>
       )}
@@ -130,11 +132,14 @@ const Signup = () => {
       nextErrors.password = 'Use at least 12 characters.'
     if (confirmPassword !== password)
       nextErrors.confirmPassword = 'Passwords don’t match.'
+    if (!agreedToTerms)
+      nextErrors.agreedToTerms =
+        'Please agree to the Privacy Policy and Terms and Conditions to continue.'
 
     setErrors(nextErrors)
 
     if (Object.keys(nextErrors).length > 0) {
-      const first = ['firstName', 'lastName', 'birthday', 'mobile', 'email', 'password', 'confirmPassword'].find(
+      const first = ['firstName', 'lastName', 'birthday', 'mobile', 'email', 'password', 'confirmPassword', 'agreedToTerms'].find(
         (name) => nextErrors[name],
       )
       formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus()
@@ -152,6 +157,8 @@ const Signup = () => {
       mobile: mobileDigits(mobile),
       email,
       password,
+      agreedToTerms,
+      termsAgreedAt: agreedToTerms ? new Date().toISOString() : null,
     })
     push('/residence-details')
   }
@@ -169,7 +176,7 @@ const Signup = () => {
         {/* Row 1 — legal name */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Field
-            label="First name"
+            label="First Name"
             name="firstName"
             placeholder="John"
             value={firstName}
@@ -179,7 +186,7 @@ const Signup = () => {
             required
           />
           <Field
-            label="Middle name"
+            label="Middle Name"
             name="middleName"
             placeholder="Michael"
             value={middleName}
@@ -188,7 +195,7 @@ const Signup = () => {
             autoComplete="additional-name"
           />
           <Field
-            label="Last name"
+            label="Last Name"
             name="lastName"
             placeholder="Thomas"
             value={lastName}
@@ -249,7 +256,7 @@ const Signup = () => {
 
           <div className="lg:col-span-2">
           <Field
-            label="Mobile number"
+            label="Mobile Number"
             name="mobile"
             placeholder="917 123 4567"
             inputMode="tel"
@@ -278,7 +285,7 @@ const Signup = () => {
         </div>
 
         <Field
-          label="Email address"
+          label="Email Address"
           name="email"
           type="email"
           placeholder="you@email.com"
@@ -317,7 +324,7 @@ const Signup = () => {
         {password !== '' && passwordFeedback}
 
         <Field
-          label="Confirm password"
+          label="Confirm Password"
           name="confirmPassword"
           type={showConfirm ? 'text' : 'password'}
           placeholder="••••••••"
@@ -358,6 +365,47 @@ const Signup = () => {
               : 'Passwords don’t match'}
           </p>
         )}
+
+        {/* Consent to Privacy Policy and Terms and Conditions */}
+        <div className="field">
+          <label className="flex items-start gap-2.5 select-none cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              name="agreedToTerms"
+              checked={agreedToTerms}
+              onChange={(e) => {
+                setAgreedToTerms(e.target.checked)
+                if (errors.agreedToTerms)
+                  setErrors((prev) => ({ ...prev, agreedToTerms: '' }))
+              }}
+              className="w-4 h-4 mt-0.5 accent-[#0F588B] cursor-pointer shrink-0"
+            />
+            <span className="text-[13px] leading-relaxed text-slate">
+              I agree to the{' '}
+              <Link
+                href="/privacy-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="auth-link"
+              >
+                Privacy Policy
+              </Link>{' '}
+              and{' '}
+              <Link
+                href="/terms-and-conditions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="auth-link"
+              >
+                Terms and Conditions
+              </Link>
+              . <span className="text-brand">*</span>
+            </span>
+          </label>
+          {errors.agreedToTerms && (
+            <p className="error">{errors.agreedToTerms}</p>
+          )}
+        </div>
 
         <button type="submit" className="btn btn--primary">
           Next

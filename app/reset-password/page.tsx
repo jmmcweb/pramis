@@ -5,11 +5,11 @@ import FormResetPassword from '@/components/forms/FormResetPassword'
 export default function ResetPassword() {
   return (
     <AuthShell
-      title="Reset password"
+      title="Reset Password"
       subtitle="Choose a new password for your account."
       footer={
         <Link href="/login" className="auth-link">
-          Back to log in
+          Back to Log In
         </Link>
       }
     >

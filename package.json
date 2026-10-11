@@ -20,6 +20,7 @@
     "smtp:check:e2e": "dotenv -e .env.local -- npx tsx scripts/smtp-e2e-check.ts",
     "db:backup": "dotenv -e .env.local -- npx tsx scripts/db-backup-e2e.ts",
     "gdrive:check": "dotenv -e .env.local -- npx tsx scripts/gdrive-diagnose.ts",
+    "blob:check": "dotenv -e .env.local -- npx tsx scripts/blob-diagnose.ts",
     "test": "jest"
   },
   "prisma": {

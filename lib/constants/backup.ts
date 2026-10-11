@@ -82,14 +82,23 @@ export function cloudBackupDir(root?: string | null): string {
   return path.join(root ?? GOOGLE_DRIVE_DIR ?? '', GOOGLE_DRIVE_SUBDIR)
 }
 
-export const BACKUP_DIR = path.resolve(
-  process.env.BACKUP_DIR ||
-    (GOOGLE_DRIVE_DIR
-      ? cloudBackupDir(GOOGLE_DRIVE_DIR)
-      : (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
-          ? path.join(os.tmpdir(), 'meditrack-backups')
-          : path.join(process.cwd(), 'backups'))),
-)
+function resolveBackupDir(): string {
+  if (process.env.BACKUP_DIR) return path.resolve(process.env.BACKUP_DIR)
+
+  const serverless = Boolean(
+    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME,
+  )
+
+  if (GOOGLE_DRIVE_DIR && !serverless) {
+    return cloudBackupDir(GOOGLE_DRIVE_DIR)
+  }
+
+  return serverless
+    ? path.join(os.tmpdir(), 'meditrack-backups')
+    : path.join(process.cwd(), 'backups')
+}
+
+export const BACKUP_DIR = resolveBackupDir()
 
 export const BACKUP_DIR_IS_GOOGLE_DRIVE =
   Boolean(GOOGLE_DRIVE_DIR) && path.resolve(BACKUP_DIR) === path.resolve(cloudBackupDir(GOOGLE_DRIVE_DIR))

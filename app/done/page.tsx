@@ -23,7 +23,7 @@ const Done = () => {
         <>
           Having trouble?{' '}
           <Link href="/support" className="auth-link">
-            Contact support
+            Contact Support
           </Link>
         </>
       }
@@ -54,7 +54,7 @@ const Done = () => {
             </p>
             <div className="flex flex-col gap-2 mt-5 w-full max-w-[280px]">
               <Link href="/login" className="btn btn--primary w-full">
-                Log in to your account
+                Log In to Your Account
               </Link>
             </div>
           </>

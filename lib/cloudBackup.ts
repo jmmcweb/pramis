@@ -32,6 +32,14 @@ import {
 } from '@/lib/gdriveApi'
 import { importSnapshot, readSnapshotBytes } from '@/lib/backupStore'
 
+/** Actionable hint shown when no Google Drive target exists at runtime. */
+const SERVERLESS_DRIVE_HINT =
+  'Google Drive API credentials are not configured on this deployment. Set GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (or GOOGLE_DRIVE_CLIENT_ID/GOOGLE_DRIVE_CLIENT_SECRET/GOOGLE_DRIVE_REFRESH_TOKEN) plus GOOGLE_DRIVE_FOLDER_ID in the environment variables.'
+
+function isServerlessRuntime(): boolean {
+  return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)
+}
+
 function backupIdFromFileName(name: string): string | null {
   if (!name.endsWith(BACKUP_FILE_EXT)) return null
   const id = name.slice(0, -BACKUP_FILE_EXT.length)
@@ -281,7 +289,7 @@ export function resolveDriveRoot(): {
   root: string | null
   source: CloudMirrorSource
 } {
-  if (GOOGLE_DRIVE_DIR) {
+  if (GOOGLE_DRIVE_DIR && isDirectory(GOOGLE_DRIVE_DIR)) {
     return { root: GOOGLE_DRIVE_DIR, source: 'env' }
   }
 
@@ -303,8 +311,10 @@ export async function ensureDriveDir(): Promise<string> {
   const dir = getDriveDirectory()
   if (!dir) {
     throw new Error(
-      'No Google Drive folder found. Set GOOGLE_DRIVE_DIR to your Drive folder ' +
-        '(e.g. "G:\\My Drive") or install Google Drive for Desktop.',
+      isServerlessRuntime()
+        ? SERVERLESS_DRIVE_HINT
+        : 'No Google Drive folder found. Set GOOGLE_DRIVE_DIR to your Drive folder ' +
+            '(e.g. "G:\\My Drive") or install Google Drive for Desktop.',
     )
   }
   await fs.mkdir(dir, { recursive: true })
@@ -368,6 +378,9 @@ export async function getCloudStatus(): Promise<CloudStatus> {
   const directory = root ? cloudBackupDir(root) : null
 
   if (!root || !directory) {
+    const staleEnvDir = Boolean(
+      GOOGLE_DRIVE_DIR && !isDirectory(GOOGLE_DRIVE_DIR),
+    )
     return {
       enabled: BACKUP_MIRROR_TO_DRIVE,
       root: null,
@@ -376,8 +389,11 @@ export async function getCloudStatus(): Promise<CloudStatus> {
       available: false,
       fileCount: 0,
       totalBytes: 0,
-      message:
-        'No Google Drive folder detected. Install Google Drive for Desktop, or set GOOGLE_DRIVE_DIR to your Drive folder.',
+      message: isServerlessRuntime()
+        ? SERVERLESS_DRIVE_HINT
+        : staleEnvDir
+          ? `GOOGLE_DRIVE_DIR points to "${GOOGLE_DRIVE_DIR}", but that folder does not exist. Google Drive for Desktop may not be running.`
+          : 'No Google Drive folder detected. Install Google Drive for Desktop, or set GOOGLE_DRIVE_DIR to your Drive folder.',
     }
   }
 

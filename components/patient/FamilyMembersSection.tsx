@@ -50,7 +50,7 @@ function FieldLabel({
     >
       {children}
       {optional && (
-        <span className="rounded-full bg-surface px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal text-muted dark:bg-white/[0.06]">
+        <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-muted dark:bg-white/[0.06]">
           optional
         </span>
       )}

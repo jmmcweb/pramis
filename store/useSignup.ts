@@ -23,6 +23,9 @@ type SignupState = {
   // null = the patient has not answered the PWD question yet
   isPwd: boolean | null
   pwdIdImage: string
+  // Consent to the Privacy Policy and Terms and Conditions, agreed on step 1.
+  agreedToTerms: boolean
+  termsAgreedAt: string | null
   setPersonal: (data: Partial<SignupState>) => void
   setResidence: (data: Partial<SignupState>) => void
   setIdentification: (data: Partial<SignupState>) => void
@@ -50,6 +53,8 @@ export const useSignup = create<SignupState>()((set) => ({
   idPhoto: '',
   isPwd: null,
   pwdIdImage: '',
+  agreedToTerms: false,
+  termsAgreedAt: null,
   setPersonal: (data) => set((state) => ({ ...state, ...data })),
   setResidence: (data) => set((state) => ({ ...state, ...data })),
   setIdentification: (data) => set((state) => ({ ...state, ...data })),

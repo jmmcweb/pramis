@@ -23,6 +23,7 @@ import {
   deleteDatabaseBackup,
   fetchBackupFromCloudAction,
   getBackupOverview,
+  pushAllBackupsToBlobAction,
   pushAllBackupsToDriveAction,
   restoreDatabaseBackup,
   refreshBackupsFromStoreAction,
@@ -187,6 +188,20 @@ export default function BackupClient({
       router.refresh()
     })
 
+  const handleSyncBlob = () =>
+    startTransition(async () => {
+      setBusy('blob-all')
+      const res = await pushAllBackupsToBlobAction()
+      setBusy(null)
+      if (!res.success) {
+        toast.error(res.message)
+        return
+      }
+      toast.success(res.message)
+      await refresh()
+      router.refresh()
+    })
+
   const handleFetchAllFromDrive = () =>
     startTransition(async () => {
       const pending = overview.cloud.files.filter(
@@ -261,6 +276,11 @@ export default function BackupClient({
           ? `${blob.fileCount} snapshot(s) using ${formatBytes(blob.totalBytes)}`
           : 'Set BLOB_READ_WRITE_TOKEN for serverless',
         tone: blob.configured ? 'good' : 'warn',
+        action: {
+          label: 'Push all',
+          onClick: handleSyncBlob,
+          busy: busy === 'blob-all',
+        },
       },
     ]
   }, [

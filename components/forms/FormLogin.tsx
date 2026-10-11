@@ -132,7 +132,7 @@ export default function FormLogin({ className }: { className?: string }) {
 
       <div className="field">
         <label className="auth-label" htmlFor="login-email">
-          Email address
+          Email Address
         </label>
         <div className={`auth-box ${state?.errors?.email ? 'has-errors' : ''}`}>
           <Mail size={18} className="text-slate shrink-0" />
@@ -193,16 +193,16 @@ export default function FormLogin({ className }: { className?: string }) {
             name="staySigned"
             className="w-4 h-4 accent-[#0F588B] cursor-pointer"
           />
-          Stay signed in
+          Stay Signed In
         </label>
         <Link href="/forgot-password" className="auth-link text-[13px]">
-          Forgot password?
+          Forgot Password?
         </Link>
       </div>
 
       <div>
         <button type="submit" className="btn btn--primary" disabled={pending}>
-          {pending ? 'Please wait…' : 'Log in'}
+          {pending ? 'Please Wait…' : 'Log In'}
         </button>
       </div>
     </form>

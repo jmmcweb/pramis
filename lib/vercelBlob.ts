@@ -88,6 +88,44 @@ export async function putSnapshotInBlob(
   }
 }
 
+export async function putManifestInBlob(
+  backupId: string,
+  manifest: unknown,
+): Promise<CloudResult> {
+  if (!isBlobConfigured()) {
+    return {
+      success: false,
+      message: 'Vercel Blob is not configured on this deployment.',
+      backupId,
+    }
+  }
+
+  try {
+    await put(
+      blobPathname(backupId, BACKUP_MANIFEST_EXT),
+      JSON.stringify(manifest, null, 2),
+      {
+        access: 'private',
+        allowOverwrite: true,
+        addRandomSuffix: false,
+        contentType: 'application/json',
+      },
+    )
+    return {
+      success: true,
+      message: `Uploaded the manifest for ${backupId} to Vercel Blob.`,
+      backupId,
+    }
+  } catch (error) {
+    console.error('[putManifestInBlob | Error]:', error)
+    return {
+      success: false,
+      message: `Failed to upload the manifest for ${backupId} to Vercel Blob.`,
+      backupId,
+    }
+  }
+}
+
 export async function getSnapshotFromBlob(
   backupId: string,
 ): Promise<Buffer | null> {

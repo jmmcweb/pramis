@@ -75,7 +75,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+      <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-muted">
         {label}
       </span>
       {children}
@@ -103,7 +103,7 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+      <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-muted">
         {label}
       </span>
 
@@ -138,7 +138,7 @@ function SelectField({
 function ReadonlyRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl bg-surface/70 px-3.5 py-2.5 dark:bg-white/[0.03]">
-      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+      <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-muted">
         {label}
       </p>
       <p className="mt-0.5 truncate text-sm font-semibold text-body">

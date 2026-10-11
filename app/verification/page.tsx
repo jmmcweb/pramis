@@ -59,7 +59,7 @@ const CodeInput = ({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex justify-center gap-2 sm:gap-3">
+      <div className="flex justify-center gap-1.5 sm:gap-3">
         {values.map((val, index) => (
           <input
             key={index}
@@ -87,7 +87,7 @@ const CodeInput = ({
               refs.current[Math.min(pasted.length, length - 1)]?.focus()
             }}
             aria-label={`Digit ${index + 1}`}
-            className={`w-11 h-12 sm:w-13 sm:h-13 sm:w-[52px] sm:h-[52px] rounded-xl border bg-white text-center text-[20px] font-bold text-ink outline-none transition-all ${
+            className={`w-full min-w-0 max-w-[3rem] h-11 sm:h-12 sm:max-w-[3.25rem] rounded-lg sm:rounded-xl border bg-white text-center text-[18px] sm:text-[20px] font-bold text-ink outline-none transition-all ${
               val
                 ? 'border-brand shadow-[0_0_0_3px_rgba(15,88,139,0.12)]'
                 : error
@@ -146,7 +146,7 @@ const SendCodeButton = ({
   <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-2.5">
     <div className="flex items-center gap-2.5 min-w-0">
       <MailCheck className="w-5 h-5 shrink-0 text-slate" />
-                  <span className="text-[13px] text-ink truncate min-w-0">{target}</span>
+              <span className="text-[13px] text-ink truncate min-w-0">{target}</span>
     </div>
     {!sent ? (
       <button
@@ -154,7 +154,7 @@ const SendCodeButton = ({
         onClick={onSend}
         className="text-[13px] font-semibold text-brand bg-transparent cursor-pointer hover:underline shrink-0"
       >
-        Send code
+        Send Code
       </button>
     ) : retryIn > 0 ? (
       <span className="text-[12px] text-slate shrink-0 tabular-nums">
@@ -448,7 +448,7 @@ const VerificationPage = () => {
                 Verifying…
               </>
             ) : (
-              'Verify & create account'
+              'Verify & Create Account'
             )}
           </button>
         </div>

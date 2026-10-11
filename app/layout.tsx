@@ -48,6 +48,10 @@ export const metadata: Metadata = {
   title: 'PRAMIS | Stay On Track With Us',
   description:
     'Your barangay health tracking platform. Book appointments, manage health records, and stay on track.',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 }
 
 export default function RootLayout({

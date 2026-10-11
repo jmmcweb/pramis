@@ -31,6 +31,7 @@ import {
   type CloudStatus,
 } from '@/lib/constants/backup'
 import type { AuditActor } from '@/lib/audit'
+import { isBlobConfigured } from '@/lib/vercelBlob'
 
 const unauthorized = {
   success: false as const,
@@ -409,6 +410,16 @@ export async function fetchBackupFromCloudAction(backupId: string) {
 export async function pushAllBackupsToBlobAction() {
   const session = await requireAdmin()
   if (!session) return unauthorized
+
+  if (!isBlobConfigured()) {
+    return {
+      success: false,
+      message:
+        'Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN in this deployment’s environment variables first.',
+      pushed: [] as string[],
+      failed: [] as Array<{ backupId: string; message: string }>,
+    }
+  }
 
   const result = await pushAllBackupsToBlob()
 

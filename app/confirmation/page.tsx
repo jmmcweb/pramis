@@ -10,7 +10,7 @@ const Item = ({ label, value, wide = false }: RowProps & { wide?: boolean }) => 
   <div
     className={`py-2 border-b border-line ${wide ? 'sm:col-span-2' : ''}`}
   >
-    <dt className="font-inter text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate">
+    <dt className="font-inter text-[12px] font-bold uppercase tracking-[0.1em] text-slate">
       {label}
     </dt>
     <dd className="text-[14px] text-ink mt-0.5 break-words">{value || '—'}</dd>
@@ -43,7 +43,7 @@ const Confirmation = () => {
     <AuthShell
       step={3}
       animate={false}
-      title="Confirm details"
+      title="Confirm Details"
       cardClassName="lg:max-w-2xl"
       subtitle="Review your details before verifying your account."
       backHref="/residence-details"
@@ -51,13 +51,13 @@ const Confirmation = () => {
         <>
           Something off?{' '}
           <Link href="/signup" className="auth-link">
-            Start over
+            Start Over
           </Link>
         </>
       }
     >
       <dl className="border-t border-line">
-        <dt className="auth-label mt-3 mb-1">Personal information</dt>
+        <dt className="auth-label mt-3 mb-1">Personal Information</dt>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
           <Item
             wide
@@ -83,7 +83,7 @@ const Confirmation = () => {
           <Item label="Country" value={country} />
         </div>
 
-        <dt className="auth-label mt-4 mb-1">Disability &amp; priority access</dt>
+        <dt className="auth-label mt-4 mb-1">Disability &amp; Priority Access</dt>
         <p className="text-[12px] text-slate m-0 mb-1.5">
           You will declare this in the Identification step, together with your
           valid ID.
@@ -109,7 +109,7 @@ const Confirmation = () => {
       </dl>
 
       <Link href="/identification" className="btn btn--primary mt-4">
-        Continue to identification
+        Continue to Identification
       </Link>
     </AuthShell>
   )

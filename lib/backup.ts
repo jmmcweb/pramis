@@ -360,6 +360,23 @@ export async function createBackup(
         )
       : undefined
 
+    // On serverless platforms the local disk is ephemeral, so a snapshot that
+    // reached neither Vercel Blob nor Google Drive would be gone as soon as the
+    // function ends. Fail loudly instead of reporting a backup that cannot be
+    // restored later.
+    const onServerless = Boolean(
+      process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME,
+    )
+    const persisted = storedInBlob || Boolean(cloud?.success)
+    if (onServerless && !persisted) {
+      return {
+        success: false,
+        message:
+          'The snapshot could not be persisted to a durable store on this deployment, so it would be lost when the function ends. Set BLOB_READ_WRITE_TOKEN (Vercel Blob) and/or Google Drive API credentials (GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON, or GOOGLE_DRIVE_CLIENT_ID/GOOGLE_DRIVE_CLIENT_SECRET/GOOGLE_DRIVE_REFRESH_TOKEN) in the environment variables and try again.',
+        cloud,
+      }
+    }
+
     return {
       success: true,
       message: `Backup created with ${rowCount.toLocaleString()} rows.`,

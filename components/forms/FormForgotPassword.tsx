@@ -25,7 +25,7 @@ export default function FormForgotPassword({
       className={`flex flex-col gap-5 ${className}`}
     >
       <Field
-        label="Email address"
+        label="Email Address"
         id="email"
         type="email"
         name="email"
@@ -52,7 +52,7 @@ export default function FormForgotPassword({
           className="btn btn--primary disabled:animate-pulse disabled:opacity-50 my-3"
           disabled={isPending}
         >
-          {isPending ? 'Please wait…' : 'Send reset link'}
+          {isPending ? 'Please Wait…' : 'Send Reset Link'}
         </button>
       </div>
     </form>

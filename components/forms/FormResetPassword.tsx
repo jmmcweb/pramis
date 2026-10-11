@@ -39,7 +39,7 @@ export default function FormResetPassword({
       <div className="m-auto w-full max-w-lg space-y-10">
         <div className="space-y-4">
           <h1 className="font-bebas text-[32px] leading-none text-ink">
-            Invalid reset link
+            Invalid Reset Link
           </h1>
           <p className="text-[14px] leading-relaxed text-slate">
             This link is missing or has expired. Check your email for the
@@ -47,7 +47,7 @@ export default function FormResetPassword({
           </p>
         </div>
         <Link href="/forgot-password" className="btn btn--primary">
-          Request a new link
+          Request a New Link
         </Link>
       </div>
     )
@@ -62,7 +62,7 @@ export default function FormResetPassword({
       className={`flex flex-col gap-5 ${className}`}
     >
       <Field
-        label="Email address"
+        label="Email Address"
         id="email"
         type="email"
         name="email"
@@ -83,7 +83,7 @@ export default function FormResetPassword({
       />
 
       <Field
-        label="Confirm password"
+        label="Confirm Password"
         id="confirmpassword"
         type="password"
         name="confirmPassword"
@@ -113,7 +113,7 @@ export default function FormResetPassword({
           className="btn btn--primary disabled:animate-pulse disabled:opacity-50"
           disabled={isPending}
         >
-          {isPending ? 'Please wait…' : 'Reset password'}
+          {isPending ? 'Please Wait…' : 'Reset Password'}
         </button>
       </div>
     </form>
