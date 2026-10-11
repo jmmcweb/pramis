@@ -732,7 +732,10 @@ export async function getScheduleAppointments(): Promise<{
   try {
     const { start } = dayRange(todayISO())
     const rows = await (prisma as any).appointment.findMany({
-      where: { appointmentAt: { gte: start }, source: 'BOOKING' },
+      where: {
+        appointmentAt: { gte: start },
+        source: { in: ['BOOKING', 'WALKIN'] },
+      },
       orderBy: { appointmentAt: 'asc' },
       include: {
         service: true,
@@ -753,11 +756,11 @@ export async function getScheduleAppointments(): Promise<{
           ? `${(profile.lastName || '').toUpperCase()}, ${profile.firstName || ''}${
               profile.middleName ? ' ' + profile.middleName : ''
             }`.trim()
-          : row.user?.email || 'Unknown patient'
+          : row.patient?.name || row.user?.email || 'Unknown patient'
       return {
         id: row.appointmentid,
         patientName: name,
-        patientReference: row.user?.id || '',
+        patientReference: row.patient?.patientid || row.user?.id || '',
         email: row.user?.email || '',
         serviceName: row.service?.name ?? 'Service',
         dateISO: `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, '0')}-${String(at.getUTCDate()).padStart(2, '0')}`,
@@ -843,17 +846,6 @@ export async function updateAppointmentStatus(
     })
     if (!appointment) {
       return { success: false, message: 'Appointment not found.' }
-    }
-
-    // A visit may only be completed through the ITR form. saveMedicalRecord
-    // sets COMPLETED itself once the record is saved, so anything arriving
-    // here without a record is an attempt to skip the ITR.
-    if (status === 'COMPLETED' && !appointment.medicalHistory) {
-      return {
-        success: false,
-        message:
-          'Complete the ITR form first — a visit can only be marked done once its medical record is saved.',
-      }
     }
 
     const serviceName = appointment.service?.name ?? 'your appointment'

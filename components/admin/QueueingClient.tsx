@@ -6,23 +6,21 @@ import { useRouter } from 'next/navigation'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import {
   advanceQueueEntry,
-  markQueueDone,
   removeQueueEntry,
   addToQueue,
   type QueueEntry,
   type TodayQueues,
 } from '@/lib/actions/queue'
-import { cancelAppointment } from '@/lib/actions/appointment'
 import {
-  getScheduledAppointmentView,
-  getWalkInAppointmentView,
+  cancelAppointment,
+  updateAppointmentStatus,
+} from '@/lib/actions/appointment'
+import {
   registerWalkIn,
   searchPatientById,
   searchPatientsByName,
   type PatientLookup,
 } from '@/lib/actions/appointmentManagement'
-import MedicalRecordModal from '@/components/ui/MedicalRecordModal'
-import type { ScheduleAppointmentView } from '@/config/appointment'
 import { now, toISO } from '@/src/lib/dateUtils'
 import { FIXED_ADDRESS, PUROKS } from '@/src/data/patientInfo'
 
@@ -61,15 +59,7 @@ export default function QueueingClient({
   const [isPending, startTransition] = useTransition()
 
   const [inConsultation, setInConsultation] = useState(new Set<string>())
-
-  const [recordFor, setRecordFor] = useState<ScheduleAppointmentView | null>(
-    null,
-  )
-  const [pendingDoneQid, setPendingDoneQid] = useState<string | null>(null)
-  // APT-#### id of a scheduled visit waiting on its ITR before completing.
-  const [pendingDoneAppointmentId, setPendingDoneAppointmentId] = useState<
-    string | null
-  >(null)
+  const [completedIds, setCompletedIds] = useState(new Set<string>())
 
   const [showAdd, setShowAdd] = useState(false)
   const [lane, setLane] = useState<Lane>('WALKIN')
@@ -119,9 +109,7 @@ export default function QueueingClient({
     })
   }
 
-  // Completing a scheduled visit requires the full ITR, exactly like a
-  // walk-in: the visit only flips to COMPLETED once the record is saved
-  // (saveMedicalRecord marks the appointment COMPLETED on submit).
+  // Completing a scheduled visit marks it COMPLETED without requiring ITR input in queueing
   const advanceScheduled = (entry: QueueEntry) => {
     if (!inConsultation.has(entry.id)) {
       setInConsultation((prev) => new Set(prev).add(entry.id))
@@ -129,43 +117,42 @@ export default function QueueingClient({
       return
     }
     if (isPending) return
-    startTransition(async () => {
-      const res = await getScheduledAppointmentView(entry.id)
-      if (res.success && res.appointment) {
-        setPendingDoneAppointmentId(entry.id)
-        setRecordFor(res.appointment)
-      } else {
-        toast.error(res.message)
-      }
+    setInConsultation((prev) => {
+      const next = new Set(prev)
+      next.delete(entry.id)
+      return next
     })
+    setCompletedIds((prev) => new Set(prev).add(entry.id))
+    runAction(() => updateAppointmentStatus(entry.id, 'COMPLETED'))
   }
 
   const scheduledStatus = (entry: QueueEntry): QueueEntry['status'] =>
-    entry.status === 'DONE'
+    entry.status === 'DONE' || completedIds.has(entry.id)
       ? 'DONE'
       : inConsultation.has(entry.id)
         ? 'IN_CONSULTATION'
         : 'WAITING'
 
   const advanceQueued = (entry: QueueEntry) => {
+    if (entry.id.startsWith('APT-')) {
+      advanceScheduled(entry)
+      return
+    }
     if (entry.status === 'WAITING') {
-      if (entry.id.startsWith('APT-')) {
-        advanceScheduled(entry)
-        return
-      }
       runAction(() => advanceQueueEntry(entry.id))
       return
     }
     if (isPending || entry.status !== 'IN_CONSULTATION') return
-    startTransition(async () => {
-      const res = await getWalkInAppointmentView(entry.id)
-      if (res.success && res.appointment) {
-        setPendingDoneQid(entry.id)
-        setRecordFor(res.appointment)
-      } else {
-        toast.error(res.message)
-      }
-    })
+    setCompletedIds((prev) => new Set(prev).add(entry.id))
+    runAction(() => advanceQueueEntry(entry.id))
+  }
+
+  const isEntryActive = (entry: QueueEntry) => {
+    if (completedIds.has(entry.id)) return false
+    const status = entry.id.startsWith('APT-')
+      ? scheduledStatus(entry)
+      : entry.status
+    return status !== 'DONE'
   }
 
   // Applies the DB-derived lane: senior (60+) or PWD (profile.isPwd) go PRIORITY.
@@ -332,6 +319,13 @@ export default function QueueingClient({
   const fieldLabel = `block text-[13px] font-bold mb-1.5 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`
   const fieldInput = `w-full px-3.5 py-2.5 rounded-lg text-[15px] outline-none transition-colors border ${darkMode ? 'bg-[#0f1438] text-[#F9FAFB] placeholder-gray-500 border-[rgba(255,255,255,0.15)] focus:border-[#4E69D3]' : 'bg-white text-gray-800 placeholder-gray-400 border-gray-200 focus:border-[#4E69D3]'}`
 
+  const activePriority = queues.priority.filter(
+    (q) =>
+      (q.priority === 'SENIOR' || q.priority === 'PWD') && isEntryActive(q),
+  )
+  const activeScheduled = queues.scheduled.filter(isEntryActive)
+  const activeWalkins = queues.walkins.filter(isEntryActive)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-[14px]">
@@ -376,43 +370,38 @@ export default function QueueingClient({
           <span
             className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${darkMode ? 'bg-[#0f1438] text-amber-300' : 'bg-amber-500/20 text-amber-600'}`}
           >
-            {queues.priority.filter((q) => q.status !== 'DONE').length} in
-            priority queue
+            {activePriority.length} in priority queue
           </span>
         </div>
         <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
-          {queues.priority.filter(
-            (q) => q.priority === 'SENIOR' || q.priority === 'PWD',
-          ).length === 0 ? (
+          {activePriority.length === 0 ? (
             <p
               className={`text-sm font-semibold text-center m-0 py-8 text-gray-400`}
             >
               No priority patients in queue
             </p>
           ) : (
-            queues.priority
-              .filter((q) => q.priority === 'SENIOR' || q.priority === 'PWD')
-              .map((q) => (
-                <QueueRow
-                  key={q.id}
-                  darkMode={darkMode}
-                  item={{
-                    ...q,
-                    status: q.id.startsWith('APT-')
-                      ? scheduledStatus(q)
-                      : q.status,
-                  }}
-                  busy={isPending}
-                  onAdvance={() => advanceQueued(q)}
-                  onRemove={() =>
-                    runAction(() =>
-                      q.id.startsWith('APT-')
-                        ? cancelAppointment(q.id)
-                        : removeQueueEntry(q.id),
-                    )
-                  }
-                />
-              ))
+            activePriority.map((q) => (
+              <QueueRow
+                key={q.id}
+                darkMode={darkMode}
+                item={{
+                  ...q,
+                  status: q.id.startsWith('APT-')
+                    ? scheduledStatus(q)
+                    : q.status,
+                }}
+                busy={isPending}
+                onAdvance={() => advanceQueued(q)}
+                onRemove={() =>
+                  runAction(() =>
+                    q.id.startsWith('APT-')
+                      ? cancelAppointment(q.id)
+                      : removeQueueEntry(q.id),
+                  )
+                }
+              />
+            ))
           )}
         </div>
       </div>
@@ -442,22 +431,18 @@ export default function QueueingClient({
             <span
               className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
             >
-              {
-                queues.scheduled.filter((q) => scheduledStatus(q) !== 'DONE')
-                  .length
-              }{' '}
-              in queue
+              {activeScheduled.length} in queue
             </span>
           </div>
           <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto pr-1">
-            {queues.scheduled.length === 0 ? (
+            {activeScheduled.length === 0 ? (
               <p
                 className={`text-sm font-semibold text-center m-0 py-8 text-gray-400`}
               >
                 No scheduled patients today
               </p>
             ) : (
-              queues.scheduled.map((q) => (
+              activeScheduled.map((q) => (
                 <QueueRow
                   key={q.id}
                   darkMode={darkMode}
@@ -475,25 +460,32 @@ export default function QueueingClient({
         <div
           className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.08)]'} border p-4 rounded-[24px] ${darkMode ? 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]'}`}
         >
-          <div className="mb-3">
-            <h2
-              className={`font-poppins text-[18px] font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2
+                className={`font-poppins text-[18px] font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+              >
+                Walk-ins
+              </h2>
+              <p className={`text-[12px] font-semibold m-0 mt-0.5 text-gray-400`}>
+                Patients without appointment
+              </p>
+            </div>
+            <span
+              className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${darkMode ? 'bg-[#0f1438] text-purple-300' : 'bg-purple-500/20 text-purple-600'}`}
             >
-              Walk-ins
-            </h2>
-            <p className={`text-[12px] font-semibold m-0 mt-0.5 text-gray-400`}>
-              Patients without appointment
-            </p>
+              {activeWalkins.length} in queue
+            </span>
           </div>
           <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto pr-1">
-            {queues.walkins.length === 0 ? (
+            {activeWalkins.length === 0 ? (
               <p
                 className={`text-sm font-semibold text-center m-0 py-8 text-gray-400`}
               >
                 No walk-ins yet
               </p>
             ) : (
-              queues.walkins.map((q) => (
+              activeWalkins.map((q) => (
                 <QueueRow
                   key={q.id}
                   darkMode={darkMode}
@@ -513,35 +505,6 @@ export default function QueueingClient({
           </div>
         </div>
       </div>
-
-      {/* Post-consultation record required to mark a queued visit DONE. */}
-      {recordFor && (
-        <MedicalRecordModal
-          appointment={recordFor}
-          darkMode={darkMode}
-          onClose={() => {
-            setRecordFor(null)
-            setPendingDoneQid(null)
-            setPendingDoneAppointmentId(null)
-          }}
-          onSaved={() => {
-            // Walk-ins also need their queue entry flipped to DONE. Scheduled
-            // visits are already COMPLETED by saveMedicalRecord, so they only
-            // need to leave the in-consultation set.
-            if (pendingDoneQid) {
-              runAction(() => markQueueDone(pendingDoneQid))
-            } else if (pendingDoneAppointmentId) {
-              setInConsultation((prev) => {
-                const next = new Set(prev)
-                next.delete(pendingDoneAppointmentId)
-                return next
-              })
-              refresh()
-            }
-            setPendingDoneQid(null)
-          }}
-        />
-      )}
 
       {/* Add to queue modal */}
       {showAdd && (
@@ -632,7 +595,7 @@ export default function QueueingClient({
                         className={`m-0 text-[13px] font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
                       >
                         {walkInResult.credentialsEmailed
-                          ? 'The temporary password has been emailed to the patient.'
+                          ? 'A link to set their password has been emailed to the patient.'
                           : 'The email could not be sent — ask the patient to use “Forgot password” on the login page to set their own.'}
                       </p>
                     </div>

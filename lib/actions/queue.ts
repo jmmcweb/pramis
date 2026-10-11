@@ -96,7 +96,7 @@ export async function getTodayQueues(): Promise<{
       (prisma as any).appointment.findMany({
         where: {
           appointmentAt: { gte: start, lt: end },
-          status: { in: ['APPROVED', 'COMPLETED'] },
+          status: 'APPROVED',
           source: 'BOOKING',
         },
         orderBy: { appointmentAt: 'asc' },
@@ -107,7 +107,10 @@ export async function getTodayQueues(): Promise<{
         },
       }),
       (prisma as any).walkInQueue.findMany({
-        where: { createdAt: { gte: start, lt: end } },
+        where: {
+          createdAt: { gte: start, lt: end },
+          status: { not: 'DONE' },
+        },
         orderBy: { createdAt: 'asc' },
         include: {
           patient: {
@@ -397,6 +400,59 @@ export async function addToQueue(_prevState: any, formData: FormData) {
 }
 
 // Advances the status of a queue entry (scheduled or walk-in) based on its current status. It checks for user authorization (admin or staff), validates the input queue ID, and updates the status in the database. If the entry is marked as "DONE," it also updates any related scheduled appointments for the patient. The function returns a success status and message indicating the result of the operation. If an error occurs during the database update, it logs the error and returns a failure status with an appropriate message.
+async function syncWalkInAppointmentOnDone(qid: string) {
+  try {
+    const entry = await (prisma as any).walkInQueue.findUnique({
+      where: { qid },
+      select: { patientId: true, serviceId: true },
+    })
+    if (!entry?.patientId) return
+    const { start, end } = dayRange(todayISO())
+    const existing = await (prisma as any).appointment.findFirst({
+      where: {
+        patientId: entry.patientId,
+        source: 'WALKIN',
+        appointmentAt: { gte: start, lt: end },
+      },
+    })
+    if (existing) {
+      await (prisma as any).appointment.update({
+        where: { appointmentid: existing.appointmentid },
+        data: { status: 'COMPLETED' },
+      })
+    } else {
+      let serviceId = entry.serviceId
+      if (!serviceId) {
+        const fallback = await (prisma as any).service.findFirst({
+          where: { availability: true },
+          orderBy: { serviceid: 'asc' },
+          select: { serviceid: true },
+        })
+        serviceId = fallback?.serviceid ?? null
+      }
+      if (serviceId) {
+        const patient = await (prisma as any).patient.findUnique({
+          where: { patientid: entry.patientId },
+          select: { userId: true },
+        })
+        await (prisma as any).appointment.create({
+          data: {
+            appointmentid: await nextReferenceId('APT'),
+            patientId: entry.patientId,
+            userId: patient?.userId ?? null,
+            serviceId,
+            source: 'WALKIN',
+            appointmentAt: new Date(),
+            status: 'COMPLETED',
+          },
+        })
+      }
+    }
+  } catch (err) {
+    console.error('[syncWalkInAppointmentOnDone | Error]:', err)
+  }
+}
+
 export async function advanceQueueEntry(
   qid: string,
 ): Promise<{ success: boolean; message: string }> {
@@ -430,22 +486,7 @@ export async function advanceQueueEntry(
     })
 
     if (next === 'DONE') {
-      const entry = await (prisma as any).walkInQueue.findUnique({
-        where: { qid },
-        select: { patientId: true },
-      })
-      if (entry?.patientId) {
-        const { start, end } = dayRange(todayISO())
-        await (prisma as any).appointment.updateMany({
-          where: {
-            patientId: entry.patientId,
-            source: 'WALKIN',
-            status: 'APPROVED',
-            appointmentAt: { gte: start, lt: end },
-          },
-          data: { status: 'COMPLETED' },
-        })
-      }
+      await syncWalkInAppointmentOnDone(qid)
     }
 
     revalidateTag('queues', 'max')
@@ -490,7 +531,9 @@ export async function markQueueDone(
       where: { qid },
       data: { status: 'DONE' },
     })
+    await syncWalkInAppointmentOnDone(qid)
     revalidateTag('queues', 'max')
+    revalidateTag('appointments', 'max')
 
     await recordAudit({
       action: 'STATUS_CHANGE',

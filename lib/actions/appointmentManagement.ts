@@ -1,7 +1,7 @@
 // Appointment management functions for handling various appointment-related operations.
 'use server'
 
-import { randomInt } from 'crypto'
+import crypto from 'crypto'
 import { hash } from 'bcrypt'
 import prisma from '@/lib/prisma'
 import { revalidateTag } from 'next/cache'
@@ -22,42 +22,45 @@ import {
 } from '@/config/appointment'
 import type { ScheduleAppointmentView } from '@/config/appointment'
 
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  let out = ''
-  for (let i = 0; i < 10; i++) out += chars[randomInt(chars.length)]
-  return out
-}
-
-async function sendWalkInCredentials({
+async function sendWalkInSetupLink({
   email,
-  tempPassword,
   displayName,
   patientId,
   serviceName,
 }: {
   email: string
-  tempPassword: string
   displayName: string
   patientId: string
   serviceName: string
 }): Promise<boolean> {
   try {
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const expires = new Date()
+    expires.setHours(expires.getHours() + 24)
+    await (prisma as any).resetPasswordToken.deleteMany({ where: { email } })
+    await (prisma as any).resetPasswordToken.create({
+      data: {
+        email,
+        token: crypto.createHash('sha256').update(rawToken).digest('hex'),
+        expires,
+      },
+    })
+    const setupLink = `${APP_BASE_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`
     return await sendMail({
       to: email,
-      subject: `Your ${APP_NAME} Login Details`,
+      subject: `Set Your Password - ${APP_NAME}`,
       content: `
         <p>Hi ${displayName},</p>
-        <p>Welcome to ${APP_NAME}. You have been registered as a walk-in for <strong>${serviceName}</strong> and added to today's queue.</p>
+        <p>An account has been created for you on ${APP_NAME} after your walk-in <strong>${serviceName}</strong> visit. Click the link below to set your password:</p>
+        <a href="${setupLink}">Set Your Password</a>
         <p><strong>Patient ID:</strong> ${patientId}</p>
         <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Temporary password:</strong> ${tempPassword}</p>
-        <p>You can now sign in at <a href="${APP_BASE_URL}/login">${APP_BASE_URL}/login</a>. Please change your password after your first sign-in.</p>
+        <p>This link expires in 24 hours. After setting your password, you can sign in with this email address.</p>
         <p>If you did not expect this, please ignore this email and contact the health center.</p>
       `,
     })
   } catch (error) {
-    console.error('[sendWalkInCredentials] Error:', error)
+    console.error('[sendWalkInSetupLink] Error:', error)
     return false
   }
 }
@@ -535,7 +538,6 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
     let patient: any = null
     let displayName = ''
     let accountEmail = ''
-    let tempPassword: string | null = null
     let credentialsEmailed = false
     let newPatientBirthdate: Date | null = null
     if (patientIdInput) {
@@ -629,13 +631,12 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
         }
         userId = await nextReferenceId('USR')
         accountEmail = email
-        tempPassword = generateTempPassword()
         await (prisma as any).user.create({
           data: {
             id: userId,
             email,
             status: 'ACTIVE',
-            password: await hash(tempPassword, 12),
+            password: await hash(crypto.randomUUID(), 12),
           } as any,
         })
         await (prisma as any).userProfile.create({
@@ -767,17 +768,16 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
         description: `Your walk-in ${service.name} visit has been registered. Please proceed to the health center.`,
       })
     }
-    if (accountEmail && tempPassword) {
-      credentialsEmailed = await sendWalkInCredentials({
+    if (accountEmail) {
+      credentialsEmailed = await sendWalkInSetupLink({
         email: accountEmail,
-        tempPassword,
         displayName,
         patientId: patient.patientid,
         serviceName: service.name,
       })
       if (!credentialsEmailed) {
         console.error(
-          `[registerWalkIn] Could not deliver the login credentials for ${patient.patientid} to ${accountEmail}`,
+          `[registerWalkIn] Could not deliver the set-password link for ${patient.patientid} to ${accountEmail}`,
         )
       }
     }
@@ -785,10 +785,10 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
     return {
       success: true,
       message:
-        accountEmail && tempPassword
+        accountEmail
           ? credentialsEmailed
-            ? `${displayName} (${patient.patientid}) registered as a walk-in and added to the queue. Login details were emailed to ${accountEmail}.`
-            : `${displayName} (${patient.patientid}) registered as a walk-in and added to the queue, but the login email could not be sent — please have the patient use "Forgot password" to set one.`
+            ? `${displayName} (${patient.patientid}) registered as a walk-in and added to the queue. A link to set their password was emailed to ${accountEmail}.`
+            : `${displayName} (${patient.patientid}) registered as a walk-in and added to the queue, but the set-password email could not be sent — please have the patient use "Forgot password" to set one.`
           : `${displayName} (${patient.patientid}) registered as a walk-in and added to the queue.`,
       payload: {
         appointmentId: created.appointmentid,
@@ -805,9 +805,6 @@ export async function registerWalkIn(_prevState: any, formData: FormData) {
   }
 }
 
-// Loads a single booked appointment as a ScheduleAppointmentView so the queue
-// board can open the full ITR form before the visit is marked done. This is
-// the scheduled-visit counterpart of getWalkInAppointmentView.
 export async function getScheduledAppointmentView(
   appointmentId: string,
 ): Promise<{
