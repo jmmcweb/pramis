@@ -3,6 +3,7 @@
 import { useRef, useActionState } from 'react'
 import { forgotPassword } from '@/lib/actions/util'
 import Field from '@/components/auth/Field'
+import { MAX } from '@/src/lib/constants'
 
 export default function FormForgotPassword({
   className,
@@ -32,6 +33,7 @@ export default function FormForgotPassword({
         placeholder="you@email.com"
         autoComplete="email"
         required
+        maxLength={MAX.EMAIL}
         error={state?.errors?.email}
       />
 

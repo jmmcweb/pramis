@@ -74,6 +74,7 @@ export function TextField({
   type = 'text',
   placeholder,
   className,
+  maxLength,
 }: {
   name: string
   label: string
@@ -81,6 +82,8 @@ export function TextField({
   type?: string
   placeholder?: string
   className?: string
+  /** Maximum number of characters a user may enter. */
+  maxLength?: number
 }) {
   const submitted = useContext(SubmittedValuesContext)
   return (
@@ -95,6 +98,7 @@ export function TextField({
         defaultValue={submitted?.[name] ?? defaultValue ?? ''}
         placeholder={placeholder}
         className={FIELD}
+        maxLength={maxLength}
       />
     </div>
   )

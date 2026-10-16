@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { resetPassword } from '@/lib/actions/util'
 import Field from '@/components/auth/Field'
+import { MAX } from '@/src/lib/constants'
 
 export default function FormResetPassword({
   className,
@@ -69,6 +70,7 @@ export default function FormResetPassword({
         value={email}
         readOnly
         required
+        maxLength={MAX.EMAIL}
       />
 
       <Field
@@ -80,6 +82,7 @@ export default function FormResetPassword({
         autoComplete="new-password"
         required
         error={state?.errors?.password}
+        maxLength={MAX.PASSWORD}
       />
 
       <Field
@@ -91,6 +94,7 @@ export default function FormResetPassword({
         autoComplete="new-password"
         required
         error={state?.errors?.confirmpassword}
+        maxLength={MAX.PASSWORD}
       />
 
       {/* Alert */}

@@ -21,6 +21,7 @@ import {
   patientInfoFromProfile,
   FIXED_ADDRESS,
 } from '@/src/data/patientInfo'
+import { MAX } from '@/src/lib/constants'
 import type { AddressOptions, MyProfileView } from '@/src/data/patientInfo'
 
 const inputClass =
@@ -325,6 +326,7 @@ export default function PatientInfoForm({
                 <input
                   name="firstName"
                   defaultValue={initialForm.firstName}
+                  maxLength={MAX.NAME}
                   className={inputClass}
                 />
               </Field>
@@ -336,6 +338,7 @@ export default function PatientInfoForm({
                 <input
                   name="middleName"
                   defaultValue={initialForm.middleName}
+                  maxLength={MAX.NAME}
                   className={inputClass}
                 />
               </Field>
@@ -349,6 +352,7 @@ export default function PatientInfoForm({
                 <input
                   name="lastName"
                   defaultValue={initialForm.lastName}
+                  maxLength={MAX.NAME}
                   className={inputClass}
                 />
               </Field>
@@ -361,6 +365,7 @@ export default function PatientInfoForm({
                   name="suffix"
                   defaultValue={initialForm.suffix}
                   placeholder="Jr., Sr., III"
+                  maxLength={MAX.SHORT_NAME}
                   className={inputClass}
                 />
               </Field>
@@ -451,6 +456,7 @@ export default function PatientInfoForm({
               <input
                 name="phoneNumber"
                 defaultValue={initialForm.mobile}
+                maxLength={MAX.PHONE}
                 className={inputClass}
               />
             </Field>
@@ -463,6 +469,7 @@ export default function PatientInfoForm({
                 type="email"
                 name="email"
                 defaultValue={initialForm.email}
+                maxLength={MAX.EMAIL}
                 className={inputClass}
               />
             </Field>

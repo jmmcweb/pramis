@@ -5,6 +5,7 @@ import { getSession, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
+import { MAX } from '@/src/lib/constants'
 
 function roleHome(role?: string): string {
   switch (role) {
@@ -145,6 +146,7 @@ export default function FormLogin({ className }: { className?: string }) {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            maxLength={MAX.EMAIL}
             className="auth-input"
           />
         </div>

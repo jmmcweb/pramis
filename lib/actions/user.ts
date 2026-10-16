@@ -7,6 +7,7 @@ import { revalidateTag, revalidatePath } from "next/cache"
 import { cacheLife, cacheTag } from "next/cache"
 import { USERS_PER_PAGE } from "@/config/constants"
 import { isValidEmail } from "@/lib/helper"
+import { MAX } from "@/src/lib/constants"
 import { requireAdmin, requireUser, sanitizeUser, sanitizeUsers } from "@/lib/actions/guard"
 import { recordAudit } from "@/lib/actions/audit"
 import { nextReferenceId } from "@/lib/referenceId"
@@ -223,6 +224,7 @@ export async function updateUser(_prevState: any, formData: FormData) {
 
   const errors: Record<string, string> = {}
   if (!email) errors.email = "Email is required."
+  else if (email.length > MAX.EMAIL) errors.email = `Email must be ${MAX.EMAIL} characters or fewer.`
   else if (!isValidEmail(email)) errors.email = "Please enter a valid email address."
 
   if (Object.keys(errors).length > 0) {

@@ -4,6 +4,7 @@ import { useEffect, useState, useActionState, useRef } from 'react'
 import { updateMe } from '@/lib/actions/me'
 import { useSession } from 'next-auth/react'
 import { UserRoundPen } from 'lucide-react'
+import { MAX } from '@/src/lib/constants'
 
 export default function FormProfile({
   m,
@@ -82,6 +83,7 @@ export default function FormProfile({
               name="email"
               type="email"
               defaultValue={me?.email}
+              maxLength={MAX.EMAIL}
               className={`!w-full ${state.errors?.email ? 'has-errors' : ''}`}
               disabled={isPending}
             />

@@ -23,6 +23,8 @@ import {
 } from '@/lib/actions/appointmentManagement'
 import { now, toISO } from '@/src/lib/dateUtils'
 import { FIXED_ADDRESS, PUROKS } from '@/src/data/patientInfo'
+import { MAX } from '@/src/lib/constants'
+import { isValidPhone } from '@/lib/helper'
 
 type Lane = 'WALKIN' | 'PRIORITY'
 
@@ -234,6 +236,9 @@ export default function QueueingClient({
   // walk-in only needs the patient's details and a service.
   const emailLooksValid =
     !newInfo.email.trim() || /^\S+@\S+\.\S+$/.test(newInfo.email.trim())
+  // Phone is optional, but when entered it must be a valid PH mobile number.
+  const phoneLooksValid =
+    !newInfo.phoneNumber.trim() || isValidPhone(newInfo.phoneNumber.trim())
   const canRegister =
     !isPending &&
     !!serviceId &&
@@ -242,7 +247,8 @@ export default function QueueingClient({
     !!newInfo.birthdate &&
     !!newInfo.sex &&
     !!newInfo.purok &&
-    emailLooksValid
+    emailLooksValid &&
+    phoneLooksValid
 
   const submitNewWalkIn = () => {
     if (!canRegister) return
@@ -616,6 +622,7 @@ export default function QueueingClient({
                         onChange={setNewField('firstName')}
                         placeholder="Juan"
                         autoFocus
+                        maxLength={MAX.NAME}
                         className={fieldInput}
                       />
                     </div>
@@ -628,6 +635,7 @@ export default function QueueingClient({
                         value={newInfo.lastName}
                         onChange={setNewField('lastName')}
                         placeholder="Dela Cruz"
+                        maxLength={MAX.NAME}
                         className={fieldInput}
                       />
                     </div>
@@ -670,6 +678,7 @@ export default function QueueingClient({
                         value={newInfo.phoneNumber}
                         onChange={setNewField('phoneNumber')}
                         placeholder="0917 123 4567"
+                        maxLength={MAX.PHONE}
                         className={fieldInput}
                       />
                     </div>
@@ -683,6 +692,7 @@ export default function QueueingClient({
                         value={newInfo.email}
                         onChange={setNewField('email')}
                         placeholder="Creates a login account"
+                        maxLength={MAX.EMAIL}
                         className={fieldInput}
                       />
                     </div>
@@ -695,6 +705,7 @@ export default function QueueingClient({
                         value={newInfo.houseNumber}
                         onChange={setNewField('houseNumber')}
                         placeholder="123 Mabini Street"
+                        maxLength={MAX.SHORT_NAME}
                         className={fieldInput}
                       />
                     </div>

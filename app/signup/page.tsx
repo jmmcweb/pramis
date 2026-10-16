@@ -12,6 +12,7 @@ import {
   MIN_ACCOUNT_AGE,
   parseISODate,
 } from '@/src/lib/age'
+import { MAX } from '@/src/lib/constants'
 
 type Errors = Record<string, string>
 
@@ -184,6 +185,7 @@ const Signup = () => {
             error={errors.firstName}
             autoComplete="given-name"
             required
+            maxLength={MAX.NAME}
           />
           <Field
             label="Middle Name"
@@ -193,6 +195,7 @@ const Signup = () => {
             onChange={(e) => setMiddleName(e.target.value)}
             error={errors.middleName}
             autoComplete="additional-name"
+            maxLength={MAX.NAME}
           />
           <Field
             label="Last Name"
@@ -203,6 +206,7 @@ const Signup = () => {
             error={errors.lastName}
             autoComplete="family-name"
             required
+            maxLength={MAX.NAME}
           />
           <Field
             label="Suffix"
@@ -212,6 +216,7 @@ const Signup = () => {
             onChange={(e) => setSuffix(e.target.value)}
             error={errors.suffix}
             autoComplete="honorific-suffix"
+            maxLength={MAX.SHORT_NAME}
           />
         </div>
 
@@ -294,6 +299,7 @@ const Signup = () => {
           error={errors.email}
           autoComplete="email"
           required
+          maxLength={MAX.EMAIL}
         />
 
         <Field
@@ -309,6 +315,7 @@ const Signup = () => {
           error={errors.password}
           autoComplete="new-password"
           required
+          maxLength={MAX.PASSWORD}
           trailing={
             <button
               type="button"
@@ -337,6 +344,7 @@ const Signup = () => {
           error={errors.confirmPassword}
           autoComplete="new-password"
           required
+          maxLength={MAX.PASSWORD}
           trailing={
             <button
               type="button"

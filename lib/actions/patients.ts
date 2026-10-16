@@ -6,6 +6,7 @@ import { requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { nextReferenceId } from '@/lib/referenceId'
 import { recordAudit } from '@/lib/actions/audit'
 import { isValidEmail } from '@/lib/helper'
+import { MAX } from '@/src/lib/constants'
 import { cacheTag, cacheLife, revalidateTag } from 'next/cache'
 
 import { initialRecords } from '@/src/data/patientRecords'
@@ -274,6 +275,12 @@ export async function createPatientRecord(
   if (fields.name.length < 3) {
     return { success: false, message: 'Enter the patient’s full name.' }
   }
+  if (fields.name.length > MAX.NAME) {
+    return { success: false, message: `Name must be ${MAX.NAME} characters or fewer.` }
+  }
+  if (fields.phoneNumber.length > MAX.PHONE) {
+    return { success: false, message: `Mobile number must be ${MAX.PHONE} characters or fewer.` }
+  }
   if (!fields.sex) {
     return { success: false, message: 'Select the patient’s sex.' }
   }
@@ -345,6 +352,12 @@ export async function updatePatientRecord(
   }
   if (fields.name.length < 3) {
     return { success: false, message: 'Enter the patient’s full name.' }
+  }
+  if (fields.name.length > MAX.NAME) {
+    return { success: false, message: `Name must be ${MAX.NAME} characters or fewer.` }
+  }
+  if (fields.phoneNumber.length > MAX.PHONE) {
+    return { success: false, message: `Mobile number must be ${MAX.PHONE} characters or fewer.` }
   }
   if (!fields.sex) {
     return { success: false, message: 'Select the patient’s sex.' }

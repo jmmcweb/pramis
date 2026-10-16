@@ -7,6 +7,10 @@ type FieldProps = {
   leading?: ReactNode
   trailing?: ReactNode
   required?: boolean
+  /** Maximum number of characters a user may enter. */
+  maxLength?: number
+  /** HTML5 input pattern (e.g. for phone numbers). */
+  pattern?: string
   className?: string
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'className'>
 
@@ -17,6 +21,8 @@ export default function Field({
   leading,
   trailing,
   required,
+  maxLength,
+  pattern,
   className,
   ...inputProps
 }: FieldProps) {
@@ -36,6 +42,8 @@ export default function Field({
           className="auth-input"
           required={required}
           aria-invalid={error ? true : undefined}
+          maxLength={maxLength}
+          pattern={pattern}
           {...inputProps}
         />
         {trailing}

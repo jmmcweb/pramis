@@ -3,6 +3,8 @@ import { compare, hash } from 'bcrypt'
 import prisma from '@/lib/prisma'
 import { nextReferenceId } from '@/lib/referenceId'
 import { notifyAllStaff } from '@/lib/actions/notifications'
+import { isValidEmail, isValidPhone } from '@/lib/helper'
+import { MAX } from '@/src/lib/constants'
 import { PUROKS, FIXED_ADDRESS } from '@/src/data/patientInfo'
 import { isAtLeastAge, MIN_ACCOUNT_AGE, parseISODate } from '@/src/lib/age'
 
@@ -66,18 +68,25 @@ export async function POST(request: Request) {
   const isPwd = payload.isPwd
   const pwdIdImage = payload.pwdIdImage?.trim()
 
-  // The captured/uploaded valid ID is a base64 data URL (e.g. data:image/jpeg;base64,...)
-  if (idPhoto && !/^data:image\/(jpeg|png|webp);base64,/.test(idPhoto)) {
-    return NextResponse.json(
-      { message: 'The uploaded ID photo must be a JPEG, PNG, or WebP image.' },
-      { status: 400 },
-    )
-  }
-  if (idPhoto && idPhoto.length > 5_000_000) {
-    return NextResponse.json(
-      { message: 'The uploaded ID photo is too large (max ~3.5MB).' },
-      { status: 400 },
-    )
+  const errors: Record<string, string> = {}
+
+  // Name and contact fields must respect the max length applied to the inputs,
+  // so a client that pastes an oversized string cannot overflow the DB column.
+  if (firstName.length > MAX.NAME) errors.firstName = `First name must be ${MAX.NAME} characters or fewer.`
+  if (middleName.length > MAX.NAME) errors.middleName = `Middle name must be ${MAX.NAME} characters or fewer.`
+  if (lastName.length > MAX.NAME) errors.lastName = `Last name must be ${MAX.NAME} characters or fewer.`
+  if (suffix.length > MAX.SHORT_NAME) errors.suffix = `Suffix must be ${MAX.SHORT_NAME} characters or fewer.`
+
+  if (email.length > MAX.EMAIL) errors.email = `Email must be ${MAX.EMAIL} characters or fewer.`
+  else if (email && !isValidEmail(email)) errors.email = 'Please enter a valid email address.'
+
+  if (mobile.length > MAX.PHONE) errors.mobile = `Mobile number must be ${MAX.PHONE} digits or fewer.`
+  else if (mobile && !isValidPhone(mobile)) errors.mobile = 'Enter a valid PH mobile number (e.g. 917 123 4567).'
+
+  if (password && password.length > MAX.PASSWORD) errors.password = `Password must be ${MAX.PASSWORD} characters or fewer.`
+
+  if (Object.keys(errors).length > 0) {
+    return NextResponse.json({ errors }, { status: 400 })
   }
 
   if (

@@ -9,6 +9,7 @@ import { cacheLife, cacheTag, revalidateTag } from 'next/cache'
 import { getServerSession, Session } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { isValidEmail } from '@/lib/helper'
+import { MAX } from '@/src/lib/constants'
 import { sanitizeUser, requireUser } from '@/lib/actions/guard'
 import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
@@ -512,6 +513,23 @@ export async function updateMyProfile(
       errors[key] = `${label} is required.`
     }
   })
+
+  // Max-length safety net (client already enforces MAX.* via the inputs).
+  if (firstName.length > MAX.NAME) {
+    errors.firstName = `First name must be ${MAX.NAME} characters or fewer.`
+  }
+  if (middleName.length > MAX.NAME) {
+    errors.middleName = `Middle name must be ${MAX.NAME} characters or fewer.`
+  }
+  if (lastName.length > MAX.NAME) {
+    errors.lastName = `Last name must be ${MAX.NAME} characters or fewer.`
+  }
+  if (suffix.length > MAX.SHORT_NAME) {
+    errors.suffix = `Suffix must be ${MAX.SHORT_NAME} characters or fewer.`
+  }
+  if (phoneNumber.length > MAX.PHONE) {
+    errors.phoneNumber = `Mobile number must be ${MAX.PHONE} characters or fewer.`
+  }
 
   if (email && !isValidEmail(email)) {
     errors['email'] = 'Please enter a valid email address.'
