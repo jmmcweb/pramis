@@ -82,7 +82,9 @@ export async function putSnapshotInBlob(
     console.error('[putSnapshotInBlob | Error]:', error)
     return {
       success: false,
-      message: `Failed to upload ${backupId} to Vercel Blob.`,
+      message: `Failed to upload ${backupId} to Vercel Blob: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
       backupId,
     }
   }
@@ -120,7 +122,9 @@ export async function putManifestInBlob(
     console.error('[putManifestInBlob | Error]:', error)
     return {
       success: false,
-      message: `Failed to upload the manifest for ${backupId} to Vercel Blob.`,
+      message: `Failed to upload the manifest for ${backupId} to Vercel Blob: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
       backupId,
     }
   }

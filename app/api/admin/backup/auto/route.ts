@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/authOptions'
 import { runAutomaticBackupIfDue } from '@/lib/backup'
 
+export const maxDuration = 300
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization') ?? ''
 

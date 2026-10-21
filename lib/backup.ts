@@ -387,7 +387,9 @@ export async function createBackup(
     console.error('[createBackup | Error]:', error)
     return {
       success: false,
-      message: 'Failed to create the database backup.',
+      message: `Failed to create the database backup: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     }
   }
 }
