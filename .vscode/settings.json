@@ -5,5 +5,8 @@
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "prettier.semi": false,
-  "prettier.singleQuote": true
+  "prettier.singleQuote": true,
+  "chat.tools.terminal.autoApprove": {
+    "npx tsc": true
+  }
 }

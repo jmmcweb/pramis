@@ -22,6 +22,7 @@ import {
   todayISO,
   dayRange,
   isServiceAvailableOnDate,
+  parseStaffAvailability,
   extractPatientItrInfo,
   toMedicalRecordSummary,
 } from '@/config/appointment'
@@ -205,15 +206,60 @@ export async function getDayAvailability(
       bookedBySlot.set(slotId, (bookedBySlot.get(slotId) ?? 0) + 1)
     }
 
+    // Item 5 (midwife-only): midwife day-level availability gates capacity. Any
+    // midwife marked OFF for this date (in any active service's description
+    // JSON) reduces capacity; when every tracked midwife is OFF, no slots
+    // open. Non-midwife overrides (Nurse, BHW, Admin) are ignored.
+    let capacity = SLOT_CAPACITY
+    try {
+      const [services, midwives] = await Promise.all([
+        (prisma as any).service.findMany({
+          where: { availability: true },
+          select: { description: true },
+        }),
+        (prisma as any).staff.findMany({
+          where: { deletedAt: null, position: 'Midwife' },
+          select: { staffid: true },
+        }),
+      ])
+      const midwifeIds = new Set<string>(midwives.map((m: any) => String(m.staffid)))
+      const offIds = new Set<string>()
+      const allIds = new Set<string>()
+      for (const svc of services) {
+        const avail = parseStaffAvailability(svc?.description ?? null)
+        for (const [staffId, days] of Object.entries(avail)) {
+          if (!midwifeIds.has(String(staffId))) continue
+          allIds.add(String(staffId))
+          if (days[dateISO] === 'OFF') offIds.add(String(staffId))
+        }
+      }
+      // Midwives with no override at all still count as available: if any
+      // service tracks no midwife overrides, every active midwife counts.
+      if (allIds.size === 0 && midwifeIds.size > 0) {
+        for (const id of midwifeIds) allIds.add(id)
+      }
+      if (allIds.size > 0) {
+        if (offIds.size >= allIds.size) capacity = 0
+        else if (offIds.size > 0) {
+          capacity = Math.max(
+            1,
+            Math.ceil((SLOT_CAPACITY * (allIds.size - offIds.size)) / allIds.size),
+          )
+        }
+      }
+    } catch {
+      capacity = SLOT_CAPACITY
+    }
+
     const slots: SlotAvailability[] = APPOINTMENT_SLOTS.map((slot) => {
       const booked = bookedBySlot.get(slot.id) ?? 0
-      const remaining = Math.max(0, SLOT_CAPACITY - booked)
+      const remaining = Math.max(0, capacity - booked)
       return {
         ...slot,
         booked,
         remaining,
         status:
-          remaining === 0
+          capacity <= 0 || remaining === 0
             ? 'unavailable'
             : remaining <= 2
               ? 'limited'
@@ -524,15 +570,26 @@ export async function bookAppointment(_prevState: any, formData: FormData) {
 
     const appointmentAt = slotIdToDate(dateISO, slotId)
 
-    // Capacity check for the chosen slot.
+    // Capacity check for the chosen slot (midwife-only): reuse the same
+    // day-level capacity as getDayAvailability so the patient can't book past
+    // a midwife OFF day.
     const { start, end } = dayRange(dateISO)
+    const midwifeDay = await getDayAvailability(dateISO)
+    const daySlot = midwifeDay.slots.find((s) => s.id === slotId)
+    const effectiveCapacity = daySlot ? daySlot.booked + daySlot.remaining : SLOT_CAPACITY
+    if (effectiveCapacity <= 0) {
+      return {
+        success: false,
+        message: 'No midwife is available on this date. Please pick another date.',
+      }
+    }
     const slotBooked = await (prisma as any).appointment.count({
       where: {
         appointmentAt: { gte: start, lt: end },
         status: { not: 'CANCELLED' },
       },
     })
-    if (slotBooked >= SLOT_CAPACITY) {
+    if (slotBooked >= effectiveCapacity) {
       return {
         success: false,
         message: `The ${getSlotLabel(slotId)} slot on this date is fully booked. Please pick another slot.`,

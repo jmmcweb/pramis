@@ -273,17 +273,8 @@ export default function Homepage({
                 {population.total.toLocaleString()} Total Records
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3.5">
-              {population.ageGroups.map((g) => (
-                <AgeBar
-                  key={g.label}
-                  label={g.label}
-                  value={g.value}
-                  total={population.total}
-                  color={g.color}
-                  darkMode={darkMode}
-                />
-              ))}
+            <div>
+              <AgePie groups={population.ageGroups} total={population.total} darkMode={darkMode} />
             </div>
           </div>
 
@@ -405,6 +396,64 @@ export default function Homepage({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function AgePie({
+  groups,
+  total,
+  darkMode,
+}: {
+  groups: { label: string; value: number; color: string }[]
+  total: number
+  darkMode: boolean
+}) {
+  const R = 70
+  const C = 2 * Math.PI * R
+  let offset = 25
+  const segments = groups.map((g) => {
+    const frac = total ? g.value / total : 0
+    const seg = { ...g, frac, dash: frac * C, start: offset }
+    offset -= frac * 100
+    return seg
+  })
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-6">
+      <svg viewBox="0 0 180 180" className="w-48 h-48 flex-shrink-0">
+        <circle cx="90" cy="90" r={R} fill="none" strokeWidth="32" stroke={darkMode ? '#0f1438' : '#E8EAF6'} />
+        {segments.map((s) =>
+          s.frac > 0 ? (
+            <circle
+              key={s.label}
+              cx="90"
+              cy="90"
+              r={R}
+              fill="none"
+              stroke={s.color}
+              strokeWidth="32"
+              strokeDasharray={`${s.dash} ${C - s.dash}`}
+              strokeDashoffset={s.start}
+              strokeLinecap="butt"
+            >
+              <title>
+                {s.label}: {s.value.toLocaleString()} ({(s.frac * 100).toFixed(1)}%)
+              </title>
+            </circle>
+          ) : null,
+        )}
+      </svg>
+      <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
+        {segments.map((s) => (
+          <div key={s.label} className="flex items-center gap-2.5">
+            <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+            <span className={`text-sm font-bold w-12 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>{s.label}</span>
+            <span className={`text-xs font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              {s.value.toLocaleString()} ({(s.frac * 100).toFixed(1)}%)
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

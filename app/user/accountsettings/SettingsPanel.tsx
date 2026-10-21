@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useActionState } from 'react'
 import { toast } from 'sonner'
-import { useSession } from 'next-auth/react'
-import { updateMe, updateMePassword } from '@/lib/actions/me'
+import { signOut, useSession } from 'next-auth/react'
+import { updateMe, updateMePassword, deleteMyAccount } from '@/lib/actions/me'
 import { useDarkMode } from '@/components/globals/DarkModeContext'
 import FontSizeSetting from '@/components/globals/FontSizeSetting'
 import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
@@ -23,6 +23,7 @@ const sections = [
   { id: 'contact', label: 'Contact' },
   { id: 'terms', label: 'Terms and Conditions' },
   { id: 'about', label: 'About Us' },
+  { id: 'delete', label: 'Delete Account' },
 ]
 
 export default function SettingsPanel({ user }: { user: SettingsUser }) {
@@ -63,6 +64,8 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
     switch (active) {
       case 'account':
         return <AccountSection darkMode={darkMode} user={user} />
+      case 'delete':
+        return <DeleteAccountSection darkMode={darkMode} />
       case 'notifications':
         return (
           <>
@@ -529,6 +532,68 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
       )}
       {logoutDialog}
     </div>
+  )
+}
+
+function DeleteAccountSection({ darkMode }: { darkMode: boolean }) {
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const runDelete = async () => {
+    if (password.trim().length === 0) {
+      toast.error('Please enter your password to confirm.')
+      return
+    }
+    setBusy(true)
+    try {
+      const formData = new FormData()
+      formData.append('password', password)
+      const res = await deleteMyAccount(formData)
+      if (!res.success) {
+        toast.error(res.message || 'Unable to delete your account.')
+        return
+      }
+      toast.success(res.message)
+      await signOut({ callbackUrl: '/' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <h2 className={`text-[22px] font-bold m-0 mb-4 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}>
+        Delete Account
+      </h2>
+      <div
+        className={`rounded-xl border p-4 ${darkMode ? 'border-red-500/30 bg-red-500/5' : 'border-red-200 bg-red-50'}`}
+      >
+        <p className={`text-[14px] m-0 leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          Deleting your account signs you out and removes your login and profile. Your past
+          visit history stays with the health center so staff can still see your medical
+          records. Cancel any upcoming appointments first.
+        </p>
+        <p className={`text-[13px] font-semibold mt-3 mb-1 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}>
+          Enter your password to confirm
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            type="password"
+            className={`flex-1 px-3.5 py-2.5 rounded-lg text-[15px] outline-none border ${
+              darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'bg-white text-gray-800 border-gray-200'
+            }`}
+          />
+          <button
+            onClick={runDelete}
+            disabled={busy}
+            className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold border-none cursor-pointer disabled:opacity-60"
+          >
+            {busy ? 'Deleting…' : 'Delete my account'}
+          </button>
+        </div>
+      </div>
+    </>
   )
 }
 

@@ -43,6 +43,11 @@ const navItems = [
     label: 'Appointment Schedule',
     icon: '/calendar.png',
   },
+  {
+    href: '/admin/availability',
+    label: 'Midwife Availability',
+    icon: '/care.png',
+  },
   { href: '/admin/auditlogs', label: 'Audit Logs', icon: '/record.png' },
   {
     href: '/admin/backup',

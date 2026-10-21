@@ -6,7 +6,14 @@ import { revalidateTag } from 'next/cache'
 import { requireAdmin, requireStaff } from '@/lib/actions/guard'
 import { recordAudit } from '@/lib/actions/audit'
 import { nextReferenceId } from '@/lib/referenceId'
-import { dayRange, todayISO } from '@/config/appointment'
+import {
+  dayRange,
+  extractPatientItrInfo,
+  getSlotLabel,
+  todayISO,
+  toMedicalRecordSummary,
+  type ScheduleAppointmentView,
+} from '@/config/appointment'
 
 export type QueueEntry = {
   id: string // APT-#### for scheduled visits, WIQ-#### for queued walk-ins
@@ -485,6 +492,157 @@ async function syncWalkInAppointmentOnConsult(qid: string) {
     }
   } catch (err) {
     console.error('[syncWalkInAppointmentOnConsult | Error]:', err)
+  }
+}
+
+export async function getWalkInItrAppointment(
+  qid: string,
+): Promise<{
+  success: boolean
+  message: string
+  appointment: ScheduleAppointmentView | null
+}> {
+  const session = await requireAdmin()
+  if (!session) {
+    const staff = await requireStaff()
+    if (!staff) {
+      return { success: false, message: 'Unauthorized', appointment: null }
+    }
+  }
+  if (!qid) {
+    return {
+      success: false,
+      message: 'Queue entry ID is required.',
+      appointment: null,
+    }
+  }
+
+  try {
+    const queueEntry = await (prisma as any).walkInQueue.findUnique({
+      where: { qid },
+      select: { patientId: true, serviceId: true, status: true },
+    })
+    if (!queueEntry) {
+      return {
+        success: false,
+        message: 'Queue entry not found.',
+        appointment: null,
+      }
+    }
+    if (queueEntry.status !== 'IN_CONSULTATION') {
+      return {
+        success: false,
+        message: 'Start the consultation before completing the visit.',
+        appointment: null,
+      }
+    }
+
+    const { start, end } = dayRange(todayISO())
+    const include = {
+      service: true,
+      patient: true,
+      familyMember: true,
+      user: { include: { profile: true } },
+      medicalHistory: true,
+    }
+    let appointment = await (prisma as any).appointment.findFirst({
+      where: {
+        patientId: queueEntry.patientId,
+        source: 'WALKIN',
+        appointmentAt: { gte: start, lt: end },
+      },
+      include,
+    })
+
+    if (!appointment) {
+      let serviceId = queueEntry.serviceId
+      if (!serviceId) {
+        const service = await (prisma as any).service.findFirst({
+          where: { availability: true },
+          orderBy: { serviceid: 'asc' },
+          select: { serviceid: true },
+        })
+        serviceId = service?.serviceid ?? null
+      }
+      if (!serviceId) {
+        return {
+          success: false,
+          message: 'No available service exists for this walk-in record.',
+          appointment: null,
+        }
+      }
+
+      const patient = await (prisma as any).patient.findUnique({
+        where: { patientid: queueEntry.patientId },
+        select: { userId: true, familyMemberId: true },
+      })
+      if (!patient) {
+        return {
+          success: false,
+          message: 'The patient for this queue entry no longer exists.',
+          appointment: null,
+        }
+      }
+      appointment = await (prisma as any).appointment.create({
+        data: {
+          appointmentid: await nextReferenceId('APT'),
+          patientId: queueEntry.patientId,
+          userId: patient.userId,
+          familyMemberId: patient.familyMemberId,
+          serviceId,
+          source: 'WALKIN',
+          appointmentAt: new Date(),
+          status: 'IN_CONSULTATION',
+        },
+        include,
+      })
+    }
+
+    const at = new Date(appointment.appointmentAt)
+    const dateISO = at.toISOString().slice(0, 10)
+    const profile = appointment.user?.profile
+    const name =
+      appointment.familyMember?.name ||
+      (profile
+        ? `${(profile.lastName || '').toUpperCase()}, ${profile.firstName || ''}${
+            profile.middleName ? ` ${profile.middleName}` : ''
+          }`.trim()
+        : appointment.patient?.name || appointment.user?.email || 'Unknown patient')
+    return {
+      success: true,
+      message: 'Walk-in treatment record ready.',
+      appointment: {
+        id: appointment.appointmentid,
+        patientName: name,
+        patientReference: appointment.patient?.patientid || appointment.user?.id || '',
+        email: appointment.user?.email || '',
+        serviceName: appointment.service?.name ?? 'Service',
+        dateISO,
+        dateLabel: at.toLocaleDateString('en-US', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }),
+        timeLabel: getSlotLabel(
+          `${String(at.getUTCHours()).padStart(2, '0')}:00`,
+        ),
+        status: appointment.status,
+        patientInfo: extractPatientItrInfo(appointment),
+        hasMedicalRecord: Boolean(appointment.medicalHistory),
+        medicalRecord: appointment.medicalHistory
+          ? toMedicalRecordSummary(appointment.medicalHistory)
+          : null,
+      },
+    }
+  } catch (error) {
+    console.error('[getWalkInItrAppointment | Prisma | Error]:', error)
+    return {
+      success: false,
+      message: 'Failed to load the walk-in treatment record.',
+      appointment: null,
+    }
   }
 }
 

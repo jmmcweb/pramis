@@ -55,17 +55,35 @@ function parseService(s: any): ServiceItem {
   }
 }
 
+function parseServiceMeta(description?: string | null): {
+  desc?: string
+  subtitle?: string
+  time?: string
+  icon?: string
+  staffAvailability?: Record<string, Record<string, 'AVAILABLE' | 'OFF'>>
+} {
+  if (!description) return {}
+  try {
+    if (!description.startsWith('{')) return { desc: description }
+    return JSON.parse(description)
+  } catch {
+    return { desc: description }
+  }
+}
+
 function formatServiceDescription(meta: {
   desc?: string
   subtitle?: string
   time?: string
   icon?: string
+  staffAvailability?: Record<string, Record<string, 'AVAILABLE' | 'OFF'>>
 }) {
   return JSON.stringify({
     desc: meta.desc || '',
     subtitle: meta.subtitle || 'Monday to Friday',
     time: normalizeServiceTime(meta.time || SERVICE_TIME_RANGE),
     icon: meta.icon || '🩺',
+    ...(meta.staffAvailability ? { staffAvailability: meta.staffAvailability } : {}),
   })
 }
 
@@ -252,15 +270,21 @@ export async function updateService(data: {
   }
 
   try {
+    const existing = await (prisma as any).service.findUnique({
+      where: { serviceid: data.id },
+      select: { description: true },
+    })
+    const prevMeta = parseServiceMeta(existing?.description ?? null)
     const updateData: any = {}
     if (data.title && data.title.trim()) updateData.name = data.title.trim()
     if (data.availability !== undefined) updateData.availability = data.availability
 
     updateData.description = formatServiceDescription({
-      desc: data.desc || '',
-      subtitle: data.subtitle || 'Monday to Friday',
-      time: data.time || SERVICE_TIME_RANGE,
-      icon: data.icon || '🩺',
+      desc: data.desc ?? prevMeta.desc ?? '',
+      subtitle: data.subtitle ?? prevMeta.subtitle ?? 'Monday to Friday',
+      time: data.time ?? prevMeta.time ?? SERVICE_TIME_RANGE,
+      icon: data.icon ?? prevMeta.icon ?? '🩺',
+      staffAvailability: prevMeta.staffAvailability,
     })
 
     const updated = await (prisma as any).service.update({
@@ -289,6 +313,99 @@ export async function updateService(data: {
   } catch (error) {
     console.error('[updateService | Prisma | Error]:', error)
     return { success: false, message: 'Failed to update service in database.' }
+  }
+}
+
+// Item 5: midwife (staff) day-level availability for a service. Marking a
+// midwife OFF on a date removes appointment capacity for that date; marking
+// AVAILABLE (or clearing) restores it. Stored in Service.description JSON so
+// no schema migration is required.
+export async function setStaffDayAvailability(data: {
+  serviceId: string
+  staffId: string
+  dateISO: string
+  status: 'AVAILABLE' | 'OFF' | 'CLEAR'
+}) {
+  const session = await requireUser()
+  if (!session) return { success: false, message: 'Unauthorized' }
+  if (!['SUPERADMIN', 'ADMIN', 'MEDSTAFF'].includes(String(session.user.role ?? ''))) {
+    return { success: false, message: 'Only staff may manage availability.' }
+  }
+  if (!data.serviceId || !data.staffId) {
+    return { success: false, message: 'Service and staff are required.' }
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data.dateISO || '')) {
+    return { success: false, message: 'Enter a valid date (YYYY-MM-DD).' }
+  }
+  try {
+    const [existing, staffer] = await Promise.all([
+      (prisma as any).service.findUnique({
+        where: { serviceid: data.serviceId },
+        select: { serviceid: true, name: true, description: true },
+      }),
+      (prisma as any).staff.findUnique({
+        where: { staffid: data.staffId },
+        select: { position: true },
+      }),
+    ])
+    if (!existing) return { success: false, message: 'Service not found.' }
+    // Only midwives affect patient slots — reject overrides for other roles.
+    if ((staffer?.position || '').toLowerCase() !== 'midwife') {
+      return { success: false, message: 'Only midwife availability affects appointment slots.' }
+    }
+    const meta = parseServiceMeta(existing.description ?? null)
+    const avail = meta.staffAvailability ?? {}
+    const perDay = { ...(avail[data.staffId] ?? {}) }
+    if (data.status === 'CLEAR') delete perDay[data.dateISO]
+    else perDay[data.dateISO] = data.status
+    if (Object.keys(perDay).length === 0) delete avail[data.staffId]
+    else avail[data.staffId] = perDay
+    const description = formatServiceDescription({
+      desc: meta.desc,
+      subtitle: meta.subtitle,
+      time: meta.time,
+      icon: meta.icon,
+      staffAvailability: Object.keys(avail).length ? avail : undefined,
+    })
+    await (prisma as any).service.update({
+      where: { serviceid: data.serviceId },
+      data: { description },
+    })
+    revalidateTag('services', 'max')
+    revalidateTag('appointments', 'max')
+    await recordAudit({
+      action: 'UPDATE',
+      entity: 'SERVICE',
+      entityId: data.serviceId,
+      description:
+        data.status === 'CLEAR'
+          ? `Cleared availability override for staff ${data.staffId} on ${data.dateISO} (${existing.name}).`
+          : `Marked staff ${data.staffId} as ${data.status} on ${data.dateISO} (${existing.name}).`,
+      metadata: { serviceId: data.serviceId, staffId: data.staffId, dateISO: data.dateISO, status: data.status },
+    })
+    return { success: true, message: 'Availability updated.' }
+  } catch (error) {
+    console.error('[setStaffDayAvailability | Prisma | Error]:', error)
+    return { success: false, message: 'Failed to update availability.' }
+  }
+}
+
+// Item 5 helper: list staff availability overrides for one service so the
+// schedule UI can show which midwife is OFF on which date.
+export async function getServiceStaffAvailability(serviceId: string) {
+  const session = await requireUser()
+  if (!session) return { success: false as const, message: 'Unauthorized', availability: {} as Record<string, Record<string, 'AVAILABLE' | 'OFF'>> }
+  if (!serviceId) return { success: false as const, message: 'Service is required.', availability: {} as Record<string, Record<string, 'AVAILABLE' | 'OFF'>> }
+  try {
+    const row = await (prisma as any).service.findUnique({
+      where: { serviceid: serviceId },
+      select: { description: true },
+    })
+    if (!row) return { success: false as const, message: 'Service not found.', availability: {} as Record<string, Record<string, 'AVAILABLE' | 'OFF'>> }
+    return { success: true as const, message: 'Availability fetched.', availability: parseServiceMeta(row.description ?? null).staffAvailability ?? {} }
+  } catch (error) {
+    console.error('[getServiceStaffAvailability | Prisma | Error]:', error)
+    return { success: false as const, message: 'Failed to fetch availability.', availability: {} as Record<string, Record<string, 'AVAILABLE' | 'OFF'>> }
   }
 }
 

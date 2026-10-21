@@ -1,15 +1,12 @@
 export const APP_NAME = 'PRAMIS'
-export const APP_BASE_URL = 'https://pramis-kappa.vercel.app/'
-  process.env.NODE_ENV === 'production'
-    ? 'https://pramis-kappa.vercel.app/'
-    : 'http://localhost:3000'
+
+// Base URL used in links within emails (e.g. "Set Your Password" link for new
+// walk-in patients). Override via APP_BASE_URL in your environment if needed.
+export const APP_BASE_URL = process.env.APP_BASE_URL ?? 'https://pramis-smhc.vercel.app/'
 
 export const SCHOOL_NAME = 'PRAMIS'
 
 export const SMTP_FROM_NAME = 'PRAMIS'
-// The "From" address for outgoing emails. Must be a sender verified in the Brevo
-// account (Brevo -> Senders, Domains & Dedicated IPs). SMTP_USER is only the SMTP
-// login credential and is NOT a valid sender address.
 export const SMTP_FROM_EMAIL = 'info.pramis@gmail.com'
 
 export const USERS_PER_PAGE = 5

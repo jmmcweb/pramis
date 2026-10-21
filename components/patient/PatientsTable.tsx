@@ -256,6 +256,9 @@ export default function PatientsTable({
 
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  type SortKey = 'name' | 'id' | 'sex' | 'contact' | 'address' | 'recorded'
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -266,6 +269,30 @@ export default function PatientsTable({
   const [itrRecord, setItrRecord] = useState<MedicalRecord | null>(null)
   const [form, setForm] = useState<PatientForm>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+    setCurrentPage(1)
+  }
+  const sortMark = (key: SortKey): string =>
+    sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'
+  const sortVal = (row: PatientListItem, key: SortKey): string => {
+    if (key === 'name') return (row.name || '').toLowerCase()
+    if (key === 'id') return (row.id || '').toLowerCase()
+    if (key === 'sex') return (row.sex || '').toLowerCase()
+    if (key === 'contact') return (row.phoneNumber || row.email || '').toLowerCase()
+    if (key === 'address')
+      return [row.houseNumber, row.purok, row.barangay, row.city, row.province]
+        .filter(Boolean)
+        .join(', ')
+        .toLowerCase()
+    if (key === 'recorded') return row.dateRecorded || ''
+    return ''
+  }
 
   const q = searchQuery.trim().toLowerCase()
   const filtered = patients.filter((p) => {
@@ -282,14 +309,16 @@ export default function PatientsTable({
     )
   })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PER_PAGE))
+  const sortedFiltered = [...filtered].sort((a, b) => { const av = sortVal(a, sortKey); const bv = sortVal(b, sortKey); const mult = sortDir === 'asc' ? 1 : -1; if (av < bv) return -1 * mult; if (av > bv) return 1 * mult; return a.name.localeCompare(b.name) * mult })
+
+  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / RECORDS_PER_PAGE))
   const safePage = Math.min(currentPage, totalPages)
-  const pagePatients = filtered.slice(
+  const pagePatients = sortedFiltered.slice(
     (safePage - 1) * RECORDS_PER_PAGE,
     safePage * RECORDS_PER_PAGE,
   )
   const firstShown =
-    filtered.length === 0 ? 0 : (safePage - 1) * RECORDS_PER_PAGE + 1
+    sortedFiltered.length === 0 ? 0 : (safePage - 1) * RECORDS_PER_PAGE + 1
   const lastShown = (safePage - 1) * RECORDS_PER_PAGE + pagePatients.length
 
   const maleCount = patients.filter(
@@ -485,18 +514,21 @@ export default function PatientsTable({
             <thead>
               <tr className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}>
                 {[
-                  'Patient',
-                  'Age / Sex',
-                  'Contact',
-                  'Address',
-                  'Last Visit',
-                ].map((label, i) => (
+                  { label: 'Patient', key: 'name' as SortKey },
+                  { label: 'Age / Sex', key: 'sex' as SortKey },
+                  { label: 'Contact', key: 'contact' as SortKey },
+                  { label: 'Address', key: 'address' as SortKey },
+                  { label: 'Last Visit', key: 'recorded' as SortKey },
+                ].map((col, i) => (
                   <th
-                    key={label}
-                    className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b`}
+                    key={col.label}
+                    onClick={() => toggleSort(col.key)}
+                    title={`Sort by ${col.label} alphabetically`}
+                    className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b cursor-pointer select-none hover:opacity-70`}
                     style={{ width: ['26%', '12%', '16%', '20%', '16%'][i] }}
                   >
-                    {label}
+                    {col.label}
+                    {sortMark(col.key)}
                   </th>
                 ))}
                 <th
@@ -660,7 +692,7 @@ export default function PatientsTable({
           <p
             className={`m-0 text-[14px] font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
           >
-            Showing {firstShown}&ndash;{lastShown} of {filtered.length}
+            Showing {firstShown}&ndash;{lastShown} of {sortedFiltered.length}
           </p>
           <div className="flex items-center gap-2">
             <button

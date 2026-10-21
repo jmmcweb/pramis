@@ -518,6 +518,8 @@ export default function AppointmentManagementClient({
 
   return (
     <div>
+      <div className="mb-5">
+      </div>
       <div className="flex items-center justify-between mb-[14px]">
         <h1
           className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 text-left`}

@@ -15,6 +15,72 @@ export const APPOINTMENT_SLOTS: AppointmentSlot[] = [
 // The morning window advertised on service cards and used by service forms.
 export const SERVICE_TIME_RANGE = '8:00am - 12:00pm'
 
+// Only staff whose position is Midwife gate patient slots. Other positions
+// (Nurse, BHW, Admin) never reduce booking capacity.
+export function isMidwifePosition(position: string | null | undefined): boolean {
+  return (position || '').trim().toLowerCase() === 'midwife'
+}
+
+export function midwifeIdsFromDirectory(
+  staff: { id: string; position?: string | null }[],
+): string[] {
+  return staff.filter((s) => isMidwifePosition(s.position)).map((s) => s.id)
+}
+
+// Staff availability (Item 5): midwife day-level availability that gates
+// appointment slots. Stored in the Service description JSON so no migration
+// is needed: { ..., staffAvailability: { [staffId]: { [dateISO]: 'AVAILABLE' | 'OFF' } } }.
+export type StaffDayStatus = 'AVAILABLE' | 'OFF'
+
+export function parseStaffAvailability(description?: string | null): Record<string, Record<string, StaffDayStatus>> {
+  if (!description) return {}
+  try {
+    if (!description.startsWith('{')) return {}
+    const meta = JSON.parse(description) as { staffAvailability?: unknown }
+    const raw = meta.staffAvailability
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+    const out: Record<string, Record<string, StaffDayStatus>> = {}
+    for (const [staffId, days] of Object.entries(raw as Record<string, unknown>)) {
+      if (!days || typeof days !== 'object' || Array.isArray(days)) continue
+      const perDay: Record<string, StaffDayStatus> = {}
+      for (const [dateISO, status] of Object.entries(days as Record<string, unknown>)) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateISO) && (status === 'AVAILABLE' || status === 'OFF')) {
+          perDay[dateISO] = status
+        }
+      }
+      out[String(staffId)] = perDay
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function isMidwifeAvailableOnDate(
+  description: string | null | undefined,
+  staffId: string | null | undefined,
+  dateISO: string,
+): boolean {
+  if (!staffId) return true
+  const avail = parseStaffAvailability(description ?? null)
+  const status = avail[String(staffId)]?.[dateISO]
+  return status !== 'OFF'
+}
+
+export function countAvailableMidwivesOnDate(
+  description: string | null | undefined,
+  staffIds: string[],
+  dateISO: string,
+): number {
+  if (staffIds.length === 0) return 1
+  const avail = parseStaffAvailability(description ?? null)
+  let count = 0
+  for (const id of staffIds) {
+    if (avail[String(id)]?.[dateISO] !== 'OFF') count += 1
+  }
+  return count
+}
+
 // Labels kept for appointments that were booked before the schedule became
 // morning-only, so their stored times still render readably.
 const LEGACY_SLOT_LABELS: Record<string, string> = {

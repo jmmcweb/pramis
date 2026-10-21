@@ -4,27 +4,15 @@ import { useState, useTransition, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
-import {
-  advanceQueueEntry,
-  removeQueueEntry,
-  addToQueue,
-  type QueueEntry,
-  type TodayQueues,
-} from '@/lib/actions/queue'
-import {
-  cancelAppointment,
-  updateAppointmentStatus,
-} from '@/lib/actions/appointment'
-import {
-  registerWalkIn,
-  searchPatientById,
-  searchPatientsByName,
-  type PatientLookup,
-} from '@/lib/actions/appointmentManagement'
+import { advanceQueueEntry, getWalkInItrAppointment, removeQueueEntry, addToQueue, type QueueEntry, type TodayQueues } from '@/lib/actions/queue'
+import { cancelAppointment, updateAppointmentStatus } from '@/lib/actions/appointment'
+import { registerWalkIn, searchPatientById, searchPatientsByName, type PatientLookup } from '@/lib/actions/appointmentManagement'
 import { now, toISO } from '@/src/lib/dateUtils'
 import { FIXED_ADDRESS, PUROKS } from '@/src/data/patientInfo'
 import { MAX } from '@/src/lib/constants'
 import { isValidPhone } from '@/lib/helper'
+import MedicalRecordModal from '@/components/ui/MedicalRecordModal'
+import type { ScheduleAppointmentView } from '@/config/appointment'
 
 type Lane = 'WALKIN' | 'PRIORITY'
 
@@ -90,6 +78,7 @@ export default function QueueingClient({
     email?: string
     credentialsEmailed?: boolean
   } | null>(null)
+  const [recordFor, setRecordFor] = useState<ScheduleAppointmentView | null>(null)
 
   const setNewField =
     (key: keyof typeof newInfo) =>
@@ -150,6 +139,18 @@ export default function QueueingClient({
       return
     }
     runAction(() => advanceQueueEntry(entry.qid ?? entry.id))
+  }
+
+  const openWalkInItr = (entry: QueueEntry) => {
+    if (isPending) return
+    startTransition(async () => {
+      const result = await getWalkInItrAppointment(entry.qid ?? entry.id)
+      if (result.success && result.appointment) {
+        setRecordFor(result.appointment)
+      } else {
+        toast.error(result.message)
+      }
+    })
   }
 
   const isEntryActive = (entry: QueueEntry) => entry?.status !== 'DONE'
@@ -396,6 +397,11 @@ export default function QueueingClient({
                 }}
                 busy={isPending}
                 onAdvance={() => advanceQueued(q)}
+                onCompleteItr={
+                  !q.id.startsWith('APT-') && q.status === 'IN_CONSULTATION'
+                    ? () => openWalkInItr(q)
+                    : undefined
+                }
                 onRemove={() =>
                   runAction(() =>
                     q.id.startsWith('APT-')
@@ -499,6 +505,11 @@ export default function QueueingClient({
                   item={q}
                   busy={isPending}
                   onAdvance={() => advanceQueued(q)}
+                  onCompleteItr={
+                    q.status === 'IN_CONSULTATION'
+                      ? () => openWalkInItr(q)
+                      : undefined
+                  }
                   onRemove={() =>
                     runAction(() =>
                       q.id.startsWith('APT-')
@@ -1076,6 +1087,14 @@ export default function QueueingClient({
           </div>
         </div>
       )}
+      {recordFor && (
+        <MedicalRecordModal
+          appointment={recordFor}
+          darkMode={darkMode}
+          onClose={() => setRecordFor(null)}
+          onSaved={refresh}
+        />
+      )}
     </div>
   )
 }
@@ -1086,12 +1105,14 @@ function QueueRow({
   busy,
   onAdvance,
   onRemove,
+  onCompleteItr,
 }: {
   darkMode: boolean
   item: QueueEntry
   busy: boolean
   onAdvance: () => void
   onRemove: () => void
+  onCompleteItr?: () => void
 }) {
   const statusLabel =
     item.status === 'DONE'
@@ -1199,27 +1220,53 @@ function QueueRow({
         {statusLabel}
       </span>
       {item.status !== 'DONE' && (
-        <button
-          onClick={onAdvance}
-          disabled={busy}
-          title={
-            item.status === 'WAITING' ? 'Start consultation' : 'Mark as done'
-          }
-          className={`w-8 h-8 rounded-lg cursor-pointer border transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50 ${darkMode ? 'bg-[#2d1b4e] text-[#4E9FFF] border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}
-        >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {item.status === 'WAITING' && (
+            <button
+              onClick={onAdvance}
+              disabled={busy}
+              title="Start consultation"
+              aria-label="Start consultation"
+              className={`w-8 h-8 rounded-lg cursor-pointer border transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50 ${darkMode ? 'bg-[#2d1b4e] text-[#4E9FFF] border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </button>
+          )}
+          {onCompleteItr && (
+            <button
+              onClick={onCompleteItr}
+              disabled={busy}
+              title="Complete visit and record treatment (ITR)"
+              aria-label="Complete visit and record treatment (ITR)"
+              className={`w-8 h-8 rounded-lg cursor-pointer border transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-50 ${darkMode ? 'bg-[#2d1b4e] text-[#4ECB71] border-[rgba(255,255,255,0.10)] hover:bg-[#141a45]' : 'bg-white text-[#4ECB71] border-[#4ECB71] hover:bg-[#E8F5E9]'}`}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+                <polyline points="9 6 9 17" />
+              </svg>
+            </button>
+          )}
+        </div>
       )}
       <button
         onClick={onRemove}
