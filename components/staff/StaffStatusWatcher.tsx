@@ -16,11 +16,22 @@ export default function StaffStatusWatcher() {
     if (status !== 'authenticated') return
 
     let cancelled = false
-    const interval = setInterval(async () => {
-      if (signingOutRef.current) return
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    const controller = new AbortController()
+    signingOutRef.current = false
+
+    const checkStatus = async () => {
+      if (cancelled || signingOutRef.current) return
+
       try {
-        const res = await fetch('/api/auth/status', { cache: 'no-store' })
-        if (!res.ok) return
+        const res = await fetch('/api/auth/status', {
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          throw new Error(`Status endpoint returned HTTP ${res.status}`)
+        }
+
         const data = await res.json()
         if (cancelled) return
 
@@ -33,13 +44,22 @@ export default function StaffStatusWatcher() {
           await signOut({ callbackUrl: '/login' })
         }
       } catch (err) {
-        console.error('Staff status polling error:', err)
+        if (!cancelled) {
+          console.error('Staff status polling error:', err)
+        }
+      } finally {
+        if (!cancelled && !signingOutRef.current) {
+          timeout = setTimeout(checkStatus, 15000)
+        }
       }
-    }, 15000)
+    }
+
+    timeout = setTimeout(checkStatus, 15000)
 
     return () => {
       cancelled = true
-      clearInterval(interval)
+      controller.abort()
+      if (timeout) clearTimeout(timeout)
     }
   }, [status])
 

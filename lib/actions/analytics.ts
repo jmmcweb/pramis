@@ -27,21 +27,24 @@ function resolveAnalyticsDateWindow(
     ANALYTICS_RANGES.find((r) => r.key === rangeKey) || ANALYTICS_RANGES[1]
 
   if (isYearRangeKey(range.key)) {
-    const y = year ?? new Date().getFullYear()
-    const safeYear = Number.isFinite(y) ? y : new Date().getFullYear()
+    const currentYear = new Date().getUTCFullYear()
+    const y = year ?? currentYear
+    const safeYear =
+      Number.isInteger(y) && y >= 1900 && y <= currentYear ? y : currentYear
     return {
-      start: new Date(safeYear, 0, 1, 0, 0, 0, 0),
-      end: new Date(safeYear, 11, 31, 23, 59, 59, 999),
+      start: new Date(Date.UTC(safeYear, 0, 1)),
+      end: new Date(Date.UTC(safeYear + 1, 0, 1) - 1),
       label: `Year ${safeYear}`,
     }
   }
 
   if (range.days > 0) {
     const start = new Date()
-    start.setHours(0, 0, 0, 0)
-    start.setDate(start.getDate() - (range.days - 1))
-    const end = new Date()
-    end.setHours(23, 59, 59, 999)
+    start.setUTCHours(0, 0, 0, 0)
+    start.setUTCDate(start.getUTCDate() - (range.days - 1))
+    const end = new Date(start)
+    end.setUTCDate(end.getUTCDate() + range.days)
+    end.setUTCMilliseconds(end.getUTCMilliseconds() - 1)
     return { start, end, label: range.label }
   }
 
@@ -56,6 +59,48 @@ function withDateWindow(where: any, field: string, win: AnalyticsDateWindow) {
   return where
 }
 
+function analyticsPersonKey(record: any): string {
+  const id =
+    record.familyMemberId ??
+    record.familyMember?.familymemberid ??
+    record.patient?.familyMemberId ??
+    record.userId ??
+    record.patientId ??
+    record.patient?.patientid
+  if (id) return String(id)
+
+  const profile = record.user?.profile
+  const name = String(
+    record.familyMember?.name ??
+      record.patient?.name ??
+      [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') ??
+      '',
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+  const birthdate =
+    record.patient?.birthdate ??
+    record.familyMember?.birthdate ??
+    profile?.birthdate
+  const sex = String(
+    record.familyMember?.sex ??
+      record.patient?.sex ??
+      profile?.sex ??
+      '',
+  )
+    .trim()
+    .toLowerCase()
+  const birthdateKey = birthdate
+    ? new Date(birthdate).toISOString().slice(0, 10)
+    : ''
+  const appointmentId = record.appointmentid ?? record.appointmentId
+  if (!name && !birthdateKey && appointmentId) {
+    return `appointment:${appointmentId}`
+  }
+  return `${sex}||${name}||${birthdateKey}`
+}
+
 // This file contains logic for fetching and computing analytics statistics for the Meditrack application. It includes functions to retrieve appointment data, classify medical cases, and compute various breakdowns such as service share, reasons for visits, outcomes, peak hours, and disease cases within a specified date range. The main function `getAnalyticsStats` returns an object containing the computed statistics along with success status and messages.
 
 // Type definition for the analytics statistics object
@@ -63,8 +108,11 @@ export type AnalyticsStats = {
   rangeLabel: string
   total: number
   walkIns: number
-  resident: number
+  bookings: number
   repeatVisits: number
+  resolvedAppointments: number
+  overdueOpenAppointments: number
+  upcomingAppointments: number
   serviceShare: AnalyticsBreakdown[]
   reasons: AnalyticsBreakdown[]
   outcomes: AnalyticsBreakdown[]
@@ -85,6 +133,7 @@ export type AnalyticsStats = {
   } | null
   immunization: AnalyticsBreakdown[]
   sexByService: { service: string; male: number; female: number }[]
+  sexTotals: { male: number; female: number }
   completionRate: number
   noShowRate: number
   cancellationRate: number
@@ -112,8 +161,10 @@ export type AnalyticsStats = {
     cancelled: number
     completionRate: number
   }[]
-  /** New vs returning patients in the window. */
+  /** Patients with one visit vs multiple visits in the selected period. */
   patientMix: { newPatients: number; returningPatients: number }
+  previousPeriodTotal: number | null
+  appointmentChangePct: number | null
 }
 
 // Maps a service name to a reason for the visit based on predefined keywords.
@@ -132,9 +183,54 @@ function reasonFromService(name: string): string {
     return 'Family Planning'
   if (n.includes('consultation') || n.includes('check'))
     return 'Routine Check-up'
-  if (n.includes('visual') || n.includes('via')) return 'Cancer Screening'
+  if (n.includes('visual') || /(^|\W)via(\W|$)/.test(n))
+    return 'Cancer Screening'
   if (n.includes('adolescent')) return 'Adolescent Health'
   return 'Others'
+}
+
+const IMMUNIZATION_FIELDS = [
+  { key: 'immBcg', label: 'BCG' },
+  { key: 'immHepab24', label: 'HepB (birth dose)' },
+  { key: 'immHepab24plus', label: 'HepB (24h+)' },
+  { key: 'immPenta1', label: 'Penta 1' },
+  { key: 'immPenta2', label: 'Penta 2' },
+  { key: 'immPenta3', label: 'Penta 3' },
+  { key: 'immOpv1', label: 'OPV 1' },
+  { key: 'immOpv2', label: 'OPV 2' },
+  { key: 'immOpv3', label: 'OPV 3' },
+  { key: 'immRota1', label: 'Rota 1' },
+  { key: 'immRota2', label: 'Rota 2' },
+  { key: 'immPcv1', label: 'PCV 1' },
+  { key: 'immPcv2', label: 'PCV 2' },
+  { key: 'immPcv3', label: 'PCV 3' },
+  { key: 'immMcv1', label: 'MCV 1' },
+  { key: 'immMcv2', label: 'MCV 2' },
+  { key: 'immHepab2', label: 'HepB 2' },
+  { key: 'immHepab3', label: 'HepB 3' },
+  { key: 'immHepaa', label: 'HepA' },
+  { key: 'immPneumonia', label: 'Pneumonia' },
+  { key: 'immInfluenza', label: 'Influenza' },
+  { key: 'immOthers', label: 'Others' },
+] as const
+
+function immunizationDateWhere(window: AnalyticsDateWindow) {
+  return {
+    OR: IMMUNIZATION_FIELDS.map(({ key }) => ({
+      [key]:
+        window.start && window.end
+          ? { gte: window.start, lte: window.end }
+          : { not: null },
+    })),
+  }
+}
+
+function isDateInWindow(value: Date | null, window: AnalyticsDateWindow) {
+  return Boolean(
+    value &&
+      (!window.start || value >= window.start) &&
+      (!window.end || value <= window.end),
+  )
 }
 
 // Parse blood pressure string "systolic/diastolic" into numbers
@@ -151,12 +247,21 @@ function parseBp(
 }
 
 // Compute age from a birthdate
-function computeAge(birthdate: Date | null): number | null {
+function computeAge(
+  birthdate: Date | null,
+  at: Date = new Date(),
+): number | null {
   if (!birthdate) return null
-  const now = Date.now()
-  const age = Math.floor(
-    (now - new Date(birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000),
-  )
+  const dob = new Date(birthdate)
+  const reference = new Date(at)
+  let age = reference.getFullYear() - dob.getFullYear()
+  const monthDifference = reference.getMonth() - dob.getMonth()
+  if (
+    monthDifference < 0 ||
+    (monthDifference === 0 && reference.getDate() < dob.getDate())
+  ) {
+    age--
+  }
   return age >= 0 ? age : null
 }
 
@@ -206,32 +311,93 @@ export async function getAnalyticsStats(
   // Fetch appointment records from the database based on the specified date range and compute various statistics.
 
   try {
-    const rows = await (prisma as any).appointment.findMany({
-      where,
-      select: {
-        appointmentAt: true,
-        status: true,
-        source: true,
-        userId: true,
-        patientId: true,
-        familyMemberId: true,
-        service: { select: { name: true } },
-        patient: {
-          select: { sex: true, name: true, patientid: true, bloodType: true },
+    const previousPeriodWindow =
+      window.start && window.end
+        ? (() => {
+            if (isYearRangeKey(rangeKey)) {
+              const yearStart = new Date(
+                Date.UTC(window.start!.getUTCFullYear() - 1, 0, 1),
+              )
+              return {
+                start: yearStart,
+                end: new Date(window.start!.getTime() - 1),
+              }
+            }
+            const duration = window.end!.getTime() - window.start!.getTime() + 1
+            return {
+              start: new Date(window.start!.getTime() - duration),
+              end: new Date(window.start!.getTime() - 1),
+            }
+          })()
+        : null
+    const [rows, previousPeriodTotal] = await Promise.all([
+      (prisma as any).appointment.findMany({
+        where,
+        orderBy: { appointmentAt: 'desc' },
+        select: {
+          appointmentid: true,
+          appointmentAt: true,
+          status: true,
+          source: true,
+          userId: true,
+          patientId: true,
+          familyMemberId: true,
+          service: { select: { name: true } },
+          patient: {
+            select: {
+              sex: true,
+              name: true,
+              patientid: true,
+              familyMemberId: true,
+              bloodType: true,
+            },
+          },
+          familyMember: {
+            select: {
+              familymemberid: true,
+              name: true,
+              birthdate: true,
+              sex: true,
+              bloodType: true,
+            },
+          },
+          user: {
+            select: {
+              profile: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  birthdate: true,
+                  sex: true,
+                  bloodType: true,
+                },
+              },
+            },
+          },
         },
-        user: { select: { profile: { select: { firstName: true, lastName: true } } } },
-      },
-    })
+      }),
+      previousPeriodWindow
+        ? (prisma as any).appointment.count({
+            where: {
+              appointmentAt: {
+                gte: previousPeriodWindow.start,
+                lte: previousPeriodWindow.end,
+              },
+            },
+          })
+        : Promise.resolve(null),
+    ])
 
     const total = rows.length
 
     const walkIns = rows.filter((r: any) => r.source === 'WALK_IN').length
-    const resident = total - walkIns
+    const bookings = total - walkIns
 
     const ownerCounts = new Map<string, number>()
     for (const r of rows) {
-      if (r.userId)
-        ownerCounts.set(r.userId, (ownerCounts.get(r.userId) ?? 0) + 1)
+      if (String(r.status).toUpperCase() !== 'COMPLETED') continue
+      const owner = analyticsPersonKey(r)
+      ownerCounts.set(owner, (ownerCounts.get(owner) ?? 0) + 1)
     }
     let repeatVisits = 0
     for (const c of ownerCounts.values()) {
@@ -256,6 +422,7 @@ export async function getAnalyticsStats(
     const outcomeLabels: Record<string, string> = {
       PENDING: 'Pending',
       APPROVED: 'Approved',
+      IN_CONSULTATION: 'In Consultation',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
       NO_SHOW: 'No Show',
@@ -270,19 +437,38 @@ export async function getAnalyticsStats(
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count)
 
-    // Completion / No-show / Cancellation rates
+    // Compare outcomes only after the appointment has a final status.
     const completedCount = outcomeMap.get('Completed') ?? 0
     const noShowCount = outcomeMap.get('No Show') ?? 0
     const cancelledCount = outcomeMap.get('Cancelled') ?? 0
-    const completionRate = total
-      ? parseFloat(((completedCount / total) * 100).toFixed(1))
+    const resolvedAppointments =
+      completedCount + noShowCount + cancelledCount
+    const completionRate = resolvedAppointments
+      ? parseFloat(
+          ((completedCount / resolvedAppointments) * 100).toFixed(1),
+        )
       : 0
-    const noShowRate = total
-      ? parseFloat(((noShowCount / total) * 100).toFixed(1))
+    const noShowRate = resolvedAppointments
+      ? parseFloat(((noShowCount / resolvedAppointments) * 100).toFixed(1))
       : 0
-    const cancellationRate = total
-      ? parseFloat(((cancelledCount / total) * 100).toFixed(1))
+    const cancellationRate = resolvedAppointments
+      ? parseFloat(((cancelledCount / resolvedAppointments) * 100).toFixed(1))
       : 0
+    const now = Date.now()
+    const overdueOpenAppointments = rows.filter(
+      (r: any) =>
+        new Date(r.appointmentAt).getTime() < now &&
+        ['PENDING', 'APPROVED', 'IN_CONSULTATION'].includes(
+          String(r.status).toUpperCase(),
+        ),
+    ).length
+    const upcomingAppointments = rows.filter(
+      (r: any) =>
+        new Date(r.appointmentAt).getTime() >= now &&
+        ['PENDING', 'APPROVED', 'IN_CONSULTATION'].includes(
+          String(r.status).toUpperCase(),
+        ),
+    ).length
 
     const hourMap = new Map<string, number>()
     for (const r of rows) {
@@ -306,7 +492,9 @@ export async function getAnalyticsStats(
         const dayOfWeek = (d.getUTCDay() + 6) % 7 // Mon=0
         const thursday = new Date(d)
         thursday.setUTCDate(d.getUTCDate() - dayOfWeek + 3)
-        const firstThursday = new Date(thursday.getUTCFullYear(), 0, 4)
+        const firstThursday = new Date(
+          Date.UTC(thursday.getUTCFullYear(), 0, 4),
+        )
         const weekNum =
           1 +
           Math.round(
@@ -315,7 +503,7 @@ export async function getAnalyticsStats(
               ((firstThursday.getUTCDay() + 6) % 7)) /
               7,
           )
-        const label = `W${String(weekNum).padStart(2, '0')} '${String(d.getUTCFullYear()).slice(2)}`
+        const label = `W${String(weekNum).padStart(2, '0')} '${String(thursday.getUTCFullYear()).slice(2)}`
         weekMap.set(label, (weekMap.get(label) ?? 0) + 1)
       }
     }
@@ -351,19 +539,21 @@ export async function getAnalyticsStats(
     // Most frequent patients, resolved from the patient record or the owner's profile.
     const visitMap = new Map<string, { name: string; visits: number; last: number }>()
     for (const r of rows) {
-      if (!r.userId) continue
-      const profile = (r as any).user?.profile
+      if (String(r.status).toUpperCase() !== 'COMPLETED') continue
+      const profile = r.user?.profile
       const name =
-        (r as any).patient?.name ||
+        r.familyMember?.name ||
+        r.patient?.name ||
         [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim() ||
         'Unnamed patient'
       const at = r.appointmentAt ? new Date(r.appointmentAt).getTime() : 0
-      const entry = visitMap.get(r.userId)
+      const owner = analyticsPersonKey(r)
+      const entry = visitMap.get(owner)
       if (entry) {
         entry.visits += 1
         entry.last = Math.max(entry.last, at)
       } else {
-        visitMap.set(r.userId, { name, visits: 1, last: at })
+        visitMap.set(owner, { name, visits: 1, last: at })
       }
     }
     const topPatients = [...visitMap.values()]
@@ -397,69 +587,60 @@ export async function getAnalyticsStats(
         completed: v.completed,
         noShow: v.noShow,
         cancelled: v.cancelled,
-        completionRate: v.total
-          ? parseFloat(((v.completed / v.total) * 100).toFixed(1))
+        completionRate: v.completed + v.noShow + v.cancelled
+          ? parseFloat(
+              ((v.completed / (v.completed + v.noShow + v.cancelled)) * 100).toFixed(1),
+            )
           : 0,
       }))
       .sort((a, b) => b.total - a.total)
 
     const patientMix = { newPatients: 0, returningPatients: 0 }
-    if (total > 0) {
-      try {
-        const earliest = new Map<string, Date>()
-        for (const r of rows) {
-          if (!r.userId || !r.appointmentAt) continue
-          const at = new Date(r.appointmentAt)
-          const cur = earliest.get(r.userId)
-          if (!cur || at < cur) earliest.set(r.userId, at)
-        }
-        const ids = [...earliest.keys()]
-        if (ids.length > 0) {
-          const before = await (prisma as any).appointment.groupBy({
-            by: ['userId'],
-            where: {
-              userId: { in: ids },
-              appointmentAt: { lt: where.appointmentAt?.gte ?? new Date() },
-            },
-            _count: { _all: true },
-          })
-          const seenBefore = new Set(before.map((b: any) => b.userId))
-          for (const id of ids) {
-            if (seenBefore.has(id)) patientMix.returningPatients += 1
-            else patientMix.newPatients += 1
-          }
-        }
-      } catch (mixErr) {
-        console.error('[getAnalyticsStats | patientMix | Error]:', mixErr)
+    const patientVisitCounts = new Map<string, number>()
+    for (const r of rows) {
+      if (String(r.status).toUpperCase() !== 'COMPLETED') continue
+      const owner = analyticsPersonKey(r)
+      patientVisitCounts.set(owner, (patientVisitCounts.get(owner) ?? 0) + 1)
+    }
+    for (const [owner, count] of patientVisitCounts) {
+      if (count > 1) {
+        patientMix.returningPatients++
+      } else {
+        patientMix.newPatients++
       }
     }
 
-    // Sex breakdown per top-5 services. Distinct patients with visits in the
-    // window only: a patient with several visits counts once per service
-    // rather than once per appointment (per the same visits-only rule the
-    // age-group chart uses). `patientId` is authoritative, so family-member
-    // visits resolve to the member's own identity instead of the booking
-    // account, and overlapping appointment/patient records collapse here.
+    // Demographic breakdowns use completed encounters and count each patient
+    // once per service, independent of account or linked patient-record IDs.
     const sexServiceMap = new Map<string, { male: number; female: number }>()
     const seenSexPatients = new Set<string>()
+    const seenSexPeople = new Set<string>()
+    const sexTotals = { male: 0, female: 0 }
     for (const r of rows) {
-      const owner =
-        String(r.patientId ?? r.familyMemberId ?? r.userId ?? '').trim() ||
-        String(r.patient?.patientid ?? '').trim()
-      if (!owner) continue
-      if (seenSexPatients.has(owner)) continue
-      seenSexPatients.add(owner)
+      if (String(r.status).toUpperCase() !== 'COMPLETED') continue
       const name = r.service?.name ?? 'Others'
-      const sex = String(r.patient?.sex ?? '').toLowerCase()
+      const person = analyticsPersonKey(r)
+      const servicePerson = `${name}||${person}`
+      if (!person || seenSexPatients.has(servicePerson)) continue
+      const sex = String(
+        r.patient?.sex ?? r.familyMember?.sex ?? r.user?.profile?.sex ?? '',
+      )
+        .trim()
+        .toLowerCase()
+      if (!['male', 'm', 'female', 'f'].includes(sex)) continue
+      seenSexPatients.add(servicePerson)
       const entry = sexServiceMap.get(name) ?? { male: 0, female: 0 }
-      if (sex === 'male' || sex === 'm') entry.male++
-      else if (sex === 'female' || sex === 'f') entry.female++
+      const sexKey = sex === 'male' || sex === 'm' ? 'male' : 'female'
+      entry[sexKey]++
       sexServiceMap.set(name, entry)
+      if (!seenSexPeople.has(person)) {
+        seenSexPeople.add(person)
+        sexTotals[sexKey]++
+      }
     }
     const sexByService = [...sexServiceMap.entries()]
       .map(([service, counts]) => ({ service, ...counts }))
       .sort((a, b) => b.male + b.female - (a.male + a.female))
-      .slice(0, 6)
 
     // Disease / case statistics from medical history records in the range
     let diseases: AnalyticsBreakdown[] = []
@@ -468,7 +649,17 @@ export async function getAnalyticsStats(
     let immunization: AnalyticsBreakdown[] = []
 
     try {
-      const mhWhere: any = withDateWindow({}, 'checkedDate', window)
+      const mhWhere: any =
+        window.start && window.end
+          ? {
+              appointment: {
+                is: {
+                  ...withDateWindow({}, 'appointmentAt', window),
+                  status: 'COMPLETED',
+                },
+              },
+            }
+          : { appointment: { is: { status: 'COMPLETED' } } }
 
       const cases = await (prisma as any).medicalHistory.findMany({
         where: mhWhere,
@@ -479,30 +670,6 @@ export async function getAnalyticsStats(
           respiratoryRate: true,
           temperature: true,
           oxygenLevel: true,
-          // Immunization fields
-          immBcg: true,
-          immHepab24: true,
-          immHepab24plus: true,
-          immPenta1: true,
-          immPenta2: true,
-          immPenta3: true,
-          immOpv1: true,
-          immOpv2: true,
-          immOpv3: true,
-          immRota1: true,
-          immRota2: true,
-          immPcv1: true,
-          immPcv2: true,
-          immPcv3: true,
-          immMcv1: true,
-          immMcv2: true,
-          immHepab2: true,
-          immHepab3: true,
-          immHepaa: true,
-          immPneumonia: true,
-          immInfluenza: true,
-          immOthers: true,
-          appointment: { select: { service: { select: { name: true } } } },
         },
       })
 
@@ -511,11 +678,7 @@ export async function getAnalyticsStats(
       const diseaseMap = new Map<string, number>()
       let categorized = 0
       for (const c of cases) {
-        const label = classifyMedicalCase(
-          c.diagnosis,
-          c.bloodPressure,
-          c.appointment?.service?.name,
-        )
+        const label = classifyMedicalCase(c.diagnosis, c.bloodPressure)
         if (!label) continue
         categorized += 1
         diseaseMap.set(label, (diseaseMap.get(label) ?? 0) + 1)
@@ -588,35 +751,18 @@ export async function getAnalyticsStats(
             }
           : null
 
-      // Immunization coverage count
-      const immFields: { key: string; label: string }[] = [
-        { key: 'immBcg', label: 'BCG' },
-        { key: 'immHepab24', label: 'HepB (birth dose)' },
-        { key: 'immHepab24plus', label: 'HepB (24h+)' },
-        { key: 'immPenta1', label: 'Penta 1' },
-        { key: 'immPenta2', label: 'Penta 2' },
-        { key: 'immPenta3', label: 'Penta 3' },
-        { key: 'immOpv1', label: 'OPV 1' },
-        { key: 'immOpv2', label: 'OPV 2' },
-        { key: 'immOpv3', label: 'OPV 3' },
-        { key: 'immRota1', label: 'Rota 1' },
-        { key: 'immRota2', label: 'Rota 2' },
-        { key: 'immPcv1', label: 'PCV 1' },
-        { key: 'immPcv2', label: 'PCV 2' },
-        { key: 'immPcv3', label: 'PCV 3' },
-        { key: 'immMcv1', label: 'MCV 1' },
-        { key: 'immMcv2', label: 'MCV 2' },
-        { key: 'immHepab2', label: 'HepB 2' },
-        { key: 'immHepab3', label: 'HepB 3' },
-        { key: 'immHepaa', label: 'HepA' },
-        { key: 'immPneumonia', label: 'Pneumonia' },
-        { key: 'immInfluenza', label: 'Influenza' },
-        { key: 'immOthers', label: 'Others' },
-      ]
+      // Immunization activity is dated by the administered dose, not the
+      // patient's appointment or the date the record was entered.
+      const immunizationRows = await (prisma as any).medicalHistory.findMany({
+        where: immunizationDateWhere(window),
+        select: Object.fromEntries(
+          IMMUNIZATION_FIELDS.map(({ key }) => [key, true]),
+        ),
+      })
       const immCounts = new Map<string, number>()
-      for (const c of cases) {
-        for (const { key, label } of immFields) {
-          if ((c as any)[key]) {
+      for (const c of immunizationRows) {
+        for (const { key, label } of IMMUNIZATION_FIELDS) {
+          if (isDateInWindow((c as any)[key], window)) {
             immCounts.set(label, (immCounts.get(label) ?? 0) + 1)
           }
         }
@@ -634,23 +780,19 @@ export async function getAnalyticsStats(
       const seenBtPatients = new Set<string>()
       const btCounts = new Map<string, number>()
       for (const r of rows) {
-        const patient = r.patient
-        const sexKey =
-          String(patient?.sex ?? '').trim().toUpperCase()
-        const personName = patient?.name ?? ''
-        const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
-        const owner =
-          String(r.patientId ?? r.familyMemberId ?? r.userId ?? '').trim() ||
-          String(
-            patient?.patientid ??
-            r.familyMemberId ??
-            `${sexKey}||${nameKey}`,
-          ).trim()
-        if (!owner) continue
+        if (String(r.status).toUpperCase() !== 'COMPLETED') continue
+        const owner = analyticsPersonKey(r)
         if (seenBtPatients.has(owner)) continue
-        seenBtPatients.add(owner)
-        const bt = String(r.patient?.bloodType ?? '').trim().toUpperCase()
+        const bt = String(
+          r.patient?.bloodType ??
+            r.familyMember?.bloodType ??
+            r.user?.profile?.bloodType ??
+            '',
+        )
+          .trim()
+          .toUpperCase()
         if (!bt) continue
+        seenBtPatients.add(owner)
         btCounts.set(bt, (btCounts.get(bt) ?? 0) + 1)
       }
       bloodTypes = [...btCounts.entries()]
@@ -666,14 +808,25 @@ export async function getAnalyticsStats(
       const ageGroupMap = new Map<string, number>()
       for (const label of AGE_GROUP_ORDER) ageGroupMap.set(label, 0)
       const ageAppointments = await (prisma as any).appointment.findMany({
-        where,
+        where: { ...where, status: 'COMPLETED' },
+        orderBy: { appointmentAt: 'desc' },
         select: {
+          appointmentid: true,
           patientId: true,
           familyMemberId: true,
           userId: true,
-          patient: { select: { patientid: true, birthdate: true, name: true, sex: true } },
+          patient: {
+            select: {
+              patientid: true,
+              familyMemberId: true,
+              birthdate: true,
+              name: true,
+              sex: true,
+            },
+          },
           familyMember: { select: { familymemberid: true, birthdate: true, name: true, sex: true } },
           user: { select: { profile: { select: { firstName: true, lastName: true, birthdate: true, sex: true } } } },
+          appointmentAt: true,
         },
       })
       for (const appt of ageAppointments) {
@@ -682,25 +835,15 @@ export async function getAnalyticsStats(
         const profile = appt.user?.profile ?? null
         const birthdate = patient?.birthdate ?? member?.birthdate ?? profile?.birthdate ?? null
         if (!birthdate) continue
-        const isoDob = new Date(birthdate).toISOString().slice(0, 10)
-        const personName =
-          member?.name ??
-          patient?.name ??
-          `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
-        const sexKey = String(member?.sex ?? patient?.sex ?? profile?.sex ?? '').trim().toUpperCase()
-        const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
-        const owner =
-          String(appt.patientId ?? appt.familyMemberId ?? appt.userId ?? '').trim() ||
-          String(
-            patient?.patientid ??
-            member?.familymemberid ??
-            `${sexKey}||${nameKey}||${isoDob}`
-          ).trim()
+        const owner = analyticsPersonKey(appt)
         if (!owner) continue
         if (seenAgePatients.has(owner)) continue
-        seenAgePatients.add(owner)
-        const age = computeAge(birthdate)
+        const age = computeAge(
+          birthdate,
+          appt.appointmentAt ? new Date(appt.appointmentAt) : new Date(),
+        )
         if (age !== null) {
+          seenAgePatients.add(owner)
           const label = ageGroupLabel(age)
           ageGroupMap.set(label, (ageGroupMap.get(label) ?? 0) + 1)
         }
@@ -717,7 +860,12 @@ export async function getAnalyticsStats(
     let pwdStats: AnalyticsStats['pwdStats'] = null
     try {
       const profiles = await (prisma as any).userProfile.findMany({
-        select: { validIdType: true, membershipType: true, isPwd: true },
+        select: {
+          validIdType: true,
+          membershipType: true,
+          isPwd: true,
+          birthdate: true,
+        },
       })
       const totalProfiles = profiles.length
       let pwdCount = 0
@@ -733,7 +881,11 @@ export async function getAnalyticsStats(
           membership.includes('pwd')
         )
           pwdCount++
-        if (idType.includes('senior') || membership.includes('senior'))
+        if (
+          idType.includes('senior') ||
+          membership.includes('senior') ||
+          computeAge(p.birthdate) >= 60
+        )
           seniorCount++
       }
       pwdStats = {
@@ -759,7 +911,7 @@ export async function getAnalyticsStats(
         rangeLabel,
         total,
         walkIns,
-        resident,
+        bookings,
         repeatVisits,
         serviceShare,
         reasons,
@@ -770,6 +922,7 @@ export async function getAnalyticsStats(
         vitals,
         immunization,
         sexByService,
+        sexTotals,
         completionRate,
         noShowRate,
         cancellationRate,
@@ -782,6 +935,19 @@ export async function getAnalyticsStats(
         topPatients,
         serviceMatrix,
         patientMix,
+        resolvedAppointments,
+        overdueOpenAppointments,
+        upcomingAppointments,
+        previousPeriodTotal,
+        appointmentChangePct:
+          previousPeriodTotal === null || previousPeriodTotal === 0
+            ? null
+            : parseFloat(
+                (
+                  ((total - previousPeriodTotal) / previousPeriodTotal) *
+                  100
+                ).toFixed(1),
+              ),
       } satisfies AnalyticsStats,
     }
   } catch (error) {
@@ -861,7 +1027,10 @@ export async function getAnalyticsSectionRows(
 
   try {
     const appointments = await (prisma as any).appointment.findMany({
-      where: withDateWindow({}, 'appointmentAt', window),
+      where:
+        section === 'immunization'
+          ? { medicalHistory: { is: immunizationDateWhere(window) } }
+          : withDateWindow({}, 'appointmentAt', window),
       select: {
         appointmentid: true,
         appointmentAt: true,
@@ -875,6 +1044,7 @@ export async function getAnalyticsSectionRows(
         patient: {
           select: {
             patientid: true,
+            familyMemberId: true,
             name: true,
             birthdate: true,
             sex: true,
@@ -926,6 +1096,7 @@ export async function getAnalyticsSectionRows(
             bloodType: true,
             religion: true,
             phone: true,
+            isPwd: true,
             houseNumber: true,
             purok: true,
             barangay: true,
@@ -936,7 +1107,16 @@ export async function getAnalyticsSectionRows(
           },
         },
         medicalHistory: {
-          select: { diagnosis: true, bloodPressure: true, checkedBy: { select: { firstName: true, lastName: true } } },
+          select: {
+            diagnosis: true,
+            bloodPressure: true,
+            ...Object.fromEntries(
+              IMMUNIZATION_FIELDS.map(({ key }) => [key, true]),
+            ),
+            checkedBy: {
+              select: { firstName: true, lastName: true },
+            },
+          },
         },
       },
       orderBy: { appointmentAt: 'desc' },
@@ -945,6 +1125,7 @@ export async function getAnalyticsSectionRows(
     const outcomeLabels: Record<string, string> = {
       PENDING: 'Pending',
       APPROVED: 'Approved',
+      IN_CONSULTATION: 'In Consultation',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
       NO_SHOW: 'No Show',
@@ -952,25 +1133,8 @@ export async function getAnalyticsSectionRows(
 
     const visitCounts = new Map<string, number>()
     for (const a of appointments) {
-      const patient = a.patient
-      const member = a.familyMember
-      const profile = a.user?.profile
-      const sexKey =
-        String(patient?.sex ?? member?.sex ?? profile?.sex ?? '').trim().toUpperCase()
-      const personName =
-        member?.name ??
-        patient?.name ??
-        `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
-      const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
-      const isoDob = patient?.birthdate ?? member?.birthdate ?? profile?.birthdate ?? null
-      const dobStamp = isoDob ? new Date(isoDob).toISOString().slice(0, 10) : null
-      const owner =
-        String(a.patientId ?? a.familyMemberId ?? a.userId ?? '').trim() ||
-        String(
-          patient?.patientid ??
-          member?.familymemberid ??
-          `${sexKey}||${nameKey}||${dobStamp}`,
-        ).trim()
+      if (String(a.status).toUpperCase() !== 'COMPLETED') continue
+      const owner = analyticsPersonKey(a)
       visitCounts.set(owner, (visitCounts.get(owner) ?? 0) + 1)
     }
 
@@ -999,22 +1163,13 @@ export async function getAnalyticsSectionRows(
         'Unnamed patient'
       const birthdate =
         patient?.birthdate ?? member?.birthdate ?? profile?.birthdate ?? null
-      const age = computeAge(birthdate ? new Date(birthdate) : null)
-      const sexKey =
-        String(patient?.sex ?? member?.sex ?? profile?.sex ?? '').trim().toUpperCase()
-      const personName =
-        member?.name ?? patient?.name ?? `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
-      const nameKey = personName.trim().toLowerCase().replace(/\s+/g, ' ')
-      const isoDob = birthdate ? new Date(birthdate).toISOString().slice(0, 10) : null
+      const age = computeAge(
+        birthdate ? new Date(birthdate) : null,
+        new Date(a.appointmentAt),
+      )
       const statusKey = String(a.status ?? '').toUpperCase()
       const outcome = outcomeLabels[statusKey] ?? statusKey
-      const owner =
-        String(a.patientId ?? a.familyMemberId ?? a.userId ?? '').trim() ||
-        String(
-          patient?.patientid ??
-          member?.familymemberid ??
-          `${sexKey}||${nameKey}||${isoDob}`
-        ).trim()
+      const owner = analyticsPersonKey(a)
       const idType = String(profile?.validIdType ?? '').toLowerCase()
       const membership = String(profile?.membershipType ?? '').toLowerCase()
 
@@ -1077,7 +1232,7 @@ export async function getAnalyticsSectionRows(
         service,
         reason: reasonFromService(service),
         outcome,
-        disease: classifyMedicalCase(mh?.diagnosis, mh?.bloodPressure, service),
+        disease: classifyMedicalCase(mh?.diagnosis, mh?.bloodPressure),
         ageGroup: age === null ? null : ageGroupLabel(age),
         hour: a.appointmentAt
           ? `${String(new Date(a.appointmentAt).getUTCHours()).padStart(2, '0')}:00`
@@ -1091,6 +1246,7 @@ export async function getAnalyticsSectionRows(
         source: String(a.source ?? '').trim().toUpperCase(),
         visits: visitCounts.get(owner) ?? 1,
         isPwd:
+          member?.isPwd === true ||
           profile?.isPwd === true ||
           idType.includes('pwd') ||
           membership.includes('pwd'),
@@ -1098,6 +1254,12 @@ export async function getAnalyticsSectionRows(
           idType.includes('senior') ||
           membership.includes('senior') ||
           (age !== null && age >= 60),
+        immunizations: IMMUNIZATION_FIELDS.filter(({ key }) =>
+          isDateInWindow(mh?.[key] ?? null, window),
+        ).map(({ key, label }) => ({
+          label,
+          date: new Date(mh[key]).toISOString(),
+        })),
         owner,
       }
     })
@@ -1107,10 +1269,29 @@ export async function getAnalyticsSectionRows(
     const eq = (value: unknown) => !!label && norm(value) === norm(label)
 
     const matches = (r: (typeof mapped)[number]) => {
-      if (section === 'repeatVisits') return r.visits > 1
+      if (section === 'repeatVisits')
+        return r.outcome === 'Completed' && r.visits > 1
       if (section === 'walkIns') return r.source === 'WALK_IN'
       if (section === 'pwd') return r.isPwd
       if (section === 'senior') return r.isSenior
+      if (
+        ['ageGroups', 'bloodTypes', 'diseases', 'sexByService'].includes(section) &&
+        r.outcome !== 'Completed'
+      ) {
+        return false
+      }
+      if (section === 'sexByService') {
+        const sex = String(r.sex).trim().toLowerCase()
+        if (sex !== 'male' && sex !== 'm' && sex !== 'female' && sex !== 'f')
+          return false
+        if (!label) return true
+        if (norm(label) === 'male' || norm(label) === 'female')
+          return sex === norm(label) || sex === norm(label[0])
+        return norm(r.service) === norm(label)
+      }
+      if (section === 'bloodTypes') {
+        return Boolean(r.bloodType) && (!label || eq(r.bloodType))
+      }
       if (!label) return true
       switch (section) {
         case 'serviceShare':
@@ -1126,30 +1307,83 @@ export async function getAnalyticsSectionRows(
           return norm(r.ageGroup) === norm(label)
         case 'diseases':
           return norm(r.disease) === norm(label)
-        case 'sexByService':
-          if (norm(label) === 'male' || norm(label) === 'female')
-            return norm(r.sex) === norm(label)
-          return norm(r.service) === norm(label)
         case 'immunization':
-          return norm(r.service).includes('immuniz') || norm(r.service).includes('vaccin')
-        case 'bloodTypes':
-          return eq(r.bloodType)
+          return label
+            ? r.immunizations.some(
+                (dose: { label: string }) => norm(dose.label) === norm(label),
+              )
+            : r.immunizations.length > 0
         default:
           return false
       }
     }
 
-    const filtered = mapped.filter(matches)
+    const isSexCategory =
+      label !== null &&
+      ['male', 'female'].includes(String(label).trim().toLowerCase())
+    const uniqueSexPeople = new Map<
+      string,
+      (typeof mapped)[number]
+    >()
+    if (section === 'sexByService') {
+      for (const row of mapped) {
+        if (row.outcome !== 'Completed') continue
+        const sex = String(row.sex).trim().toLowerCase()
+        if (!['male', 'm', 'female', 'f'].includes(sex)) continue
+        if (!uniqueSexPeople.has(row.owner)) uniqueSexPeople.set(row.owner, row)
+      }
+    }
+    const sourceRows =
+      section === 'sexByService' && (!label || isSexCategory)
+        ? [...uniqueSexPeople.values()]
+        : mapped
+    const filtered = sourceRows.filter(matches)
+    const sectionRecords: Array<
+      (typeof mapped)[number] & { detailCategory?: string }
+    > =
+      section === 'immunization'
+        ? filtered.flatMap((r) =>
+            r.immunizations.map(
+              (immunization: { label: string; date: string }) => ({
+              ...r,
+              key: `${r.key}:${immunization.label}`,
+              service: `${r.service} · ${immunization.label}`,
+              detailCategory: immunization.label,
+              date: immunization.date,
+            })),
+          )
+        : filtered
 
+    const deduplicateByPerson = [
+      'ageGroups',
+      'bloodTypes',
+      'repeatVisits',
+      'pwd',
+      'senior',
+    ].includes(section)
     const seen = new Set<string>()
-    const deduplicated = filtered.filter((r) => {
-      if (seen.has(r.owner)) return false
-      seen.add(r.owner)
-      return true
-    })
+    const deduplicated =
+      section === 'sexByService'
+        ? sectionRecords.filter((r) => {
+            const key =
+              !label || isSexCategory
+                ? r.owner
+                : `${r.service}||${r.owner}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+        : deduplicateByPerson
+      ? sectionRecords.filter((r) => {
+          if (seen.has(r.owner)) return false
+          seen.add(r.owner)
+          return true
+        })
+      : sectionRecords
 
     const rows: AnalyticsDetailRow[] = deduplicated.slice(0, DETAIL_LIMIT).map((r) => ({
       key: r.key,
+      appointmentRef: r.appointmentRef,
       patientName: r.patientName,
       relation: r.relation,
       age: r.age,
@@ -1165,7 +1399,9 @@ export async function getAnalyticsSectionRows(
       reason: r.reason,
       outcome: r.outcome,
       category:
-        section === 'diseases'
+        section === 'immunization'
+          ? r.detailCategory ?? ''
+          : section === 'diseases'
           ? (r.disease ?? '')
           : section === 'ageGroups'
             ? (r.ageGroup ?? '')
@@ -1216,23 +1452,18 @@ export async function getAnalyticsYears(): Promise<{
     return { success: false, message: 'Unauthorized', years: [] }
   }
 
-  const currentYear = new Date().getFullYear()
+  const currentYear = new Date().getUTCFullYear()
 
   try {
     const bounds = await (prisma as any).appointment.aggregate({
       _min: { appointmentAt: true },
-      _max: { appointmentAt: true },
     })
 
     const min = bounds?._min?.appointmentAt
-      ? new Date(bounds._min.appointmentAt).getFullYear()
+      ? new Date(bounds._min.appointmentAt).getUTCFullYear()
       : currentYear
-    const max = bounds?._max?.appointmentAt
-      ? new Date(bounds._max.appointmentAt).getFullYear()
-      : currentYear
-
     const first = Math.max(Math.min(min, currentYear), currentYear - 11)
-    const last = Math.max(max, currentYear)
+    const last = currentYear
 
     const years: number[] = []
     for (let y = last; y >= first; y--) years.push(y)

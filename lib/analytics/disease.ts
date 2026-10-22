@@ -88,13 +88,8 @@ const DISEASE_RULES: Array<{ label: string; keywords: string[] }> = [
 export function classifyMedicalCase(
   diagnosis?: string | null,
   bp?: string | null,
-  serviceName?: string | null,
 ): string | null {
   const text = String(diagnosis ?? '').toLowerCase()
-  const service = String(serviceName ?? '').toLowerCase()
-  if (service.includes('vaccin') || service.includes('immuniz')) {
-    return 'Immunization / Vaccination'
-  }
   for (const rule of DISEASE_RULES) {
     if (rule.keywords.some((k) => text.includes(k))) return rule.label
   }

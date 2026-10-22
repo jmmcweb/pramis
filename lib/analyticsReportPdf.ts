@@ -774,12 +774,17 @@ const renderAnalyticsReport = (
   doc.addPage()
   y = M
 
+  const outcomeCount = (label: string) =>
+    stats.outcomes.find((outcome) => outcome.label === label)?.count ?? 0
+  const completedCount = outcomeCount('Completed')
+  const noShowCount = outcomeCount('No Show')
+  const cancelledCount = outcomeCount('Cancelled')
+
   if (has('summary')) {
     sectionHeading('Key performance indicators', 'summary')
 
-    const repeatRate = stats.total ? stats.repeatVisits / stats.total : 0
+    const repeatRate = completedCount ? stats.repeatVisits / completedCount : 0
     const walkInRate = stats.total ? stats.walkIns / stats.total : 0
-
     kpiGrid([
       {
         label: 'Total appointments',
@@ -789,26 +794,30 @@ const renderAnalyticsReport = (
       },
       {
         label: 'Completion rate',
-        value: `${stats.completionRate}%`,
-        sub: 'of appointments',
+        value: stats.resolvedAppointments
+          ? `${stats.completionRate}%`
+          : '—',
+        sub: `${nf(completedCount)} of ${nf(stats.resolvedAppointments)} finalized`,
         color: [16, 185, 129],
       },
       {
         label: 'No-show rate',
-        value: `${stats.noShowRate}%`,
-        sub: 'of appointments',
+        value: stats.resolvedAppointments ? `${stats.noShowRate}%` : '—',
+        sub: `${nf(noShowCount)} of ${nf(stats.resolvedAppointments)} finalized`,
         color: [239, 68, 68],
       },
       {
         label: 'Cancellation rate',
-        value: `${stats.cancellationRate}%`,
-        sub: 'of appointments',
+        value: stats.resolvedAppointments
+          ? `${stats.cancellationRate}%`
+          : '—',
+        sub: `${nf(cancelledCount)} of ${nf(stats.resolvedAppointments)} finalized`,
         color: [245, 158, 11],
       },
       {
-        label: 'Repeat visits',
+        label: 'Repeat appointments',
         value: nf(stats.repeatVisits),
-        sub: `${(repeatRate * 100).toFixed(0)}% return rate`,
+        sub: `${(repeatRate * 100).toFixed(0)}% of completed visits after first visit in period`,
         color: [236, 72, 153],
       },
       {
@@ -818,9 +827,9 @@ const renderAnalyticsReport = (
         color: [14, 165, 233],
       },
       {
-        label: 'Residents',
-        value: nf(stats.resident),
-        sub: `${nf(Math.max(stats.total - stats.walkIns, 0))} non-walk-in`,
+        label: 'Bookings',
+        value: nf(stats.bookings),
+        sub: 'non-walk-in appointments',
         color: [139, 92, 246],
       },
       {
@@ -834,17 +843,17 @@ const renderAnalyticsReport = (
     const mix = stats.patientMix
     const mixTotal = mix.newPatients + mix.returningPatients
     if (mixTotal > 0) {
-      subHeading('Patient mix (new vs returning)')
+      subHeading('Patient visit frequency within the selected period')
       simpleTable(
         ['Segment', 'Patients', 'Share'],
         [
           [
-            'New patients',
+            'Single-visit patients',
             nf(mix.newPatients),
             `${pct(mix.newPatients, mixTotal).toFixed(1)}%`,
           ],
           [
-            'Returning patients',
+            'Repeat patients',
             nf(mix.returningPatients),
             `${pct(mix.returningPatients, mixTotal).toFixed(1)}%`,
           ],
@@ -881,27 +890,39 @@ const renderAnalyticsReport = (
         ? `averaging ${(stats.total / activeDayCount).toFixed(1)} per active day`
         : `averaging ${stats.total} in total`
       const share = (n: number) => `${pct(n, stats.total).toFixed(1)}% of appointments`
-      const completed =
-        stats.outcomes.find((o) => o.label.toLowerCase() === 'completed')?.count ?? 0
       const males = stats.sexByService.reduce((s, r) => s + r.male, 0)
       const females = stats.sexByService.reduce((s, r) => s + r.female, 0)
       const doses = stats.immunization.reduce((s, i) => s + i.count, 0)
       const bloodTypeKnown = stats.bloodTypes.reduce((s, b) => s + b.count, 0)
+      const volumeComparison =
+        stats.previousPeriodTotal === null
+          ? ''
+          : stats.previousPeriodTotal === 0
+            ? ' The previous comparable period had no appointments.'
+            : ` Appointment volume changed by ${stats.appointmentChangePct?.toFixed(1) ?? '0.0'}% from the previous comparable period (${nf(stats.previousPeriodTotal)} appointments).`
 
       noteBlock(
         'Volume.',
-        `${nf(stats.total)} appointments were recorded for ${meta.rangeLabel}, ${perDay}. Of these, ${nf(stats.walkIns)} were walk-ins (${pct(stats.walkIns, stats.total).toFixed(1)}%) and ${nf(stats.resident)} were recorded as residents.`,
+        `${nf(stats.total)} appointments were recorded for ${meta.rangeLabel}, ${perDay}. Of these, ${nf(stats.walkIns)} were walk-ins (${pct(stats.walkIns, stats.total).toFixed(1)}%) and ${nf(stats.bookings)} were non-walk-in appointments.${volumeComparison}`,
       )
       noteBlock(
         'Attendance.',
-        `${stats.completionRate}% of appointments were completed (${nf(completed)}), against a no-show rate of ${stats.noShowRate}% and a cancellation rate of ${stats.cancellationRate}%.`,
+        stats.resolvedAppointments
+          ? `${stats.completionRate}% of finalized appointments were completed (${nf(completedCount)} of ${nf(stats.resolvedAppointments)}), with a no-show rate of ${stats.noShowRate}% (${nf(noShowCount)}) and a cancellation rate of ${stats.cancellationRate}% (${nf(cancelledCount)}).`
+          : 'No finalized appointment outcomes were recorded in this period, so completion, no-show, and cancellation rates are unavailable.',
       )
+      if (stats.overdueOpenAppointments > 0) {
+        noteBlock(
+          'Follow-up.',
+          `${nf(stats.overdueOpenAppointments)} past appointments remain marked pending, approved, or in consultation and may need record reconciliation.`,
+        )
+      }
       if (topService) {
         noteBlock(
           'Demand.',
           `${topService.label} was the most requested service with ${nf(topService.count)} visits (${share(topService.count)})${
             topReason
-              ? `; the leading reason for visit was ${topReason.label.toLowerCase()} with ${nf(topReason.count)}`
+              ? `; the leading inferred service category was ${topReason.label.toLowerCase()} with ${nf(topReason.count)} appointments`
               : ''
           }.`,
         )
@@ -926,7 +947,7 @@ const renderAnalyticsReport = (
       if (topDisease) {
         noteBlock(
           'Case mix.',
-          `${nf(stats.diseaseCases)} visits carried a classified medical condition; the most frequent was ${topDisease.label} (${nf(topDisease.count)}, ${pct(topDisease.count, stats.diseaseCases || 1).toFixed(1)}% of cases).${
+          `${nf(stats.diseaseCases)} visits were grouped into classified medical-case categories based on diagnosis terms and/or elevated blood-pressure readings; these are not confirmed diagnoses. The most frequent category was ${topDisease.label} (${nf(topDisease.count)}, ${pct(topDisease.count, stats.diseaseCases || 1).toFixed(1)}% of cases).${
             stats.vitals && stats.vitals.hypertensionCount > 0
               ? ` Hypertension was flagged on ${nf(stats.vitals.hypertensionCount)} visits (${stats.vitals.hypertensionPct}% of records with vitals).`
               : ''
@@ -936,25 +957,25 @@ const renderAnalyticsReport = (
       if (topAge) {
         const sexNote =
           males + females > 0
-            ? ` Across the six busiest services, recorded sex was ${nf(males)} male and ${nf(females)} female.`
+            ? ` Across all services, recorded sex was ${nf(males)} male and ${nf(females)} female patient-service records.`
             : ''
         const pwdNote = stats.pwdStats
-          ? ` The registered caseload holds ${nf(stats.pwdStats.total)} persons with disability (${stats.pwdStats.pct}%) and ${nf(stats.pwdStats.seniorCitizens)} senior citizens (${stats.pwdStats.seniorPct}%).`
+          ? ` Registered user profiles include ${nf(stats.pwdStats.total)} persons with disability (${stats.pwdStats.pct}%) and ${nf(stats.pwdStats.seniorCitizens)} senior citizens (${stats.pwdStats.seniorPct}%).`
           : ''
         noteBlock(
           'Catchment.',
-          `Across the patient register, the largest age group is ${topAge.label} years with ${nf(topAge.count)} patients.${sexNote}${pwdNote} These demographic counts cover the whole register rather than the reporting period.`,
+          `Among patients seen during the reporting period, the largest age group is ${topAge.label} years with ${nf(topAge.count)} patients.${sexNote}${pwdNote} The registered user-profile totals cover all profiles rather than only those seen during the reporting period.`,
         )
       }
       noteBlock(
         'Continuity of care.',
-        `${nf(stats.repeatVisits)} visits (${pct(stats.repeatVisits, stats.total).toFixed(1)}%) came from patients returning within the period${
+        `${nf(stats.repeatVisits)} completed appointments (${pct(stats.repeatVisits, completedCount).toFixed(1)}% of completed visits) were repeat visits after a patient's first visit in the period${
           topPatient ? `; the most frequent patient made ${nf(topPatient.visits)} visits, last seen ${topPatient.lastVisit}` : ''
         }.`,
       )
       noteBlock(
         'Data completeness.',
-      `${doses} immunization doses were recorded in the period; ${nf(stats.vitals?.totalWithVitals ?? 0)} visits carried a blood-pressure reading for the vital-sign averages. Blood type is held on ${nf(bloodTypeKnown)} patient records in total. A blank or missing section means the field was not captured, not that the count was zero.`,
+      `${doses} immunization doses were recorded in the period; ${nf(stats.vitals?.totalWithVitals ?? 0)} visits carried a blood-pressure reading for the vital-sign averages. Among patients with completed visits in the period, ${nf(bloodTypeKnown)} have a blood type currently on record. A blank or missing section means the field was not captured, not that the count was zero.`,
     )
     }
   }
@@ -969,11 +990,11 @@ const renderAnalyticsReport = (
   }
 
   if (has('reasons')) {
-    sectionHeading('Top appointment reasons', 'reasons')
+    sectionHeading('Service categories', 'reasons')
     if (stats.reasons.length > 0) {
       breakdown(stats.reasons, stats.total)
     } else {
-      noData('No appointment reasons recorded for the selected period.')
+      noData('No service-category data available for the selected period.')
     }
   }
 
@@ -1017,6 +1038,9 @@ const renderAnalyticsReport = (
   if (has('ageGroups')) {
     sectionHeading('Age group distribution', 'ageGroups')
     caption(
+      'Unique patients with completed visits, grouped by age at their latest visit in the reporting period.',
+    )
+    caption(
       'Total of Patients per Age Group',
     )
     const ageTotal = stats.ageGroups.reduce((s, g) => s + g.count, 0)
@@ -1028,7 +1052,10 @@ const renderAnalyticsReport = (
   }
 
   if (has('diseases')) {
-    sectionHeading('Disease / case reports', 'diseases')
+    sectionHeading('Case categories', 'diseases')
+    caption(
+      'Categories are inferred from recorded diagnosis terms and elevated blood-pressure readings; they are not confirmed diagnoses.',
+    )
     if (stats.diseaseCases > 0 && stats.diseases.length > 0) {
       breakdown(stats.diseases, stats.diseaseCases)
     } else {
@@ -1039,7 +1066,7 @@ const renderAnalyticsReport = (
   if (has('sexByService')) {
     sectionHeading('Sex by service', 'sexByService')
     caption(
-      'Six busiest services in the period; the sex shown is the one recorded on the patient record.',
+      'Unique patients with completed visits per service; a patient may be counted once in each service.',
     )
     if (stats.sexByService.length > 0) {
       tableCaption('Patients by sex for the busiest services')
@@ -1084,7 +1111,7 @@ const renderAnalyticsReport = (
   if (has('bloodTypes')) {
     sectionHeading('Blood type distribution', 'bloodTypes')
     caption(
-      'Patient register basis: blood type is held once per patient, so this shows the current caseload rather than visits during the period.',
+      'Unique patients with completed visits during the reporting period, grouped by the blood type currently on record.',
     )
     const btTotal = stats.bloodTypes.reduce((s, b) => s + b.count, 0)
     if (btTotal > 0) {
@@ -1128,7 +1155,7 @@ const renderAnalyticsReport = (
   if (has('pwdStats')) {
     sectionHeading('PWD & senior citizen overview', 'pwdStats')
     caption(
-      'Patient register basis: counts cover all registered profiles, not only those seen during the period.',
+      'Registered user-profile basis: counts cover all profiles, not only those seen during the period.',
     )
     if (stats.pwdStats) {
       simpleTable(
@@ -1463,4 +1490,3 @@ export const generateAnalyticsReportPdf = (
   const today = new Date().toISOString().slice(0, 10)
   doc.save(`analytics-report-${slug}-${today}.pdf`)
 }
-

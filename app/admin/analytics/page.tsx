@@ -67,7 +67,7 @@ export default function AnalyticsPage() {
 }
 
 function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
-  const currentYear = new Date().getFullYear()
+  const currentYear = new Date().getUTCFullYear()
   const [rangeKey, setRangeKey] = useState<AnalyticsRangeKey>('1M')
   const [year, setYear] = useState<number>(currentYear)
   const [years, setYears] = useState<number[]>([currentYear])
@@ -299,9 +299,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
     ),
   }))
 
-  const walkIns = stats?.walkIns ?? 0
-  const walkInRate = total ? walkIns / total : 0
-  const repeatRate = total ? (stats?.repeatVisits ?? 0) / total : 0
+  const patientCount =
+    (stats?.patientMix.newPatients ?? 0) +
+    (stats?.patientMix.returningPatients ?? 0)
+  const returningPatientRate = patientCount
+    ? (stats?.patientMix.returningPatients ?? 0) / patientCount
+    : 0
 
   const ageGroupsTotal = (stats?.ageGroups ?? []).reduce(
     (sum, group) => sum + group.count,
@@ -324,10 +327,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
   const immunizationData = buildData(stats?.immunization ?? [])
   const immunizationTotal = sumCounts(immunizationData)
 
-  const sexTotals = (stats?.sexByService ?? []).reduce(
-    (acc, s) => ({ male: acc.male + s.male, female: acc.female + s.female }),
-    { male: 0, female: 0 },
-  )
+  const sexTotals = stats?.sexTotals ?? { male: 0, female: 0 }
   const sexTotal = sexTotals.male + sexTotals.female
   const sexShare = (n: number) =>
     sexTotal > 0 ? parseFloat(((n / sexTotal) * 100).toFixed(1)) : 0
@@ -350,23 +350,26 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
       onView: () => openDetails('serviceShare'),
     },
     {
-      label: 'Completed',
-      value: `${stats?.completionRate ?? 0}%`,
-      sub: 'completion rate',
+      label: 'Completion rate',
+      value:
+        stats?.resolvedAppointments
+          ? `${stats.completionRate}%`
+          : '—',
+      sub: `${fmt(stats?.resolvedAppointments ?? 0)} finalized appointments`,
       color: '#10B981',
       onView: () => openDetails('outcomes', 'Completed'),
     },
     {
-      label: 'No-Shows',
-      value: `${stats?.noShowRate ?? 0}%`,
-      sub: 'of appointments',
+      label: 'No-show rate',
+      value: stats?.resolvedAppointments ? `${stats.noShowRate}%` : '—',
+      sub: 'of finalized appointments',
       color: '#EF4444',
       onView: () => openDetails('outcomes', 'No Show'),
     },
     {
-      label: 'Repeat Visits',
-      value: fmt(stats?.repeatVisits ?? 0),
-      sub: `${(repeatRate * 100).toFixed(0)}% return rate`,
+      label: 'Repeat Patients',
+      value: fmt(stats?.patientMix.returningPatients ?? 0),
+      sub: `${(returningPatientRate * 100).toFixed(0)}% of patients seen`,
       color: '#EC4899',
       onView: () => openDetails('repeatVisits'),
     },
@@ -597,7 +600,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
               <div className={`${card} p-6`}>
                 <CardHeader
                   darkMode={darkMode}
-                  title="Top appointment reasons"
+                  title="Service categories"
                   titleClass={title}
                   onView={() => openDetails('reasons')}
                 />
@@ -614,8 +617,8 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                   <EmptyState
                     darkMode={darkMode}
                     icon="chart"
-                    title="No reasons recorded"
-                    text="No appointment reason data available."
+                    title="No categories recorded"
+                    text="No service data available."
                   />
                 )}
               </div>
@@ -690,6 +693,9 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     titleClass={title}
                     onView={() => openDetails('ageGroups')}
                   />
+                <p className={`${sub} mt-1`}>
+                  Unique patients; age at latest visit.
+                </p>
 
                 {ageGroupsData.some((g) => g.count > 0) ? (
                   <PieBreakdown
@@ -725,12 +731,12 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                   <div>
                     <CardHeader
                     darkMode={darkMode}
-                    title="Disease / case reports"
+                    title="Case categories"
                     titleClass={title}
                     onView={() => openDetails('diseases')}
                   />
                     <p className={`${sub} mt-1`}>
-                      Most commonly recorded cases in the {rangeLabel}.
+                      Grouped from recorded diagnosis terms and elevated blood-pressure readings; these are not confirmed diagnoses.
                     </p>
                   </div>
                   <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
@@ -766,11 +772,10 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     darkMode={darkMode}
                     title="PWD & senior citizen overview"
                     titleClass={title}
-                    onView={() => openDetails('pwd')}
                   />
                   <p className={`${sub} mt-1 mb-5`}>
-                    Registered PWD and senior citizens accounted for in the{' '}
-                    {rangeLabel}.
+                    Current totals across registered user profiles; these are
+                    not limited to the selected appointment period.
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -780,7 +785,6 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                       value={stats.pwdStats.total}
                       pct={`${stats.pwdStats.pct}% of users`}
                       color="#4E69D3"
-                      onView={() => openDetails('pwd')}
                     />
                     <ProfileStat
                       darkMode={darkMode}
@@ -788,7 +792,6 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                       value={stats.pwdStats.seniorCitizens}
                       pct={`${stats.pwdStats.seniorPct}% of users`}
                       color="#F59E0B"
-                      onView={() => openDetails('senior')}
                     />
                   </div>
                 </div>
@@ -826,6 +829,9 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     titleClass={title}
                     onView={() => openDetails('sexByService')}
                   />
+                <p className={`${sub} mt-1`}>
+                  Unique patients; service totals may overlap.
+                </p>
 
                 {(stats?.sexByService ?? []).length > 0 ? (
                   <PieBreakdown
@@ -847,7 +853,7 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                             darkMode ? 'text-gray-400' : 'text-gray-500'
                           }`}
                         >
-                          Patients by service
+                          By service
                         </p>
                         <div className="flex flex-col gap-1 max-h-[150px] overflow-y-auto pr-1">
                           {stats!.sexByService.map((s) => (
@@ -926,6 +932,9 @@ function AnalyticsSection({ darkMode }: { darkMode: boolean }) {
                     titleClass={title}
                     onView={() => openDetails('bloodTypes')}
                   />
+                <p className={`${sub} mt-1`}>
+                  Patients with completed visits in the selected period, using the blood type currently on record.
+                </p>
 
                 {bloodTypesData.length > 0 ? (
                   <PieBreakdown
@@ -1740,7 +1749,11 @@ function DecisionSupport({
   const cancellationRate = stats?.cancellationRate ?? 0
   const completionRate = stats?.completionRate ?? 0
   const walkIns = stats?.walkIns ?? 0
-  const repeatVisits = stats?.repeatVisits ?? 0
+  const resolvedAppointments = stats?.resolvedAppointments ?? 0
+  const previousPeriodTotal = stats?.previousPeriodTotal ?? null
+  const appointmentChangePct = stats?.appointmentChangePct ?? null
+  const overdueOpenAppointments = stats?.overdueOpenAppointments ?? 0
+  const smallOutcomeSample = resolvedAppointments < 20
 
   const topService = [...(stats?.serviceShare ?? [])].sort(
     (a, b) => b.count - a.count,
@@ -1761,54 +1774,81 @@ function DecisionSupport({
   const indicators: Indicator[] = [
     {
       label: "No-show rate",
-      value: `${noShowRate.toFixed(1)}%`,
+      value: resolvedAppointments ? `${noShowRate.toFixed(1)}%` : "—",
       detail:
-        noShowRate >= 15
-          ? "High missed-appointment level; review reminder and scheduling practices."
-          : noShowRate >= 8
-            ? "Monitor missed appointments and consider improving reminders."
-            : "Within the current monitoring threshold.",
+        !resolvedAppointments
+          ? "No finalized appointment outcomes are available for this period."
+          : smallOutcomeSample
+            ? `Based on ${resolvedAppointments} finalized appointments; interpret this small sample cautiously.`
+            : noShowRate >= 15
+              ? "Above the 15% monitoring threshold; review reminder and scheduling practices."
+              : noShowRate >= 8
+                ? "Above the 8% watch threshold; monitor reminders and scheduling."
+                : "Below the dashboard's 8% watch threshold.",
       status:
-        noShowRate >= 15
-          ? "attention"
-          : noShowRate >= 8
-            ? "watch"
-            : "normal",
+        !resolvedAppointments || smallOutcomeSample
+          ? "watch"
+          : noShowRate >= 15
+            ? "attention"
+            : noShowRate >= 8
+              ? "watch"
+              : "normal",
       onView: () => onView("outcomes", "No Show"),
     },
     {
       label: "Cancellation rate",
-      value: `${cancellationRate.toFixed(1)}%`,
+      value: resolvedAppointments ? `${cancellationRate.toFixed(1)}%` : "—",
       detail:
-        cancellationRate >= 15
-          ? "High cancellation level; review cancellation reasons and slot utilization."
-          : cancellationRate >= 8
-            ? "Monitor cancellations for recurring scheduling issues."
-            : "Within the current monitoring threshold.",
+        !resolvedAppointments
+          ? "No finalized appointment outcomes are available for this period."
+          : smallOutcomeSample
+            ? `Based on ${resolvedAppointments} finalized appointments; interpret this small sample cautiously.`
+            : cancellationRate >= 15
+              ? "Above the 15% monitoring threshold; review cancellation patterns and slot utilization."
+              : cancellationRate >= 8
+                ? "Above the 8% watch threshold; monitor cancellation patterns."
+                : "Below the dashboard's 8% watch threshold.",
       status:
-        cancellationRate >= 15
-          ? "attention"
-          : cancellationRate >= 8
-            ? "watch"
-            : "normal",
+        !resolvedAppointments || smallOutcomeSample
+          ? "watch"
+          : cancellationRate >= 15
+            ? "attention"
+            : cancellationRate >= 8
+              ? "watch"
+              : "normal",
       onView: () => onView("outcomes", "Cancelled"),
     },
     {
       label: "Completion rate",
-      value: `${completionRate.toFixed(1)}%`,
+      value: resolvedAppointments ? `${completionRate.toFixed(1)}%` : "—",
       detail:
-        completionRate < 70
-          ? "Low completion level; review pending, cancelled, and missed appointments."
-          : completionRate < 85
-            ? "Monitor appointment completion and follow-up."
-            : "Appointment completion is currently high.",
+        !resolvedAppointments
+          ? "No finalized appointment outcomes are available for this period."
+          : smallOutcomeSample
+            ? `Based on ${resolvedAppointments} finalized appointments; interpret this small sample cautiously.`
+            : completionRate < 70
+              ? "Below the 70% monitoring threshold; review follow-up and barriers to attendance."
+              : completionRate < 85
+                ? "Below the 85% watch threshold; monitor follow-up and completion."
+                : "At or above the dashboard's 85% monitoring threshold.",
       status:
-        completionRate < 70
-          ? "attention"
-          : completionRate < 85
-            ? "watch"
-            : "normal",
+        !resolvedAppointments || smallOutcomeSample
+          ? "watch"
+          : completionRate < 70
+            ? "attention"
+            : completionRate < 85
+              ? "watch"
+              : "normal",
       onView: () => onView("outcomes", "Completed"),
+    },
+    {
+      label: "Past appointments still open",
+      value: overdueOpenAppointments.toLocaleString(),
+      detail:
+        overdueOpenAppointments > 0
+          ? "Review past appointments still marked pending, approved, or in consultation."
+          : "No past appointments remain in an open status.",
+      status: overdueOpenAppointments > 0 ? "attention" : "normal",
     },
     {
       label: "Walk-in share",
@@ -1827,6 +1867,19 @@ function DecisionSupport({
 
   const demandSignals: SignalRow[] = [
     {
+      label: "Appointment volume vs prior period",
+      value:
+        previousPeriodTotal === null
+          ? "Comparison unavailable"
+          : appointmentChangePct === null
+            ? `${total.toLocaleString()} vs ${previousPeriodTotal.toLocaleString()} (no baseline)`
+            : `${appointmentChangePct > 0 ? "+" : ""}${appointmentChangePct.toFixed(1)}% (${total.toLocaleString()} vs ${previousPeriodTotal.toLocaleString()})`,
+    },
+    {
+      label: "Upcoming open appointments",
+      value: (stats?.upcomingAppointments ?? 0).toLocaleString(),
+    },
+    {
       label: "Most used service",
       value: topService
         ? `${topService.label} (${topService.count.toLocaleString()})`
@@ -1836,7 +1889,7 @@ function DecisionSupport({
         : undefined,
     },
     {
-      label: "Most common appointment reason",
+      label: "Top service category",
       value: topReason
         ? `${topReason.label} (${topReason.count.toLocaleString()})`
         : "No data",
@@ -1853,7 +1906,7 @@ function DecisionSupport({
 
   const healthSignals: SignalRow[] = [
     {
-      label: "Most recorded condition",
+      label: "Top case category",
       value: topDisease
         ? `${topDisease.label} (${topDisease.count.toLocaleString()})`
         : "No case data",
@@ -1866,9 +1919,12 @@ function DecisionSupport({
         (stats?.diseaseCases ?? 0) > 0 ? () => onView("diseases") : undefined,
     },
     {
-      label: "Repeat visits",
-      value: repeatVisits.toLocaleString(),
-      onView: repeatVisits > 0 ? () => onView("repeatVisits") : undefined,
+      label: "Repeat patients in period",
+      value: (stats?.patientMix.returningPatients ?? 0).toLocaleString(),
+      onView:
+        (stats?.patientMix.returningPatients ?? 0) > 0
+          ? () => onView("repeatVisits")
+          : undefined,
     },
   ]
 
@@ -1880,7 +1936,7 @@ function DecisionSupport({
             Decision support
           </h3>
           <p className={`m-0 text-[14px] mt-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-            Automated indicators for the {rangeLabel}. These are not medical diagnoses.
+            Outcomes use finalized appointments; small samples are flagged. Thresholds are operational prompts, not medical diagnoses or facility-specific targets.
           </p>
         </div>
         <button
@@ -1995,7 +2051,7 @@ type Indicator = {
   detail: string
   status: "attention" | "watch" | "normal"
   /** Drill-down to the patients behind this indicator. */
-  onView: () => void
+  onView?: () => void
 }
 
 function IndicatorTable({
@@ -2082,15 +2138,21 @@ function IndicatorTable({
               {row.detail}
             </td>
             <td className={`${td} text-right`}>
-              <button
-                type="button"
-                onClick={row.onView}
-                className={`text-[11px] font-bold whitespace-nowrap hover:underline cursor-pointer p-0 border-0 bg-transparent ${
-                  darkMode ? "text-[#8FA5F5]" : "text-[#4E69D3]"
-                }`}
-              >
-                View details
-              </button>
+              {row.onView ? (
+                <button
+                  type="button"
+                  onClick={row.onView}
+                  className={`text-[11px] font-bold whitespace-nowrap hover:underline cursor-pointer p-0 border-0 bg-transparent ${
+                    darkMode ? "text-[#8FA5F5]" : "text-[#4E69D3]"
+                  }`}
+                >
+                  View details
+                </button>
+              ) : (
+                <span className={`text-[11px] ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
+                  —
+                </span>
+              )}
             </td>
           </tr>
         ))}
@@ -2154,7 +2216,7 @@ function PieBreakdown({
               onMouseLeave={() => setHovered(null)}
               onClick={() => onSelect?.(o)}
             >
-              <title>{`View patients for ${o.label}`}</title>
+              <title>{`View details for ${o.label}`}</title>
             </circle>
           )
           acc += len
