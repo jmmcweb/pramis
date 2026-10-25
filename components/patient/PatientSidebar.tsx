@@ -24,9 +24,9 @@ export default function PatientSidebar() {
   const { darkMode } = useDarkMode()
 
   return (
-    <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-[360px] flex-col bg-card border-r border-line shadow-[10px_0_30px_rgb(15_88_139/0.1)] dark:shadow-[10px_0_30px_rgb(0_0_0/0.4)]">
-      <div className="px-5 pt-8 pb-6 border-b border-line bg-gradient-to-b from-surface/60 to-transparent">
-        <div className="scale-[1.2]">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[288px] flex-col border-r border-line bg-card shadow-sm lg:flex">
+      <div className="border-b border-line px-5 py-6">
+        <div>
           <MediTrackBrand compact />
         </div>
       </div>
@@ -43,7 +43,7 @@ export default function PatientSidebar() {
               key={item.key}
               href={item.href}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex items-center gap-3 px-5 py-4 rounded-xl transition-colors ${
+              className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 ${
                 isActive
                   ? 'bg-brand-tint text-brand font-bold shadow-sm'
                   : 'text-body hover:bg-brand-tint hover:text-brand'

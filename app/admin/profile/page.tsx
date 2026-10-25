@@ -139,7 +139,6 @@ export default function ProfilePage() {
   return (
     <div>
       <div className="flex items-center justify-between my-[18px]">
-        <h1 className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} text-left m-0`}>My Profile</h1>
         {!editing ? (
           <button
             className="flex items-center gap-2 bg-[#4E69D3] text-white px-5 py-2.5 rounded-md text-sm font-semibold border-none cursor-pointer hover:bg-[#3D56B8] transition-colors"

@@ -67,13 +67,13 @@ export default function Homepage() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 my-4 mb-7">
         <div>
-          <h1
+          <h2
             className={`text-[36px] sm:text-[48px] lg:text-[56px] font-bold ${
               darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'
             } leading-tight text-left`}
           >
             {greeting}
-          </h1>
+          </h2>
           <p
             className={`text-base font-medium mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
           >

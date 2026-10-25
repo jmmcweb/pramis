@@ -22,7 +22,7 @@ export default function PatientBottomNavigation() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur border-t border-line shadow-[0_-4px_20px_rgb(15_88_139/0.06)] dark:shadow-[0_-4px_20px_rgb(0_0_0/0.45)] lg:hidden"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-line bg-card/95 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-4px_20px_rgb(15_88_139/0.06)] backdrop-blur-lg dark:shadow-[0_-4px_20px_rgb(0_0_0/0.45)] lg:hidden"
     >
       <div className="max-w-md mx-auto grid grid-cols-4 py-2 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl">
         {items.map((item) => {
@@ -36,7 +36,7 @@ export default function PatientBottomNavigation() {
               key={item.key}
               href={item.href}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex flex-col items-center gap-1 py-1.5 rounded-xl transition-colors ${
+              className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
                 isActive ? 'text-brand' : 'text-muted hover:text-body'
               }`}
             >

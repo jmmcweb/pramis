@@ -32,11 +32,11 @@ export default function AuthShell({
   cardClassName,
 }: AuthShellProps) {
   return (
-    <div className="min-h-dvh flex flex-col lg:flex-row">
+    <div className="flex min-h-dvh flex-col bg-slate-50 lg:flex-row">
       <LeftPanel />
 
-      <div className="flex-1 relative z-10 bg-white lg:h-dvh lg:overflow-y-auto no-scrollbar shadow-[0_0_60px_rgba(107,114,128,0.25)] lg:shadow-[-14px_0_44px_-12px_rgba(107,114,128,0.3)]">
-        <div className="min-h-full flex flex-col items-center justify-center px-4 py-6 lg:py-5">
+      <div className="relative z-10 flex-1 bg-slate-50 lg:h-dvh lg:overflow-y-auto no-scrollbar">
+        <div className="flex min-h-full flex-col items-center justify-center px-4 py-6 sm:px-6 lg:py-8">
           <div
             className={`w-full flex flex-col ${cardClassName ?? 'max-w-md'}`}
             style={
@@ -44,7 +44,7 @@ export default function AuthShell({
             }
           >
             {(backHref || tab) && (
-              <div className="lg:sticky lg:top-0 z-20 flex flex-col bg-white rounded-lg pb-3">
+              <div className="z-20 flex flex-col rounded-xl bg-slate-50 pb-3 lg:sticky lg:top-0">
                 {backHref && (
                   <Link href={backHref} className="auth-back mb-3 self-start">
                     ← Back
@@ -54,17 +54,17 @@ export default function AuthShell({
                 {tab && (
                   <nav
                     aria-label="Account"
-                    className="flex bg-mist rounded-xl p-1 border border-line shadow-sm"
+                    className="flex rounded-xl border border-line bg-mist p-1"
                   >
                     {TABS.map(({ key, href, label }) => (
                       <Link
                         key={key}
                         href={href}
                         aria-current={tab === key ? 'page' : undefined}
-                        className={`flex-1 py-2.5 rounded-lg text-center transition-all duration-200 font-inter text-[14px] tracking-normal ${
+                        className={`flex min-h-11 flex-1 items-center justify-center rounded-lg text-center font-inter text-sm tracking-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                           tab === key
-                            ? 'bg-white text-brand shadow-sm font-bold'
-                            : 'text-slate font-normal opacity-40 hover:text-brand hover:opacity-100'
+                            ? 'bg-white font-semibold text-brand shadow-sm'
+                            : 'font-medium text-slate hover:bg-white/70 hover:text-brand'
                         }`}
                       >
                         {label}
@@ -77,14 +77,14 @@ export default function AuthShell({
 
             {step !== undefined && <HeartbeatProgress step={step} />}
 
-            <div className="font-inter bg-white border border-line rounded-2xl shadow-[0_10px_30px_-12px_rgba(15,88,139,0.18)] p-5 sm:p-6 md:p-8 w-full flex flex-col">
-              <h1 className="font-roboto text-[24px] sm:text-[26px] md:text-[28px] font-bold tracking-tight leading-tight text-ink">
+            <div className="flex w-full flex-col rounded-3xl border border-line bg-white p-5 shadow-card sm:p-7 md:p-8">
+              <h1 className="font-roboto text-2xl font-bold leading-tight tracking-tight text-ink sm:text-[26px] md:text-[28px]">
                 {title}
               </h1>
               <span className="mt-3 block h-[3px] w-12 rounded-full bg-brand" />
 
               {subtitle && (
-                <p className="font-inter text-[13px] leading-normal tracking-normal text-slate mt-4 max-w-full text-balance">
+                <p className="mt-4 max-w-full font-inter text-sm leading-relaxed tracking-normal text-slate">
                   {subtitle}
                 </p>
               )}
@@ -94,7 +94,7 @@ export default function AuthShell({
               </div>
 
               {footer && (
-                <div className="mt-5 pt-3 border-t border-line text-center text-[13.5px] text-slate shrink-0">
+                <div className="mt-5 shrink-0 border-t border-line pt-4 text-center text-sm text-slate">
                   {footer}
                 </div>
               )}

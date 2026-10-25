@@ -518,14 +518,7 @@ export default function AppointmentManagementClient({
 
   return (
     <div>
-      <div className="mb-5">
-      </div>
       <div className="flex items-center justify-between mb-[14px]">
-        <h1
-          className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 text-left`}
-        >
-          Appointment Management
-        </h1>
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setShowArchive(!showArchive)}
@@ -717,7 +710,7 @@ export default function AppointmentManagementClient({
                   >
                     <thead>
                       <tr
-                        className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}
+                        className={`${darkMode ? 'bg-[#111c30]' : 'bg-slate-100'}`}
                       >
                         <th
                           className={`px-6 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b w-[34%]`}

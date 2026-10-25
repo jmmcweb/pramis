@@ -39,7 +39,7 @@ export default function Home() {
       <div className="absolute inset-0 bg-black/60" />
 
       <header className="sticky top-0 z-20 bg-black/30 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-5 md:px-8 h-20 flex items-center justify-between">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:h-20 md:px-8">
           <div className="flex items-center gap-1.5">
             <img
               src="/logo.png"
@@ -59,7 +59,20 @@ export default function Home() {
               </span>
             </div>
           </div>
-          <div className="w-10" />
+          <nav aria-label="Account" className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-semibold text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              Log in
+            </Link>
+            <Link
+              href="/signup"
+              className="inline-flex min-h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-brand shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40"
+            >
+              Create account
+            </Link>
+          </nav>
         </div>
       </header>
 
@@ -68,44 +81,43 @@ export default function Home() {
           <div className="max-w-2xl text-left">
             <h1 className="text-4xl md:text-5xl xl:text-[3.4rem] font-bold leading-[1.15] text-white m-0">
               One Stop Solution For{' '}
-              <span className="text-[#a78bfa]">All Medical Needs</span>
+              <span className="text-sky-200">All Medical Needs</span>
             </h1>
             <p className="mt-6 text-base md:text-lg leading-relaxed text-white/80 max-w-xl">
-              Manage your clinic appointments, access your patient records, and
-              stay updated on clinic events here in Barangay Sumapang Matanda.
-              We offer vaccines, prenatal care, checkups, and more — all in
-              one platform that keeps you on track.
+              Manage clinic appointments, access health records, and stay
+              updated on community health events in Barangay Sumapang Matanda.
+              Find vaccines, prenatal care, checkups, and more in one place.
             </p>
             <Link
               href="/login"
-              className="mt-9 inline-flex items-center justify-center bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-bold text-base px-12 py-4 rounded-full w-full sm:w-auto transition-colors no-underline shadow-lg shadow-[#7c3aed]/30"
+              className="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-7 py-3 text-base font-semibold text-white no-underline shadow-lg shadow-brand/25 transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40 sm:w-auto"
             >
-              LOGIN
+              Log in to PRAMIS
             </Link>
           </div>
         </section>
 
-        <section className="bg-gradient-to-br from-violet-100 via-purple-100 to-fuchsia-100">
+        <section className="bg-slate-50">
           <div className="max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-20">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 m-0">
+            <div className="mb-12 text-center">
+              <h2 className="m-0 text-3xl font-bold text-slate-900 md:text-4xl">
                 Our Services
               </h2>
-              <p className="mt-3 text-slate-600 max-w-2xl mx-auto">
+              <p className="mx-auto mt-3 max-w-2xl text-slate-600">
                 From appointments and patient records to vaccines, prenatal
                 care, and community events — everything your health needs in
                 Barangay Sumapang Matanda.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
               {FEATURES.map((feature) => (
                 <div
                   key={feature.title}
-                  className="bg-white border border-purple-100 rounded-3xl p-7 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow"
+                  className="flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-tint">
                     <feature.icon
-                      className="w-8 h-8 text-purple-600"
+                      className="h-7 w-7 text-brand"
                       strokeWidth={2.2}
                     />
                   </div>

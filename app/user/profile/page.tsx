@@ -54,12 +54,12 @@ export default async function ProfilePage() {
   return (
     <>
       <section
-        className="min-h-dvh bg-cover bg-center bg-no-repeat lg:ml-[360px] bg-[url('/purplebackground.png')] dark:bg-none dark:bg-[#050617]"
+        className="min-h-dvh bg-slate-50 dark:bg-[#0b1220] lg:ml-[288px]"
       >
         <PatientHeader />
 
-        <div className="max-w-md mx-auto pb-32 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl">
-          <main className="px-4 pt-4 flex flex-col gap-5 lg:px-12 lg:pt-5">
+        <div className="mx-auto max-w-7xl pb-32">
+          <main className="flex flex-col gap-5 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6 xl:px-10">
             <div className="overflow-hidden rounded-[28px] border border-white/40 bg-gradient-to-br from-[#0b4a77] via-[#0f588b] to-[#3b82c4] shadow-card dark:border-white/10 dark:from-[#0d1b33] dark:via-[#12294d] dark:to-[#1b3a63]">
               <div className="relative px-5 pb-5 pt-6 sm:px-7 sm:pt-7">
                 <div
@@ -79,9 +79,9 @@ export default async function ProfilePage() {
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold tracking-widest text-white/90 backdrop-blur">
                         {profile?.referenceId || 'NO ID YET'}
                       </span>
-                      <h1 className="mt-1.5 truncate text-[26px] font-extrabold leading-tight text-white">
+                      <h2 className="mt-1.5 truncate text-[26px] font-extrabold leading-tight text-white">
                         {displayName}
-                      </h1>
+                      </h2>
                       <p className="mt-0.5 truncate text-[13px] font-medium text-white/75">
                         {[profile?.email, profile?.phoneNumber]
                           .filter(Boolean)

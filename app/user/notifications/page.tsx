@@ -27,11 +27,11 @@ export default async function NotificationsPage() {
   return (
     <>
       <section
-        className="min-h-dvh bg-cover bg-center bg-no-repeat lg:ml-[360px] bg-[url('/purplebackground.png')] dark:bg-none dark:bg-[#050617]"
+        className="min-h-dvh bg-slate-50 dark:bg-[#0b1220] lg:ml-[288px]"
       >
         <PatientHeader />
 
-        <div className="max-w-md mx-auto pb-32 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl lg:px-12 lg:pt-5">
+        <div className="mx-auto max-w-7xl px-4 pb-32 pt-4 sm:px-6 lg:px-8 lg:pt-6 xl:px-10">
           <NotificationCenter initialNotifications={result.notifications} />
         </div>
       </section>

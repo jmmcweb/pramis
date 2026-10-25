@@ -91,13 +91,7 @@ export default function AppointmentsScheduleClient({
     darkMode
       ? 'border-[rgba(255,255,255,0.10)]'
       : 'border-[rgba(15,60,95,0.08)]'
-  } p-4 sm:p-6 rounded-[24px] mb-7 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]`
-  const headingClass = `text-[26px] sm:text-[32px] lg:text-[40px] ${
-    darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'
-  } m-0 text-center`
-  const subheadingClass = `text-center text-[15px] m-0 mt-1 mb-[18px] ${
-    darkMode ? 'text-gray-400' : 'text-gray-500'
-  }`
+  } rounded-2xl p-4 shadow-sm sm:p-6`
 
   const renderActions = (a: ScheduleAppointmentView) => {
     if (busyId === a.id && isPending) {
@@ -112,7 +106,7 @@ export default function AppointmentsScheduleClient({
     switch (a.status) {
       case 'PENDING':
         return (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button className={btnGreen} onClick={() => approve(a)}>
               Approve
             </button>
@@ -126,7 +120,7 @@ export default function AppointmentsScheduleClient({
         )
       case 'APPROVED':
         return (
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-wrap gap-2">
             {/* Medstaff hands the visit to admin: IN_CONSULTATION surfaces in
                 admin for charting; only saving the record completes it. */}
             <button
@@ -149,7 +143,7 @@ export default function AppointmentsScheduleClient({
         )
       case 'IN_CONSULTATION':
         return (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span
               className={`text-xs font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
             >
@@ -162,7 +156,7 @@ export default function AppointmentsScheduleClient({
         )
       case 'COMPLETED':
         return (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button className={btnPrimary} onClick={() => setRecordFor(a)}>
               {a.hasMedicalRecord ? 'View/Edit Record' : 'Add Record'}
             </button>
@@ -183,23 +177,14 @@ export default function AppointmentsScheduleClient({
   }
 
   return (
-    <div>
-      <h1
-        className={`text-[30px] sm:text-[38px] lg:text-[45px] ${
-          darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'
-        } my-0 mb-[14px] text-left`}
-      >
-        Appointment Schedule
-      </h1>
-
+    <div className="flex flex-col gap-6 font-sans">
       {/* All Appointments */}
       <div className={cardClass}>
-        <h2 className={headingClass}>All Appointments</h2>
-        <p className={subheadingClass}>
-          {allAppointments.length} appointment
-          {allAppointments.length === 1 ? '' : 's'} found
-        </p>
-        <div className="flex justify-end mb-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className={`m-0 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            {allAppointments.length} appointment
+            {allAppointments.length === 1 ? '' : 's'} found
+          </p>
           <div className="relative flex items-center">
             <select
               value={statusFilter}
@@ -207,7 +192,7 @@ export default function AppointmentsScheduleClient({
                 setStatusFilter(e.target.value)
                 setAllPage(1)
               }}
-              className={`py-2.5 pl-3 pr-9 rounded-lg text-[14px] font-semibold outline-none appearance-none cursor-pointer border ${darkMode ? 'bg-[#0f1438] text-[#F9FAFB] border-white/15' : 'bg-white text-gray-700 border-gray-200'}`}
+              className={`w-full appearance-none rounded-lg border py-2.5 pl-3 pr-9 text-sm font-medium outline-none sm:w-auto ${darkMode ? 'bg-[#0f1438] text-[#F9FAFB] border-white/15' : 'bg-white text-gray-700 border-gray-200'}`}
             >
               <option value="ALL">All Status</option>
               <option value="PENDING">Pending</option>
@@ -234,27 +219,27 @@ export default function AppointmentsScheduleClient({
         >
           <div className="overflow-x-auto">
             <table
-              className="w-full border-collapse text-[16px] min-w-[920px]"
+              className="w-full min-w-[1200px] border-collapse text-sm"
               style={{ tableLayout: 'fixed' }}
             >
               <thead>
                 <tr className="bg-[#4E69D3]">
-                  <th className="px-6 py-4 text-left font-bold text-white text-[16px] uppercase tracking-[1px] font-poppins w-[24%]">
+                  <th className="w-[24%] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
                     Patient Name
                   </th>
-                  <th className="px-6 py-4 text-left font-bold text-white text-[16px] uppercase tracking-[1px] font-poppins w-[17%]">
+                  <th className="w-[15%] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
                     Service
                   </th>
-                  <th className="px-6 py-4 text-left font-bold text-white text-[16px] uppercase tracking-[1px] font-poppins w-[17%]">
+                  <th className="w-[22%] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
                     Date
                   </th>
-                  <th className="px-6 py-4 text-left font-bold text-white text-[16px] uppercase tracking-[1px] font-poppins w-[14%]">
+                  <th className="w-[10%] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
                     Time
                   </th>
-                  <th className="px-6 py-4 text-left font-bold text-white text-[16px] uppercase tracking-[1px] font-poppins w-[11%]">
+                  <th className="w-[12%] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-left font-bold text-white text-[16px] uppercase tracking-[1px] font-poppins w-[17%]">
+                  <th className="w-[17%] px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
                     Actions
                   </th>
                 </tr>
@@ -264,7 +249,7 @@ export default function AppointmentsScheduleClient({
                   <tr className={rowClass}>
                     <td
                       colSpan={6}
-                      className={`px-6 py-10 text-center text-[16px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                      className={`px-4 py-10 text-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                     >
                       No appointments found.
                     </td>
@@ -272,7 +257,7 @@ export default function AppointmentsScheduleClient({
                 ) : (
                   paginate(allAppointments, allPage).map((a) => (
                     <tr key={a.id} className={rowClass}>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3 overflow-hidden">
                           <div
                             className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${darkMode ? 'bg-[#4E69D3]/25 text-blue-200' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
@@ -281,14 +266,14 @@ export default function AppointmentsScheduleClient({
                           </div>
                           <div className="min-w-0">
                             <div
-                              className={`text-[16px] font-poppins font-semibold truncate ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                              className={`truncate text-sm font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                               title={a.patientName}
                             >
                               {a.patientName}
                             </div>
                             {a.patientReference && (
                               <div
-                                className={`text-[12px] font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}
+                                className={`truncate text-xs font-semibold ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}
                               >
                                 {a.patientReference}
                               </div>
@@ -297,24 +282,24 @@ export default function AppointmentsScheduleClient({
                         </div>
                       </td>
                       <td
-                        className={`px-6 py-4 text-[15px] font-medium truncate ${cellText}`}
+                        className={`truncate px-4 py-3 text-sm font-medium ${cellText}`}
                       >
                         {a.serviceName}
                       </td>
                       <td
-                        className={`px-6 py-4 text-[15px] font-medium whitespace-nowrap ${cellText}`}
+                        className={`px-4 py-3 text-sm font-medium ${cellText}`}
                       >
                         {a.dateLabel}
                       </td>
                       <td
-                        className={`px-6 py-4 text-[16px] font-medium whitespace-nowrap ${cellText}`}
+                        className={`whitespace-nowrap px-4 py-3 text-sm font-medium ${cellText}`}
                       >
                         {a.timeLabel}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <StatusBadge status={a.status} />
                       </td>
-                      <td className="px-6 py-4">{renderActions(a)}</td>
+                      <td className="px-4 py-3">{renderActions(a)}</td>
                     </tr>
                   ))
                 )}
@@ -355,7 +340,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       style={{ background: style.bg, color: style.color }}
-      className="inline-block px-3 py-1 rounded-full text-[12px] font-bold whitespace-nowrap"
+      className="inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold"
     >
       {status.replace('_', ' ')}
     </span>

@@ -311,20 +311,7 @@ export default function BackupClient({
         onConfirm={handleRestore}
       />
 
-      {/* The header doubles as the primary action: "Back up now" belongs next to
-          the title rather than in a panel of its own. */}
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1
-            className={cx(
-              'text-[30px] sm:text-[38px] lg:text-[45px] font-bold my-0 mb-[14px]',
-              darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]',
-            )}
-          >
-            Database Backup
-          </h1>
-        </div>
-
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <input
             type="text"

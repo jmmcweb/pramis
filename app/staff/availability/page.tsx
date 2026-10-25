@@ -9,13 +9,13 @@ export const metadata: Metadata = {
   description: 'Manage your day-level availability for patient appointments',
 }
 
-const STAFF_ROLES = ['SUPERADMIN', 'ADMIN', 'MEDSTAFF']
+const ADMIN_ROLES = ['SUPERADMIN', 'ADMIN']
 
 export default async function StaffAvailabilityPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect('/login')
 
-  if (!STAFF_ROLES.includes((session.user.role as string) ?? '')) {
+  if (!ADMIN_ROLES.includes((session.user.role as string) ?? '')) {
     redirect('/staff')
   }
 

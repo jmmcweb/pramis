@@ -15,7 +15,13 @@ import StaffStatusWatcher from '@/components/staff/StaffStatusWatcher'
 import { useLogoutConfirmation } from '@/components/ui/LogoutConfirmDialog'
 import type { PatientNotification } from '@/components/patient/notificationData'
 
-const navItems = [
+const navItems: {
+  href: string
+  label: string
+  icon: string
+  exact?: boolean
+  adminOnly?: boolean
+}[] = [
   { href: '/staff', label: 'Homepage', icon: '/icon-home.png', exact: true },
   {
     href: '/staff/appointmentmanagement',
@@ -31,6 +37,7 @@ const navItems = [
     href: '/staff/availability',
     label: 'My Availability',
     icon: '/care.png',
+    adminOnly: true,
   },
   { href: '/staff/events', label: 'Events', icon: '/icon-events.png' },
   { href: '/staff/services', label: 'Services', icon: '/icon-services.png' },
@@ -70,6 +77,11 @@ function getInitials(name?: string | null): string {
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const currentPage = navItems.find((item) =>
+    item.exact
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(`${item.href}/`),
+  )
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -83,20 +95,23 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`flex min-h-screen ${darkMode ? 'bg-gradient-to-b from-[#050617] to-[#050617]' : 'bg-gradient-to-b from-violet-300 to-white'}`}
+      className={`flex min-h-screen ${darkMode ? 'bg-[#0b1220]' : 'bg-slate-50'}`}
     >
       <StaffStatusWatcher />
       <style>{`
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #e0e0e0; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb { background: #aaa; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #888; }
-        * { scrollbar-width: thin; scrollbar-color: #aaa #e0e0e0; }
+        ::-webkit-scrollbar-track { background: ${darkMode ? '#111c30' : '#f1f5f9'}; border-radius: 6px; }
+        ::-webkit-scrollbar-thumb { background: ${darkMode ? '#475569' : '#cbd5e1'}; border-radius: 6px; }
+        ::-webkit-scrollbar-thumb:hover { background: ${darkMode ? '#64748b' : '#94a3b8'}; border-radius: 6px; }
+        * { scrollbar-width: thin; scrollbar-color: ${darkMode ? '#475569 #111c30' : '#cbd5e1 #f1f5f9'}; }
       `}</style>
       <aside
-        className={`hidden lg:flex w-[360px] ${darkMode ? 'bg-[#050617] border-[rgba(255,255,255,0.08)]' : 'bg-[#F9F9F9] border-[rgba(15,60,95,0.12)]'} border-r fixed top-0 left-0 h-screen flex-col gap-5 pt-8 pb-6 px-5 shadow-[0_24px_60px_rgba(15,60,95,0.12)] overflow-hidden`}
+        className={`fixed left-0 top-0 hidden h-screen w-[288px] flex-col gap-5 overflow-hidden border-r px-4 pb-6 pt-6 shadow-sm lg:flex ${darkMode ? 'border-white/10 bg-[#0b1220]' : 'border-slate-200 bg-white'}`}
       >
-        <SidebarContent darkMode={darkMode} />
+        <SidebarContent
+          darkMode={darkMode}
+          isAdmin={['SUPERADMIN', 'ADMIN'].includes(session?.user?.role ?? '')}
+        />
       </aside>
 
       {sidebarOpen && (
@@ -106,77 +121,92 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             onClick={() => setSidebarOpen(false)}
           />
           <aside
-            className={`absolute left-0 top-0 h-full w-[300px] ${darkMode ? 'bg-[#050617] border-[rgba(255,255,255,0.08)]' : 'bg-[#F9F9F9] border-[rgba(15,60,95,0.12)]'} border-r flex flex-col gap-5 pt-8 pb-6 px-5 shadow-[0_24px_60px_rgba(15,60,95,0.25)] overflow-y-auto animate-[slideIn_0.2s_ease]`}
+            className={`absolute left-0 top-0 flex h-full w-[288px] flex-col gap-5 overflow-y-auto border-r px-4 pb-6 pt-6 shadow-xl animate-[slideIn_0.2s_ease] ${darkMode ? 'border-white/10 bg-[#0b1220]' : 'border-slate-200 bg-white'}`}
           >
             <SidebarContent
               darkMode={darkMode}
+              isAdmin={['SUPERADMIN', 'ADMIN'].includes(session?.user?.role ?? '')}
               onNavigate={() => setSidebarOpen(false)}
             />
           </aside>
         </div>
       )}
 
-      <main className="flex-1 lg:ml-[360px] flex flex-col min-w-0">
-        <div
-          className={`flex items-center justify-between gap-3 pl-4 lg:pl-7 pr-2 lg:pr-0 py-4 lg:py-5 ${darkMode ? 'bg-[rgba(45,27,78,0.65)]' : 'bg-white/65'}`}
+      <main className="flex min-w-0 flex-1 flex-col lg:ml-[288px]">
+        <header
+          className={`sticky top-0 z-30 border-b backdrop-blur-lg ${darkMode ? 'border-white/10 bg-[#111c30]/95' : 'border-slate-200/80 bg-white/90'}`}
         >
-          <button
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open menu"
-            className="lg:hidden w-10 h-10 flex items-center justify-center rounded-lg border-none bg-transparent text-[#5a6b76] cursor-pointer"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="w-6 h-6"
-            >
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <div className="flex-1" />
-          <div className="flex items-center gap-3 text-[18px] text-[#5a6b76] pr-2">
-            <button
-              onClick={() => {
-                if (!notifOpen) refresh()
-                setNotifOpen(!notifOpen)
-                setProfileOpen(false)
-              }}
-              className="relative"
-            >
-              <img
-                src="/icon-notification.png"
-                alt="Notifications"
-                className="w-7 h-7 object-contain"
-              />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setProfileOpen(!profileOpen)
-                setNotifOpen(false)
-              }}
-              className="w-9 h-9 rounded-full bg-[#2ea3e6] text-white flex items-center justify-center font-bold text-sm overflow-hidden"
-            >
-              {photo ? (
+          <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open menu"
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 lg:hidden ${darkMode ? 'border-white/10 bg-white/5 text-slate-200' : 'border-slate-200 bg-white text-slate-600'}`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
+              <h1
+                className={`truncate text-base font-semibold ${darkMode ? 'text-slate-100' : 'text-slate-800'}`}
+              >
+                {currentPage?.label ?? 'PRAMIS'}
+              </h1>
+            </div>
+            <div className={`flex shrink-0 items-center gap-3 text-base ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+              <button
+                onClick={() => {
+                  if (!notifOpen) refresh()
+                  setNotifOpen(!notifOpen)
+                  setProfileOpen(false)
+                }}
+                aria-label="Open notifications"
+                aria-expanded={notifOpen}
+                className={`relative flex h-10 w-10 items-center justify-center rounded-xl border transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 ${darkMode ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+              >
                 <img
-                  src={photo}
+                  src="/icon-notification.png"
                   alt=""
-                  className="w-full h-full object-cover"
+                  aria-hidden="true"
+                  className="h-5 w-5 object-contain"
                 />
-              ) : (
-                getInitials(session?.user?.name) || 'MS'
-              )}
-            </button>
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setProfileOpen(!profileOpen)
+                  setNotifOpen(false)
+                }}
+                aria-label="Open profile menu"
+                aria-expanded={profileOpen}
+                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-brand text-sm font-semibold text-white shadow-sm ring-2 ring-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/30"
+              >
+                {photo ? (
+                  <img
+                    src={photo}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  getInitials(session?.user?.name) || 'MS'
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        </header>
 
         {notifOpen && (
           <NotificationDropdown
@@ -196,9 +226,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         {logoutDialog}
 
         <div
-          className={`flex-1 px-4 sm:px-6 lg:px-12 pt-5 pb-12 ${darkMode ? 'bg-[#050617]/40' : ''}`}
+          className={`min-w-0 flex-1 px-4 pb-10 pt-5 sm:px-6 ${darkMode ? 'bg-[#0b1220]' : 'bg-slate-50'}`}
         >
-          <div className="w-full max-w-full overflow-x-hidden">{children}</div>
+          <div className="mx-auto w-full max-w-7xl overflow-x-hidden lg:pt-2">
+            {children}
+          </div>
         </div>
       </main>
     </div>
@@ -207,9 +239,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
 function SidebarContent({
   darkMode,
+  isAdmin,
   onNavigate,
 }: {
   darkMode: boolean
+  isAdmin: boolean
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
@@ -225,11 +259,11 @@ function SidebarContent({
           />
         </div>
         <div className="flex flex-col items-end justify-center min-w-0 w-fit">
-          <h1
+          <p
             className={`font-bebas text-[36px] lg:text-[50px] leading-none tracking-[0.03em] m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
           >
             PRAMIS
-          </h1>
+          </p>
           <p
             className={`w-full flex justify-between font-asap text-[11px] lg:text-[15px] tracking-normal leading-none whitespace-nowrap mt-1 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#0F588B]'}`}
           >
@@ -247,32 +281,36 @@ function SidebarContent({
           Menu
         </p>
         <ul className="list-none p-0 m-0 flex flex-col gap-1">
-          {navItems.map((item) => {
-            const isActive = item.exact
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + '/')
-            return (
-              <li
-                key={item.href}
-                className={`rounded-[12px] transition-colors duration-300 ${isActive ? (darkMode ? 'bg-[#2d1b4e]' : 'bg-[#ddd6fe]') : darkMode ? 'hover:bg-[#050617]/50' : 'hover:bg-[#E8E8E8]/50'}`}
-              >
-                <Link
-                  href={item.href}
-                  onClick={() => onNavigate?.()}
-                  className={`flex items-center gap-3.5 px-5 py-4 no-underline font-poppins text-[16px] text-left truncate ${isActive ? (darkMode ? 'text-white font-bold' : 'text-[#4E69D3] font-bold') : darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43] font-normal'}`}
+          {navItems
+            .filter((item) => !item.adminOnly || isAdmin)
+            .map((item) => {
+              const isActive = item.exact
+                ? pathname === item.href
+                : pathname === item.href ||
+                  pathname.startsWith(item.href + '/')
+              return (
+                <li
+                  key={item.href}
+                  className={`rounded-xl transition-colors ${isActive ? (darkMode ? 'bg-sky-400/10' : 'bg-brand-tint') : darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'}`}
                 >
-                  <span className="inline-flex items-center justify-center w-7 h-7 flex-shrink-0">
-                    <img
-                      src={item.icon}
-                      alt=""
-                      className="w-6 h-6 object-contain"
-                    />
-                  </span>
-                  {item.label}
-                </Link>
-              </li>
-            )
-          })}
+                  <Link
+                    href={item.href}
+                    onClick={() => onNavigate?.()}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm no-underline transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand/20 ${isActive ? (darkMode ? 'font-semibold text-sky-200' : 'font-semibold text-brand') : darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-brand'}`}
+                  >
+                    <span className="inline-flex items-center justify-center w-7 h-7 flex-shrink-0">
+                      <img
+                        src={item.icon}
+                        alt=""
+                        className="w-6 h-6 object-contain"
+                      />
+                    </span>
+                    {item.label}
+                  </Link>
+                </li>
+              )
+            })}
         </ul>
       </nav>
 

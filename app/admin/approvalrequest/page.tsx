@@ -224,16 +224,6 @@ export default function UserManagementPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-4 mb-5">
-        <div>
-          <h1
-            className={`text-2xl sm:text-3xl ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} m-0 text-left`}
-          >
-            Approval Request
-          </h1>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard
           darkMode={darkMode}

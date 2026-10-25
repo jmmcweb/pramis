@@ -62,10 +62,6 @@ export default function ServicesPage() {
 
   return (
     <div>
-      <h1 className={`text-[30px] sm:text-[38px] lg:text-[45px] my-[14px] text-left ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}>
-        Health Services
-      </h1>
-
       {loading && (
         <div className={`p-6 rounded-[24px] mb-6 flex items-center justify-center gap-3 ${darkMode ? 'bg-[#2d1b4e] text-white' : 'bg-white text-gray-700'} shadow-sm`}>
           <Loader2 className="w-5 h-5 animate-spin text-[#4E69D3]" />

@@ -17,48 +17,48 @@ html[data-font-size='large'] {
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --primary: #f3f4f6;
-  --secondary: #e5e7eb;
-  --tertiary: #d1d5db;
-  --accent: #000000;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #f1f5f9;
+  --secondary: #e2e8f0;
+  --tertiary: #cbd5e1;
+  --accent: #0f588b;
 
   /* MediTrack brand (patient portal, from feat/user) */
   --brand: #0f588b;
   --brand-dark: #0b4670;
   --brand-tint: #e8f1f8;
-  --surface: #f5f7fb;
+  --surface: #f8fafc;
 
   /* Meditrack identity tokens */
   --brand-deep: #0b4a77;
   --ink: #0a2b44;
-  --mist: #f2f7fb;
-  --slate: #5d7488;
+  --mist: #f1f5f9;
+  --slate: #64748b;
 
   /* Semantic display tokens */
   --card: #ffffff;
-  --line: #d8e3ec;
-  --body: #1e293b;
-  --muted: #94a3b8;
+  --line: #e2e8f0;
+  --body: #334155;
+  --muted: #64748b;
   --faint: #cbd5e1;
   --track: #e2e8f0;
   --soft: #f1f5f9;
 }
 
 .dark {
-  --background: #0f172a;
+  --background: #0b1220;
   --foreground: #f1f5f9;
-  --primary: #1e293b;
-  --secondary: #334155;
-  --tertiary: #475569;
+  --primary: #111c30;
+  --secondary: #1e293b;
+  --tertiary: #334155;
   --accent: #ffffff;
 
   /* MediTrack brand (dark) */
   --brand: #7fb6e6;
   --brand-dark: #9cc9ee;
   --brand-tint: rgb(127 182 230 / 0.14);
-  --surface: #0e1728;
+  --surface: #0b1220;
 
   /* Semantic display tokens (dark) */
   --card: #111c30;
@@ -140,6 +140,36 @@ html[data-font-size='large'] {
     background: rgb(15 88 139 / 0.18);
   }
 
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+
+    .animate-spin {
+      animation-duration: 1s !important;
+      animation-iteration-count: infinite !important;
+    }
+  }
+
   body {
     @apply min-h-dvh flex flex-col text-foreground bg-background;
     main {
@@ -189,6 +219,27 @@ html[data-font-size='large'] {
   }
 }
 
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 [data-sonner-toast] {
   gap: 16px;
 }
@@ -201,7 +252,5 @@ html[data-font-size='large'] {
   width: 22px;
   height: 22px;
 }
-
-
 
 

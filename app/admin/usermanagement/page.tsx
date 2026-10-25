@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
-import { initialRecords, type PatientRecord } from '@/src/data/patientRecords'
+import type { PatientRecord } from '@/src/data/patientRecords'
 
 type StaffPosition = 'Nurse' | 'Midwife' | 'Barangay Health Worker (BHW)'
 
@@ -60,28 +60,6 @@ type PatientUser = BaseUser & {
 type AnyUser = StaffUser | PatientUser
 
 const PER_PAGE = 8
-
-const initialStaff: StaffUser[] = []
-
-const initialPatients: PatientUser[] = initialRecords
-  .filter((r) => !r.deceased)
-  .map((r) => {
-    const first = (r.form.givenName || '').trim()
-    const last = (r.form.lastName || '').trim()
-    const slug = `${first.toLowerCase().replace(/\s+/g, '.')}.${last.toLowerCase().replace(/\s+/g, '.')}`
-    return {
-      kind: 'patient',
-      id: r.id,
-      firstName: first,
-      lastName: last,
-      username: slug,
-      email: `${slug}@gmail.com`,
-      password: `Patient@${r.id.replace(/\D/g, '').slice(-4)}`,
-      role: 'Patient',
-      dateJoined: r.date,
-      record: r,
-    }
-  })
 
 function fmtDate(value: string) {
   if (!value) return '—'
@@ -168,12 +146,7 @@ type AddAccountForm = {
 
 export default function UserManagementPage() {
   const { darkMode } = useDarkMode()
-  // Start with demo data so "all users" is never blank while the DB fetch
-  // is in flight (or when previewing without an admin session).
-  const [users, setUsers] = useState<AnyUser[]>([
-    ...initialStaff,
-    ...initialPatients,
-  ])
+  const [users, setUsers] = useState<AnyUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -225,15 +198,9 @@ export default function UserManagementPage() {
         }
 
         if (response.status === 401 || response.status === 403) {
-          console.warn(
-            'Not authorized for /api/admin/accounts, using demo data',
+          throw new Error(
+            'You are not authorized to view accounts. Sign in with an admin account and try again.',
           )
-          if (!active) return
-          setUsers((prev) =>
-            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
-          )
-          setError(null)
-          return
         }
 
         if (!response.ok) {
@@ -256,19 +223,7 @@ export default function UserManagementPage() {
             : parsed.toISOString().slice(0, 10)
         }
 
-        // Merge DB accounts with fallback/demo records so the page always
-        // shows staff + patients even when the DB is nearly empty (only 2 seed users).
-        const mergeWithFallback = (dbUsers: AnyUser[]) => {
-          const seen = new Set(dbUsers.map((u) => u.id))
-          const extra: AnyUser[] = []
-          for (const u of [...initialStaff, ...initialPatients]) {
-            if (!seen.has(u.id)) extra.push(u)
-          }
-          return [...dbUsers, ...extra]
-        }
-
-        // Handle different response structures
-        if (data.users && Array.isArray(data.users) && data.users.length > 0) {
+        if (Array.isArray(data.users)) {
           const dbUsers = data.users.map(
             (user: AnyUser & { dateJoined: string }) => ({
               ...user,
@@ -292,45 +247,23 @@ export default function UserManagementPage() {
                 null,
             }),
           )
-          setUsers(mergeWithFallback(dbUsers))
-          setError(null)
-        } else if (data.message) {
-          throw new Error(data.message)
-        } else if (data.users && Array.isArray(data.users)) {
-          console.warn('API returned 0 accounts, using demo data')
-          if (!active) return
-          setUsers((prev) =>
-            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
-          )
+          setUsers(dbUsers)
           setError(null)
         } else {
-          console.warn('Unexpected API response format, using demo data')
-          if (!active) return
-          setUsers((prev) =>
-            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
-          )
-          setError(null)
+          throw new Error(data.message || 'The accounts response was invalid.')
         }
       } catch (err) {
         if (!active) return
-        // Keep the seeded/demo rows visible and only surface a soft warning.
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          console.warn('Accounts request timed out, using demo data')
-          setUsers((prev) =>
-            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
-          )
-          setError(null)
-        } else {
-          const message =
-            err instanceof Error ? err.message : 'Unable to load accounts'
-          console.error('Failed to load accounts:', err)
-          setError(message)
-          toast.error(message)
-          // Fall back to demo data when API fails
-          setUsers((prev) =>
-            prev.length > 0 ? prev : [...initialStaff, ...initialPatients],
-          )
-        }
+        const message =
+          err instanceof DOMException && err.name === 'AbortError'
+            ? 'Loading accounts timed out. Please try again.'
+            : err instanceof Error
+              ? err.message
+              : 'Unable to load accounts'
+        console.error('Failed to load accounts:', err)
+        setUsers([])
+        setError(message)
+        toast.error(message)
       } finally {
         if (active) {
           setLoading(false)
@@ -585,10 +518,7 @@ export default function UserManagementPage() {
               databaseId: user.id,
               firstName: user.firstName || 'User',
               lastName: user.lastName || '',
-              username:
-                user.username ||
-                user.email?.split('@')[0] ||
-                user.id,
+              username: user.username || user.email?.split('@')[0] || user.id,
               email: user.email || '',
               dateJoined: toDateString(user.dateJoined),
               middleName:
@@ -600,10 +530,7 @@ export default function UserManagementPage() {
                 null,
               suffix:
                 user.suffix ??
-                ((user as any).profile?.suffix as
-                  | string
-                  | null
-                  | undefined) ??
+                ((user as any).profile?.suffix as string | null | undefined) ??
                 null,
               archivedAt: user.archivedAt || null,
             }))
@@ -656,9 +583,7 @@ export default function UserManagementPage() {
         // The restored account no longer belongs in the archived view —
         // remove it here instead of just flipping archivedAt, otherwise
         // it keeps showing up under "Archived staff" until the next fetch.
-        setArchivedStaff((prev) =>
-          prev.filter((u) => u.id !== deleting.id),
-        )
+        setArchivedStaff((prev) => prev.filter((u) => u.id !== deleting.id))
         setUsers((prev) => [
           ...prev,
           { ...(deleting as StaffUser), archivedAt: null },
@@ -716,17 +641,17 @@ export default function UserManagementPage() {
     setDeleting(null)
   }
 
-  const inputClass = `w-full px-3.5 py-2.5 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
-  const selectClass = `w-full px-3.5 py-2.5 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] appearance-none cursor-pointer box-border`
-  const searchInputClass = `pl-10 pr-3.5 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
-  const pageBtnClass = `min-w-[38px] h-[38px] px-2.5 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'}`
+  const inputClass = `w-full px-3.5 py-2.5 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-sm font-sans outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
+  const selectClass = `w-full px-3.5 py-2.5 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-sm font-sans outline-none focus:border-[#4E69D3] appearance-none cursor-pointer box-border`
+  const searchInputClass = `pl-10 pr-3.5 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]' : 'border-gray-200 text-gray-800 bg-gray-100'} rounded-lg text-sm font-sans outline-none focus:border-[#4E69D3] ${darkMode ? 'placeholder-gray-500' : 'placeholder-gray-400'} box-border`
+  const pageBtnClass = `min-w-[38px] h-[38px] px-2.5 rounded-lg text-[14px] font-semibold font-sans cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'}`
   const pageBtnActiveClass =
     'bg-[#4E69D3] text-white border-[#4E69D3] hover:bg-[#4A6BC4] hover:text-white'
   const iconBtnClass = (danger?: boolean) =>
     `inline-flex items-center justify-center w-9 h-9 rounded-lg cursor-pointer border transition-all ${darkMode ? `bg-[#2d1b4e] ${danger ? 'text-red-400 border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'text-[#4E9FFF] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]'}` : `${danger ? 'bg-white text-red-500 border-red-300 hover:bg-red-50' : 'bg-white text-[#4E69D3] border-[#4E69D3] hover:bg-[#E8EAF6]'}`}`
 
   return (
-    <div>
+    <div className="flex flex-col gap-6 font-sans">
       {/* Loading State */}
       {loading && (
         <div
@@ -741,11 +666,6 @@ export default function UserManagementPage() {
             className={`text-[16px] font-semibold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'}`}
           >
             Loading accounts...
-          </p>
-          <p
-            className={`text-[14px] mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
-          >
-            Fetching user data from database
           </p>
         </div>
       )}
@@ -782,30 +702,18 @@ export default function UserManagementPage() {
           >
             {error}
           </p>
-          <p
-            className={`text-[13px] ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}
-          >
-            Showing demo data. Please check your database connection.
-          </p>
         </div>
       )}
 
       {/* Only render the rest if not loading (or show empty state during loading) */}
-      {!loading && (
-        <>
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
-            <div>
-              <h2
-                className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 mb-[6px] text-left`}
-              >
-                User Management
-              </h2>
-            </div>
+      {!loading && !error && (
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
               <button
                 type="button"
                 onClick={openArchiveModal}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold font-poppins border transition-colors ${
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold font-sans border transition-colors ${
                   darkMode
                     ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]'
                     : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
@@ -830,13 +738,13 @@ export default function UserManagementPage() {
               <button
                 type="button"
                 onClick={() => setAdding(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4E69D3] text-white text-[13px] font-semibold font-poppins border border-[#4E69D3] hover:bg-[#4A6BC4] transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4E69D3] text-white text-[13px] font-semibold font-sans border border-[#4E69D3] hover:bg-[#4A6BC4] transition-colors"
               >
                 <span className="text-lg leading-none">+</span>
                 Add account
               </button>
               <span
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold font-poppins border ${darkMode ? 'bg-[#2d1b4e] text-[#C4B5FD] border-[rgba(255,255,255,0.10)]' : 'bg-white text-[#4E69D3] border-[#4E69D3]/30'}`}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold font-sans border ${darkMode ? 'bg-[#2d1b4e] text-[#C4B5FD] border-[rgba(255,255,255,0.10)]' : 'bg-white text-[#4E69D3] border-[#4E69D3]/30'}`}
               >
                 <svg
                   width="14"
@@ -858,70 +766,70 @@ export default function UserManagementPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-[18px] mb-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
-              <StatCard
-                darkMode={darkMode}
-                value={users.length}
-                label="Total Users"
-                color="#4E69D3"
-                active={cardFilter === 'all'}
-                onClick={() => setCardFilter('all')}
-                icon={
-                  <>
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </>
-                }
-              />
-              <StatCard
-                darkMode={darkMode}
-                value={staffCount}
-                label="Medical Staff"
-                color="#7C3AED"
-                active={cardFilter === 'staff'}
-                onClick={() => setCardFilter('staff')}
-                icon={
-                  <>
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </>
-                }
-              />
-              <StatCard
-                darkMode={darkMode}
-                value={patientCount}
-                label="Patients / Users"
-                color="#0EA5E9"
-                active={cardFilter === 'patient'}
-                onClick={() => setCardFilter('patient')}
-                icon={
-                  <>
-                    <circle cx="12" cy="8" r="5" />
-                    <path d="M20 21a8 8 0 0 0-16 0" />
-                  </>
-                }
-              />
-              <StatCard
-                darkMode={darkMode}
-                value={recordsCount}
-                label="Users with Records"
-                color="#16A34A"
-                active={cardFilter === 'records'}
-                onClick={() => setCardFilter('records')}
-                icon={
-                  <>
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                  </>
-                }
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              darkMode={darkMode}
+              value={users.length}
+              label="Total Users"
+              color="#4E69D3"
+              active={cardFilter === 'all'}
+              onClick={() => setCardFilter('all')}
+              icon={
+                <>
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </>
+              }
+            />
+            <StatCard
+              darkMode={darkMode}
+              value={staffCount}
+              label="Medical Staff"
+              color="#7C3AED"
+              active={cardFilter === 'staff'}
+              onClick={() => setCardFilter('staff')}
+              icon={
+                <>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </>
+              }
+            />
+            <StatCard
+              darkMode={darkMode}
+              value={patientCount}
+              label="Patients / Users"
+              color="#0EA5E9"
+              active={cardFilter === 'patient'}
+              onClick={() => setCardFilter('patient')}
+              icon={
+                <>
+                  <circle cx="12" cy="8" r="5" />
+                  <path d="M20 21a8 8 0 0 0-16 0" />
+                </>
+              }
+            />
+            <StatCard
+              darkMode={darkMode}
+              value={recordsCount}
+              label="Users with Records"
+              color="#16A34A"
+              active={cardFilter === 'records'}
+              onClick={() => setCardFilter('records')}
+              icon={
+                <>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </>
+              }
+            />
+          </div>
 
           <div
             className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'} border rounded-2xl p-4 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]`}
@@ -954,7 +862,7 @@ export default function UserManagementPage() {
                   />
                 </div>
                 <button
-                  className={`inline-flex items-center gap-2 px-3.5 py-3 rounded-lg text-[14px] font-semibold font-poppins cursor-pointer border transition-colors ${sortAsc ? 'bg-[#4E69D3] text-white border-[#4E69D3] hover:bg-[#4A6BC4]' : `${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'bg-white text-gray-600 border-gray-200'} hover:border-[#4E69D3]`}`}
+                  className={`inline-flex items-center gap-2 px-3.5 py-3 rounded-lg text-[14px] font-semibold font-sans cursor-pointer border transition-colors ${sortAsc ? 'bg-[#4E69D3] text-white border-[#4E69D3] hover:bg-[#4A6BC4]' : `${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'bg-white text-gray-600 border-gray-200'} hover:border-[#4E69D3]`}`}
                   onClick={() => setSortAsc(!sortAsc)}
                   title={sortAsc ? 'Ascending' : 'Descending'}
                 >
@@ -985,8 +893,7 @@ export default function UserManagementPage() {
           </div>
 
           {(() => {
-            const showStaff =
-              cardFilter === 'all' || cardFilter === 'staff'
+            const showStaff = cardFilter === 'all' || cardFilter === 'staff'
             const showPatients =
               cardFilter === 'all' ||
               cardFilter === 'patient' ||
@@ -1022,11 +929,11 @@ export default function UserManagementPage() {
             return visibleTables.map((cfg) => (
               <div
                 key={cfg.key}
-                className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'} border rounded-2xl p-4 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)] mt-5`}
+                className={`${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'} border rounded-2xl p-4 shadow-sm sm:p-6`}
               >
                 <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
                   <h2
-                    className={`font-poppins text-[18px] font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                    className={`m-0 text-base font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                   >
                     {cfg.title}
                     <span
@@ -1039,35 +946,35 @@ export default function UserManagementPage() {
 
                 <div className="overflow-x-auto rounded-xl">
                   <table
-                    className="w-full border-collapse text-[16px] min-w-[1050px]"
+                    className="w-full min-w-[1050px] border-collapse text-sm"
                     style={{ tableLayout: 'fixed' }}
                   >
                     <thead>
                       <tr
-                        className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}
+                        className={`${darkMode ? 'bg-[#111c30]' : 'bg-slate-100'}`}
                       >
                         <th
-                          className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[24%]`}
+                          className={`w-[24%] border-b px-4 py-3 text-left text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'text-[#2A2E43] border-[rgba(255,255,255,0.20)]'}`}
                         >
                           Username
                         </th>
                         <th
-                          className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[18%]`}
+                          className={`w-[18%] border-b px-4 py-3 text-left text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'text-[#2A2E43] border-[rgba(255,255,255,0.20)]'}`}
                         >
                           Email
                         </th>
                         <th
-                          className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
+                          className={`w-[13%] border-b px-4 py-3 text-left text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'text-[#2A2E43] border-[rgba(255,255,255,0.20)]'}`}
                         >
                           Account Type
                         </th>
                         <th
-                          className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[10%]`}
+                          className={`w-[10%] border-b px-4 py-3 text-left text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'text-[#2A2E43] border-[rgba(255,255,255,0.20)]'}`}
                         >
                           Date Joined
                         </th>
                         <th
-                          className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[rgba(255,255,255,0.20)]'} border-b w-[13%]`}
+                          className={`w-[13%] border-b px-4 py-3 text-left text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#F9FAFB] border-[rgba(255,255,255,0.10)]' : 'text-[#2A2E43] border-[rgba(255,255,255,0.20)]'}`}
                         >
                           Actions
                         </th>
@@ -1078,7 +985,7 @@ export default function UserManagementPage() {
                         <tr>
                           <td
                             colSpan={6}
-                            className={`px-5 py-14 text-center text-[16px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                            className={`px-4 py-12 text-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                           >
                             <svg
                               className="mx-auto mb-3"
@@ -1105,7 +1012,7 @@ export default function UserManagementPage() {
                               className={`${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-[#E8EAF6]'} transition-colors`}
                             >
                               <td
-                                className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                                className={`border-b px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB]' : 'border-[#E2E8F0] text-[#2A2E43]'}`}
                               >
                                 <div className="flex items-center gap-3 overflow-hidden">
                                   <div
@@ -1115,13 +1022,13 @@ export default function UserManagementPage() {
                                   </div>
                                   <div className="min-w-0">
                                     <span
-                                      className="block text-[16px] font-poppins font-semibold flex-1 min-w-0 whitespace-nowrap truncate"
+                                      className="block min-w-0 flex-1 truncate whitespace-nowrap text-sm font-semibold"
                                       title={fullName(u)}
                                     >
                                       {fullName(u)}
                                     </span>
                                     <span
-                                      className={`block text-[12px] font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}
+                                      className={`block truncate text-xs font-semibold ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}
                                     >
                                       {u.id}
                                     </span>
@@ -1129,12 +1036,12 @@ export default function UserManagementPage() {
                                 </div>
                               </td>
                               <td
-                                className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-nowrap overflow-hidden text-ellipsis`}
+                                className={`overflow-hidden text-ellipsis whitespace-nowrap border-b px-4 py-3 text-sm ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}
                               >
                                 {u.email}
                               </td>
                               <td
-                                className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                                className={`border-b px-4 py-3 text-sm ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB]' : 'border-[#E2E8F0] text-[#2A2E43]'}`}
                               >
                                 <span
                                   className={`inline-flex px-2.5 py-1 rounded-md text-[13px] font-semibold ${darkMode ? 'bg-[#0f1438] text-[#C4B5FD]' : 'bg-[#E8EAF6] text-[#4E69D3]'}`}
@@ -1147,12 +1054,12 @@ export default function UserManagementPage() {
                                 </span>
                               </td>
                               <td
-                                className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b text-[16px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                                className={`border-b px-4 py-3 text-sm ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB]' : 'border-[#E2E8F0] text-[#2A2E43]'}`}
                               >
                                 {fmtDate(u.dateJoined)}
                               </td>
                               <td
-                                className={`px-5 py-4 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'} border-b`}
+                                className={`border-b px-4 py-3 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'}`}
                               >
                                 <div className="flex items-center gap-2">
                                   {u.kind === 'staff' ? (
@@ -1192,8 +1099,18 @@ export default function UserManagementPage() {
                                           strokeLinejoin="round"
                                         >
                                           <polyline points="21 8 21 21 3 21 3 8" />
-                                          <rect x="1" y="3" width="22" height="5" />
-                                          <line x1="10" y1="12" x2="14" y2="12" />
+                                          <rect
+                                            x="1"
+                                            y="3"
+                                            width="22"
+                                            height="5"
+                                          />
+                                          <line
+                                            x1="10"
+                                            y1="12"
+                                            x2="14"
+                                            y2="12"
+                                          />
                                         </svg>
                                       </button>
                                     </>
@@ -1275,7 +1192,6 @@ export default function UserManagementPage() {
             ))
           })()}
 
-
           {showArchiveModal && (
             <div
               className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1000] p-3 sm:p-4"
@@ -1308,10 +1224,14 @@ export default function UserManagementPage() {
                       </svg>
                     </div>
                     <div>
-                      <h2 className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                      <h2
+                        className={`font-sans text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                      >
                         Archived Staff Accounts
                       </h2>
-                      <p className={`text-[13px] mt-1 m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <p
+                        className={`text-[13px] mt-1 m-0 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                      >
                         View and restore archived medical staff accounts.
                       </p>
                     </div>
@@ -1363,7 +1283,9 @@ export default function UserManagementPage() {
                   {archiveLoading ? (
                     <div className="flex flex-col items-center justify-center py-16">
                       <div className="w-8 h-8 border-4 border-[#4E69D3] border-t-transparent rounded-full animate-spin mb-3" />
-                      <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-[#2A2E43]'}`}>
+                      <p
+                        className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-[#2A2E43]'}`}
+                      >
                         Loading archived accounts...
                       </p>
                     </div>
@@ -1372,10 +1294,14 @@ export default function UserManagementPage() {
                       <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl font-bold mb-3">
                         !
                       </div>
-                      <p className={`text-base font-bold ${darkMode ? 'text-white' : 'text-[#2A2E43]'}`}>
+                      <p
+                        className={`text-base font-bold ${darkMode ? 'text-white' : 'text-[#2A2E43]'}`}
+                      >
                         Unable to load archived accounts
                       </p>
-                      <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <p
+                        className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                      >
                         {archiveError}
                       </p>
                       <button
@@ -1405,8 +1331,12 @@ export default function UserManagementPage() {
                         <rect x="1" y="3" width="22" height="5" />
                         <line x1="10" y1="12" x2="14" y2="12" />
                       </svg>
-                      <p className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {archiveSearch ? 'No archived staff found' : 'No archived staff accounts'}
+                      <p
+                        className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                      >
+                        {archiveSearch
+                          ? 'No archived staff found'
+                          : 'No archived staff accounts'}
                       </p>
                       {archiveSearch && (
                         <button
@@ -1429,20 +1359,34 @@ export default function UserManagementPage() {
                           style={{ tableLayout: 'fixed' }}
                         >
                           <thead>
-                            <tr className={darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}>
-                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                            <tr
+                              className={
+                                darkMode ? 'bg-[#111c30]' : 'bg-slate-100'
+                              }
+                            >
+                              <th
+                                className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                              >
                                 Staff
                               </th>
-                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                              <th
+                                className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                              >
                                 Email
                               </th>
-                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                              <th
+                                className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                              >
                                 Position
                               </th>
-                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                              <th
+                                className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                              >
                                 Archived On
                               </th>
-                              <th className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}>
+                              <th
+                                className={`px-4 py-3 text-left font-bold uppercase tracking-[0.5px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                              >
                                 Actions
                               </th>
                             </tr>
@@ -1456,31 +1400,50 @@ export default function UserManagementPage() {
                                   key={staff.id}
                                   className={`${darkMode ? 'hover:bg-[#0f1438]' : 'hover:bg-[#E8EAF6]'} transition-colors`}
                                 >
-                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB]' : 'border-[#E2E8F0] text-[#2A2E43]'}`}>
+                                  <td
+                                    className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB]' : 'border-[#E2E8F0] text-[#2A2E43]'}`}
+                                  >
                                     <div className="flex items-center gap-3">
-                                      <div className={`w-9 h-9 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'} flex items-center justify-center font-bold text-sm flex-shrink-0`}>
+                                      <div
+                                        className={`w-9 h-9 rounded-full ${darkMode ? 'bg-[#0f1438] text-blue-300' : 'bg-[#E8EAF6] text-[#4E69D3]'} flex items-center justify-center font-bold text-sm flex-shrink-0`}
+                                      >
                                         {staff.firstName.charAt(0)}
                                       </div>
                                       <div className="min-w-0">
-                                        <span className="block font-semibold truncate" title={fullName(staff)}>
+                                        <span
+                                          className="block font-semibold truncate"
+                                          title={fullName(staff)}
+                                        >
                                           {fullName(staff)}
                                         </span>
-                                        <span className={`block text-xs font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}>
+                                        <span
+                                          className={`block text-xs font-semibold truncate ${darkMode ? 'text-[#C4B5FD]' : 'text-[#4E69D3]'}`}
+                                        >
                                           {staff.id}
                                         </span>
                                       </div>
                                     </div>
                                   </td>
-                                  <td className={`px-4 py-4 border-b truncate ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}>
+                                  <td
+                                    className={`px-4 py-4 border-b truncate ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}
+                                  >
                                     {staff.email}
                                   </td>
-                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}>
+                                  <td
+                                    className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}
+                                  >
                                     {staff.position}
                                   </td>
-                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}>
-                                    {fmtDate(staff.archivedAt || staff.dateJoined)}
+                                  <td
+                                    className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)] text-gray-300' : 'border-[#E2E8F0] text-gray-600'}`}
+                                  >
+                                    {fmtDate(
+                                      staff.archivedAt || staff.dateJoined,
+                                    )}
                                   </td>
-                                  <td className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'}`}>
+                                  <td
+                                    className={`px-4 py-4 border-b ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-[#E2E8F0]'}`}
+                                  >
                                     <button
                                       type="button"
                                       onClick={() => setDeleting(staff)}
@@ -1510,9 +1473,13 @@ export default function UserManagementPage() {
                       </div>
 
                       <div className="flex justify-between items-center gap-3 pt-4 pb-1 flex-wrap">
-                        <span className={`text-[13px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <span
+                          className={`text-[13px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                        >
                           Showing {(archivedTable.safePage - 1) * PER_PAGE + 1}-
-                          {(archivedTable.safePage - 1) * PER_PAGE + archivedTable.pageRows.length} of {archivedTable.total}
+                          {(archivedTable.safePage - 1) * PER_PAGE +
+                            archivedTable.pageRows.length}{' '}
+                          of {archivedTable.total}
                         </span>
 
                         {archivedTable.totalPages > 1 && (
@@ -1521,7 +1488,9 @@ export default function UserManagementPage() {
                               type="button"
                               className={pageBtnClass}
                               disabled={archivedTable.safePage === 1}
-                              onClick={() => setArchivePage(archivedTable.safePage - 1)}
+                              onClick={() =>
+                                setArchivePage(archivedTable.safePage - 1)
+                              }
                             >
                               &lsaquo; Prev
                             </button>
@@ -1543,8 +1512,13 @@ export default function UserManagementPage() {
                             <button
                               type="button"
                               className={pageBtnClass}
-                              disabled={archivedTable.safePage === archivedTable.totalPages}
-                              onClick={() => setArchivePage(archivedTable.safePage + 1)}
+                              disabled={
+                                archivedTable.safePage ===
+                                archivedTable.totalPages
+                              }
+                              onClick={() =>
+                                setArchivePage(archivedTable.safePage + 1)
+                              }
                             >
                               Next &rsaquo;
                             </button>
@@ -1555,7 +1529,9 @@ export default function UserManagementPage() {
                   )}
                 </div>
 
-                <div className={`px-5 sm:px-7 py-4 border-t flex justify-end ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>
+                <div
+                  className={`px-5 sm:px-7 py-4 border-t flex justify-end ${darkMode ? 'border-white/10' : 'border-slate-200'}`}
+                >
                   <button
                     type="button"
                     onClick={() => setShowArchiveModal(false)}
@@ -1582,7 +1558,7 @@ export default function UserManagementPage() {
                 >
                   <div>
                     <h2
-                      className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                      className={`font-sans text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                     >
                       Add account
                     </h2>
@@ -1726,7 +1702,7 @@ export default function UserManagementPage() {
                     </div>
                     <div>
                       <h2
-                        className={`font-poppins text-xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} m-0`}
+                        className={`font-sans text-xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} m-0`}
                       >
                         Edit User &mdash; {editing.id}
                       </h2>
@@ -1872,13 +1848,13 @@ export default function UserManagementPage() {
                       setEditing(null)
                       setEditForm(null)
                     }}
-                    className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    className={`px-6 py-3 rounded-lg text-[15px] font-bold font-sans cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                   >
                     Cancel
                   </button>
                   <button
                     onClick={saveEdit}
-                    className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border-none transition-all bg-[#4E69D3] text-white hover:bg-[#4A6BC4]`}
+                    className={`px-6 py-3 rounded-lg text-[15px] font-bold font-sans cursor-pointer border-none transition-all bg-[#4E69D3] text-white hover:bg-[#4A6BC4]`}
                   >
                     Save Changes
                   </button>
@@ -1940,7 +1916,7 @@ export default function UserManagementPage() {
                           </svg>
                         </div>
                         <h3
-                          className={`font-poppins text-lg font-bold m-0 mb-2 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                          className={`font-sans text-lg font-bold m-0 mb-2 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                         >
                           {isRestore
                             ? 'Restore user?'
@@ -1972,17 +1948,19 @@ export default function UserManagementPage() {
                           )}
                         </p>
                       </div>
-                      <div className={`flex justify-center gap-3 px-6 pb-6 pt-2`}>
+                      <div
+                        className={`flex justify-center gap-3 px-6 pb-6 pt-2`}
+                      >
                         <button
                           onClick={() => setDeleting(null)}
-                          className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                          className={`px-6 py-3 rounded-lg text-[15px] font-bold font-sans cursor-pointer border transition-all ${darkMode ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                         >
                           Cancel
                         </button>
                         <button
                           onClick={confirmDelete}
                           disabled={archivePending}
-                          className={`inline-flex items-center gap-2 px-6 py-3 text-white border-none rounded-lg text-[15px] font-bold font-poppins cursor-pointer transition-colors disabled:opacity-50 ${
+                          className={`inline-flex items-center gap-2 px-6 py-3 text-white border-none rounded-lg text-[15px] font-bold font-sans cursor-pointer transition-colors disabled:opacity-50 ${
                             isRestore
                               ? 'bg-green-600 hover:bg-green-700'
                               : 'bg-red-600 hover:bg-red-700'
@@ -2056,7 +2034,7 @@ export default function UserManagementPage() {
                     </div>
                     <div>
                       <h2
-                        className={`font-poppins text-xl font-bold m-0 ${
+                        className={`font-sans text-xl font-bold m-0 ${
                           darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'
                         }`}
                       >
@@ -2275,7 +2253,7 @@ export default function UserManagementPage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   )
@@ -2306,7 +2284,7 @@ function StatCard({
       }}
       role="button"
       tabIndex={0}
-      className={`flex items-center gap-4 max-sm:gap-3 cursor-pointer ${active ? (darkMode ? 'ring-2 ring-[#4E69D3] bg-[#2d1b4e] border-[#4E69D3]' : 'ring-2 ring-[#4E69D3] bg-[#E8EAF6] border-[#E8EAF6]') : ''} ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.3)]' : 'bg-white border-[rgba(15,60,95,0.10)] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'} p-[22px] max-sm:p-4 rounded-[18px] border`}
+      className={`flex cursor-pointer items-center gap-4 rounded-2xl border p-5 shadow-sm max-sm:gap-3 max-sm:p-4 ${active ? (darkMode ? 'ring-2 ring-[#4E69D3] bg-[#2d1b4e] border-[#4E69D3]' : 'ring-2 ring-[#4E69D3] bg-[#E8EAF6] border-[#E8EAF6]') : ''} ${darkMode ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]' : 'bg-white border-[rgba(15,60,95,0.10)]'}`}
     >
       <div
         className={`w-14 h-14 max-sm:w-11 max-sm:h-11 rounded-xl ${darkMode ? 'bg-[#141a45]' : 'bg-[#E8EAF6]'} flex items-center justify-center flex-shrink-0`}
@@ -2325,12 +2303,12 @@ function StatCard({
       </div>
       <div className="flex flex-col">
         <span
-          className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          className={`text-3xl font-bold leading-none ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
         >
           {value}
         </span>
         <span
-          className={`text-lg leading-tight ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          className={`mt-1 text-sm leading-tight ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
         >
           {label}
         </span>

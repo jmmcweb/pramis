@@ -203,16 +203,6 @@ export default function AuditLogsClient({
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
-      <header className="flex flex-col gap-1">
-        <h1
-          className={`text-2xl font-bold ${
-            darkMode ? 'text-slate-100' : 'text-slate-800'
-          }`}
-        >
-          Audit Logs
-        </h1>
-      </header>
-
       {/* Summary cards */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {statCards.map(({ label, value }) => (
@@ -508,6 +498,5 @@ export default function AuditLogsClient({
     </div>
   )
 }
-
 
 

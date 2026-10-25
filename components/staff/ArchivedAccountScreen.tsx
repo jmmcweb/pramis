@@ -16,7 +16,7 @@ export default function ArchivedAccountScreen() {
   }, [])
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-4 bg-gradient-to-b from-violet-300 to-white dark:from-[#050617] dark:to-[#050617]">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-4 dark:bg-[#0b1220]">
       <div className="bg-white dark:bg-card rounded-3xl shadow-card p-8 w-full max-w-md text-center">
         <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
           <Archive className="w-8 h-8" aria-hidden="true" />

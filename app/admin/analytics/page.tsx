@@ -56,11 +56,6 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <h1
-        className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 mb-[14px] text-left font-bold`}
-      >
-        Analytics
-      </h1>
       <AnalyticsSection darkMode={darkMode} />
     </div>
   )

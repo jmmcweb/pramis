@@ -515,11 +515,6 @@ export default function SettingsPanel({ user }: { user: SettingsUser }) {
         </>
       ) : (
         <>
-          <h1
-            className={`text-[26px] sm:text-[32px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-[14px] text-left`}
-          >
-            Account Settings
-          </h1>
           {isMobile ? (
             menuPanel
           ) : (

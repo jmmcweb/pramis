@@ -332,9 +332,6 @@ export default function StaffEventsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-[14px] flex-wrap gap-3">
-        <h1 className={`text-[30px] sm:text-[38px] lg:text-[45px] ${darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'} my-0 text-left`}>
-          Events Calendar
-        </h1>
         <div className="flex items-center gap-2.5">
           <button
             onClick={openAddEvent}
@@ -377,7 +374,7 @@ export default function StaffEventsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-[16px] min-w-[640px]" style={{ tableLayout: 'fixed' }}>
                     <thead>
-                      <tr className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}>
+                      <tr className={`${darkMode ? 'bg-[#111c30]' : 'bg-slate-100'}`}>
                         <th className={`px-6 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins border-b w-[34%]`}>Event Title</th>
                         <th className={`pl-15 pr-10 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins border-b w-[18%]`}>Date</th>
                         <th className={`pl-10 pr-6 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[16px] uppercase tracking-[0.5px] font-poppins border-b w-[22%]`}>Time</th>

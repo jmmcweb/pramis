@@ -36,9 +36,6 @@ export default function NotificationCenter({
             className="w-6 h-6 object-contain"
           />
           <div>
-            <h1 className="font-poppins text-2xl font-bold text-brand m-0">
-              Notifications
-            </h1>
             <p className="text-xs text-muted m-0 mt-0.5">
               {unreadCount > 0
                 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`

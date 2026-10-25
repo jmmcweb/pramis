@@ -788,18 +788,9 @@ export default function EventsPage() {
 
       <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
         <div>
-          <h1
-            className={`
-              text-2xl sm:text-3xl font-bold tracking-tight
-              ${darkMode ? 'text-white' : 'text-[#1d4662]'}
-            `}
-          >
-            Events & Services
-          </h1>
-
           <p
             className={`
-              mt-1 text-sm
+              text-sm
               ${darkMode ? 'text-gray-400' : 'text-gray-500'}
             `}
           >

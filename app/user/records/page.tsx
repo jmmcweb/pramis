@@ -27,19 +27,13 @@ export default async function RecordsPage() {
 
   return (
     <>
-      <section className="min-h-dvh bg-cover bg-center bg-no-repeat lg:ml-[360px] bg-[url('/purplebackground.png')] dark:bg-none dark:bg-[#050617]">
+      <section className="min-h-dvh bg-slate-50 dark:bg-[#0b1220] lg:ml-[288px]">
         <PatientHeader />
 
-        <div className="max-w-md mx-auto pb-32 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl">
-          <main className="px-4 pt-4 flex flex-col gap-5 lg:px-12 lg:pt-5">
+        <div className="mx-auto max-w-7xl pb-32">
+          <main className="flex flex-col gap-5 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6 xl:px-10">
             {allowed ? (
               <>
-                <div className="bg-white dark:bg-card rounded-3xl shadow-card p-5">
-                  <h1 className="text-3xl font-bold text-brand mt-1">
-                    Your Medical Records
-                  </h1>
-                </div>
-
                 <MedicalRecordsTimeline
                   members={recordsResult?.members ?? []}
                 />

@@ -451,20 +451,10 @@ export default function AppointmentsScheduleClient({
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div>
-        <h1
-          className={`
-            text-2xl sm:text-3xl font-bold
-            ${darkMode ? 'text-white' : 'text-[#1D4662]'}
-          `}
-        >
-          Appointment Schedule
-        </h1>
-
         <p
           className={`
-            mt-1 text-sm
+            text-sm
             ${darkMode ? 'text-gray-400' : 'text-gray-500'}
           `}
         >

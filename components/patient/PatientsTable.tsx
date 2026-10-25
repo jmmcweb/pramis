@@ -85,7 +85,7 @@ function StatCard({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 p-5 rounded-[18px] border shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)] ${
+      className={`flex items-center gap-4 rounded-2xl border p-5 shadow-sm ${
         darkMode
           ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]'
           : 'bg-white border-[rgba(15,60,95,0.08)]'
@@ -110,12 +110,12 @@ function StatCard({
       </div>
       <div className="flex flex-col">
         <span
-          className={`text-4xl max-sm:text-3xl font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          className={`text-3xl font-bold leading-none ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
         >
           {value}
         </span>
         <span
-          className={`text-lg leading-tight ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+          className={`mt-1 text-sm leading-tight ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
         >
           {label}
         </span>
@@ -144,18 +144,18 @@ function VisitCard({
       <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
         <div>
           <span
-            className={`font-bold text-[16px] font-poppins block ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+            className={`font-bold text-[16px] font-sans block ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
           >
             {formatDate(v.date)}
           </span>
           <span
-            className={`text-[13px] font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+            className={`text-[13px] font-sans ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
           >
             {v.serviceName}
           </span>
         </div>
         {v.condition && (
-          <span className="px-2.5 py-1 rounded-full text-[12px] font-bold font-poppins bg-[#4E69D3] text-white">
+          <span className="px-2.5 py-1 rounded-full text-[12px] font-bold font-sans bg-[#4E69D3] text-white">
             {v.condition}
           </span>
         )}
@@ -181,7 +181,7 @@ function VisitCard({
               {m.label}
             </span>
             <span
-              className={`block text-[15px] font-bold font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+              className={`block text-[15px] font-bold font-sans ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
             >
               {m.value || '\u2014'}
             </span>
@@ -191,7 +191,7 @@ function VisitCard({
 
       {v.diagnosis && (
         <p
-          className={`m-0 mb-1.5 text-[14px] font-poppins leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+          className={`m-0 mb-1.5 text-[14px] font-sans leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
         >
           <span
             className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
@@ -203,7 +203,7 @@ function VisitCard({
       )}
       {v.recommendation && (
         <p
-          className={`m-0 mb-1.5 text-[14px] font-poppins leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+          className={`m-0 mb-1.5 text-[14px] font-sans leading-relaxed ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
         >
           <span
             className={`font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
@@ -215,7 +215,7 @@ function VisitCard({
       )}
       {v.checkedBy && (
         <p
-          className={`m-0 text-[13px] font-poppins italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+          className={`m-0 text-[13px] font-sans italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
         >
           Checked by {v.checkedBy}
         </p>
@@ -227,7 +227,7 @@ function VisitCard({
         <button
           type="button"
           onClick={() => onViewItr(v.record as MedicalRecord)}
-          className={`mt-3 w-full py-2.5 rounded-xl font-poppins text-[14px] font-medium text-white transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`mt-3 w-full py-2.5 rounded-xl font-sans text-[14px] font-medium text-white transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer ${
             darkMode
               ? 'bg-[#4E69D3] hover:bg-[#4A6BC4]'
               : 'bg-emerald-500 hover:bg-emerald-600'
@@ -284,7 +284,8 @@ export default function PatientsTable({
     if (key === 'name') return (row.name || '').toLowerCase()
     if (key === 'id') return (row.id || '').toLowerCase()
     if (key === 'sex') return (row.sex || '').toLowerCase()
-    if (key === 'contact') return (row.phoneNumber || row.email || '').toLowerCase()
+    if (key === 'contact')
+      return (row.phoneNumber || row.email || '').toLowerCase()
     if (key === 'address')
       return [row.houseNumber, row.purok, row.barangay, row.city, row.province]
         .filter(Boolean)
@@ -309,9 +310,19 @@ export default function PatientsTable({
     )
   })
 
-  const sortedFiltered = [...filtered].sort((a, b) => { const av = sortVal(a, sortKey); const bv = sortVal(b, sortKey); const mult = sortDir === 'asc' ? 1 : -1; if (av < bv) return -1 * mult; if (av > bv) return 1 * mult; return a.name.localeCompare(b.name) * mult })
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const av = sortVal(a, sortKey)
+    const bv = sortVal(b, sortKey)
+    const mult = sortDir === 'asc' ? 1 : -1
+    if (av < bv) return -1 * mult
+    if (av > bv) return 1 * mult
+    return a.name.localeCompare(b.name) * mult
+  })
 
-  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / RECORDS_PER_PAGE))
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedFiltered.length / RECORDS_PER_PAGE),
+  )
   const safePage = Math.min(currentPage, totalPages)
   const pagePatients = sortedFiltered.slice(
     (safePage - 1) * RECORDS_PER_PAGE,
@@ -333,7 +344,7 @@ export default function PatientsTable({
     darkMode
       ? 'border-[rgba(255,255,255,0.10)] text-[#F9FAFB] bg-[#2d1b4e]'
       : 'border-gray-200 text-gray-800 bg-gray-100'
-  } rounded-lg text-[15px] font-poppins outline-none focus:border-[#4E69D3] box-border`
+  } rounded-lg text-[15px] font-sans outline-none focus:border-[#4E69D3] box-border`
 
   const openEdit = (p: PatientListItem) => {
     setEditingId(p.id)
@@ -402,16 +413,8 @@ export default function PatientsTable({
   }
 
   return (
-    <div>
-      <h1
-        className={`text-[30px] sm:text-[38px] lg:text-[45px] my-[14px] text-left ${
-          darkMode ? 'text-[#F9FAFB]' : 'text-[#1d4662]'
-        }`}
-      >
-        Patient Lists
-      </h1>
-
-      <div className="grid grid-cols-4 gap-[18px] mb-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
+    <div className="flex flex-col gap-6 font-sans">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           darkMode={darkMode}
           value={patients.length}
@@ -471,7 +474,7 @@ export default function PatientsTable({
           darkMode
             ? 'bg-[#2d1b4e] border-[rgba(255,255,255,0.10)]'
             : 'bg-white border-[rgba(15,60,95,0.08)]'
-        } border shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06)]`}
+        } border shadow-sm`}
       >
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 mb-5">
           <div className="relative flex items-center flex-1">
@@ -497,7 +500,7 @@ export default function PatientsTable({
               }}
               className={`w-full pl-10 pr-3.5 py-2.5 ${
                 darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'
-              } rounded-lg text-[15px] font-poppins ${
+              } rounded-lg text-sm font-sans ${
                 darkMode
                   ? 'text-[#F9FAFB] bg-[#2d1b4e]'
                   : 'text-gray-800 bg-gray-100'
@@ -508,11 +511,11 @@ export default function PatientsTable({
 
         <div className="overflow-x-auto rounded-xl">
           <table
-            className="w-full border-collapse text-[16px] min-w-[900px]"
+            className="w-full min-w-[900px] border-collapse text-sm"
             style={{ tableLayout: 'fixed' }}
           >
             <thead>
-              <tr className={`${darkMode ? 'bg-[#0f1438]' : 'bg-[#ddd6fe]'}`}>
+              <tr className={`${darkMode ? 'bg-[#111c30]' : 'bg-slate-100'}`}>
                 {[
                   { label: 'Patient', key: 'name' as SortKey },
                   { label: 'Age / Sex', key: 'sex' as SortKey },
@@ -524,7 +527,7 @@ export default function PatientsTable({
                     key={col.label}
                     onClick={() => toggleSort(col.key)}
                     title={`Sort by ${col.label} alphabetically`}
-                    className={`px-5 py-4 text-left font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b cursor-pointer select-none hover:opacity-70`}
+                    className={`cursor-pointer select-none border-b px-4 py-3 text-left text-xs font-bold uppercase tracking-wide hover:opacity-70 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                     style={{ width: ['26%', '12%', '16%', '20%', '16%'][i] }}
                   >
                     {col.label}
@@ -532,7 +535,7 @@ export default function PatientsTable({
                   </th>
                 ))}
                 <th
-                  className={`px-5 py-4 text-right font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'} text-[15px] uppercase tracking-[0.5px] font-poppins border-b w-[10%]`}
+                  className={`w-[10%] border-b px-4 py-3 text-right text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                 >
                   Actions
                 </th>
@@ -543,7 +546,7 @@ export default function PatientsTable({
                 <tr>
                   <td
                     colSpan={6}
-                    className={`px-5 py-12 text-center text-[16px] font-semibold font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                    className={`px-4 py-12 text-center text-sm font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                   >
                     No patients found{q ? ` matching "${searchQuery}"` : ''}.
                   </td>
@@ -554,7 +557,7 @@ export default function PatientsTable({
                     key={p.id}
                     className={`border-b last:border-none ${darkMode ? 'border-[rgba(255,255,255,0.08)]' : 'border-gray-100'}`}
                   >
-                    <td className="px-5 py-4 align-middle">
+                    <td className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-3 min-w-0">
                         <div
                           className={`w-11 h-11 max-sm:w-9 max-sm:h-9 rounded-full ${
@@ -567,12 +570,12 @@ export default function PatientsTable({
                         </div>
                         <div className="min-w-0">
                           <p
-                            className={`text-[16px] font-bold m-0 truncate font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                            className={`m-0 truncate text-sm font-bold ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                           >
                             {p.name}
                           </p>
                           <p
-                            className={`text-[13px] font-semibold m-0 truncate font-poppins ${darkMode ? 'text-[#4E9FFF]' : 'text-[#4E69D3]'}`}
+                            className={`m-0 truncate text-xs font-semibold ${darkMode ? 'text-[#4E9FFF]' : 'text-[#4E69D3]'}`}
                           >
                             {p.id}
                           </p>
@@ -580,7 +583,7 @@ export default function PatientsTable({
                       </div>
                     </td>
                     <td
-                      className={`px-5 py-4 align-middle text-[15px] font-poppins ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                      className={`px-4 py-3 align-middle text-sm ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                     >
                       {p.age !== null && p.age !== undefined
                         ? `${p.age} yrs`
@@ -605,12 +608,12 @@ export default function PatientsTable({
                       </span>
                     </td>
                     <td
-                      className={`px-5 py-4 align-middle text-[15px] font-poppins truncate ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                      className={`truncate px-4 py-3 align-middle text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
                     >
                       {p.phoneNumber || '\u2014'}
                     </td>
                     <td
-                      className={`px-5 py-4 align-middle text-[14px] font-poppins ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                      className={`px-4 py-3 align-middle text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
                       title={patientAddressLines(p).join(', ')}
                     >
                       {(() => {
@@ -638,7 +641,7 @@ export default function PatientsTable({
                     </td>
                     <td
                       onClick={() => setViewingPatient(p)}
-                      className={`px-5 py-4 align-middle text-[15px] font-poppins cursor-pointer ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
+                      className={`cursor-pointer px-4 py-3 align-middle text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}
                       title="View medical history"
                     >
                       {p.visits.length > 0 ? (
@@ -654,7 +657,7 @@ export default function PatientsTable({
                         <span className="italic">No visits yet</span>
                       )}
                     </td>
-                    <td className="px-5 py-4 align-middle text-right">
+                    <td className="px-4 py-3 align-middle text-right">
                       <div className="inline-flex items-center gap-1.5">
                         <button
                           onClick={() => setViewingPatient(p)}
@@ -690,7 +693,7 @@ export default function PatientsTable({
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
           <p
-            className={`m-0 text-[14px] font-poppins ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+            className={`m-0 text-[14px] font-sans ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
           >
             Showing {firstShown}&ndash;{lastShown} of {sortedFiltered.length}
           </p>
@@ -698,7 +701,7 @@ export default function PatientsTable({
             <button
               onClick={() => setCurrentPage(safePage - 1)}
               disabled={safePage <= 1 || isPending}
-              className={`min-w-[40px] h-[40px] px-2.5 rounded-lg text-[15px] font-semibold font-poppins cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center ${
+              className={`min-w-[40px] h-[40px] px-2.5 rounded-lg text-[15px] font-semibold font-sans cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center ${
                 darkMode
                   ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]'
                   : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
@@ -707,14 +710,14 @@ export default function PatientsTable({
               <ChevronLeft size={18} />
             </button>
             <span
-              className={`min-w-[40px] h-[40px] px-2.5 rounded-lg text-[15px] font-bold font-poppins border bg-[#4E69D3] text-white border-[#4E69D3] flex items-center justify-center`}
+              className={`min-w-[40px] h-[40px] px-2.5 rounded-lg text-[15px] font-bold font-sans border bg-[#4E69D3] text-white border-[#4E69D3] flex items-center justify-center`}
             >
               {safePage}
             </span>
             <button
               onClick={() => setCurrentPage(safePage + 1)}
               disabled={safePage >= totalPages || isPending}
-              className={`min-w-[40px] h-[40px] px-2.5 rounded-lg text-[15px] font-semibold font-poppins cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center ${
+              className={`min-w-[40px] h-[40px] px-2.5 rounded-lg text-[15px] font-semibold font-sans cursor-pointer border transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center ${
                 darkMode
                   ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:border-[#4E69D3]'
                   : 'bg-white text-gray-600 border-gray-200 hover:border-[#4E69D3] hover:text-[#4E69D3]'
@@ -740,7 +743,7 @@ export default function PatientsTable({
               className={`flex justify-between items-center px-4 sm:px-7 py-4 sm:py-5 ${darkMode ? 'border-[rgba(255,255,255,0.10)]' : 'border-gray-200'} border-b`}
             >
               <h2
-                className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                className={`font-sans text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
               >
                 {editingId ? 'Edit Patient' : 'Add New Patient'}
               </h2>
@@ -957,7 +960,7 @@ export default function PatientsTable({
               <button
                 onClick={() => !isPending && closeModal()}
                 disabled={isPending}
-                className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${
+                className={`px-6 py-3 rounded-lg text-[15px] font-bold font-sans cursor-pointer border transition-all ${
                   darkMode
                     ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]'
                     : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
@@ -968,7 +971,7 @@ export default function PatientsTable({
               <button
                 onClick={handleSave}
                 disabled={isPending}
-                className="px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border-none transition-all bg-[#4E69D3] text-white hover:bg-[#4A6BC4] disabled:opacity-50"
+                className="px-6 py-3 rounded-lg text-[15px] font-bold font-sans cursor-pointer border-none transition-all bg-[#4E69D3] text-white hover:bg-[#4A6BC4] disabled:opacity-50"
               >
                 {isPending
                   ? 'Saving...'
@@ -996,12 +999,12 @@ export default function PatientsTable({
             >
               <div className="flex flex-col">
                 <h2
-                  className={`font-poppins text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
+                  className={`font-sans text-xl font-bold m-0 ${darkMode ? 'text-[#F9FAFB]' : 'text-[#2A2E43]'}`}
                 >
                   Medical History
                 </h2>
                 <span
-                  className={`text-[13px] font-poppins mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  className={`text-[13px] font-sans mt-0.5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                 >
                   {viewingPatient.name} &middot; {viewingPatient.id}
                 </span>
@@ -1019,7 +1022,7 @@ export default function PatientsTable({
             <div className="px-4 sm:px-7 py-6 overflow-y-auto flex flex-col gap-4">
               {viewingPatient.visits.length === 0 && (
                 <p
-                  className={`m-0 text-[15px] font-poppins italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
+                  className={`m-0 text-[15px] font-sans italic ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
                 >
                   No medical history recorded for this patient yet.
                 </p>
@@ -1039,7 +1042,7 @@ export default function PatientsTable({
             >
               <button
                 onClick={() => setViewingPatient(null)}
-                className={`px-6 py-3 rounded-lg text-[15px] font-bold font-poppins cursor-pointer border transition-all ${
+                className={`px-6 py-3 rounded-lg text-[15px] font-bold font-sans cursor-pointer border transition-all ${
                   darkMode
                     ? 'bg-[#2d1b4e] text-[#F9FAFB] border-[rgba(255,255,255,0.10)] hover:bg-[#0f1438]'
                     : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'

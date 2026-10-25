@@ -326,11 +326,8 @@ export async function setStaffDayAvailability(data: {
   dateISO: string
   status: 'AVAILABLE' | 'OFF' | 'CLEAR'
 }) {
-  const session = await requireUser()
-  if (!session) return { success: false, message: 'Unauthorized' }
-  if (!['SUPERADMIN', 'ADMIN', 'MEDSTAFF'].includes(String(session.user.role ?? ''))) {
-    return { success: false, message: 'Only staff may manage availability.' }
-  }
+  const session = await requireAdmin()
+  if (!session) return { success: false, message: 'Only admins may manage staff availability.' }
   if (!data.serviceId || !data.staffId) {
     return { success: false, message: 'Service and staff are required.' }
   }
