@@ -1,5 +1,3 @@
-
-
 import { promises as fs } from 'node:fs'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
@@ -61,7 +59,6 @@ export async function ensureStoreDir(): Promise<void> {
     console.error('[ensureStoreDir | Error]:', error)
   }
 }
-
 
 /**
  * True when running on a serverless platform whose filesystem is wiped between
@@ -185,7 +182,9 @@ export async function readSnapshotBytes(backupId: string): Promise<Buffer> {
     try {
       const folderId = await resolveFolderId(GOOGLE_DRIVE_SUBDIR)
       const files = await listSnapshots(folderId, BACKUP_FILE_EXT)
-      const match = files.find((f) => f.name === `${backupId}${BACKUP_FILE_EXT}`)
+      const match = files.find(
+        (f) => f.name === `${backupId}${BACKUP_FILE_EXT}`,
+      )
       if (match) {
         const bytes = await downloadSnapshot(match.id)
         try {
@@ -211,7 +210,9 @@ export async function snapshotExists(backupId: string): Promise<boolean> {
   }
 }
 
-export async function snapshotChecksum(backupId: string): Promise<string | null> {
+export async function snapshotChecksum(
+  backupId: string,
+): Promise<string | null> {
   try {
     const bytes = await readSnapshotBytes(backupId)
     return createHash('sha256').update(bytes).digest('hex')
@@ -220,7 +221,11 @@ export async function snapshotChecksum(backupId: string): Promise<string | null>
   }
 }
 
-function recoveredManifest(backupId: string, sizeBytes: number): StoredManifest {
+function recoveredManifest(
+  backupId: string,
+  sizeBytes: number,
+  createdAt = new Date().toISOString(),
+): StoredManifest {
   return {
     backupId,
     label: `Recovered ${backupId}`,
@@ -233,8 +238,28 @@ function recoveredManifest(backupId: string, sizeBytes: number): StoredManifest 
     createdById: null,
     createdByName: null,
     createdByRole: null,
-    createdAt: new Date().toISOString(),
+    createdAt,
     restoredAt: null,
+  }
+}
+
+async function persistRecoveredManifest(
+  manifest: StoredManifest,
+): Promise<void> {
+  try {
+    await writeManifest(manifest.backupId, manifest)
+  } catch (error) {
+    console.error('[persistRecoveredManifest | local write]:', error)
+  }
+
+  if (isBlobConfigured()) {
+    const uploaded = await putManifestInBlob(manifest.backupId, manifest)
+    if (!uploaded.success) {
+      console.error(
+        '[persistRecoveredManifest | blob upload]:',
+        uploaded.message,
+      )
+    }
   }
 }
 
@@ -250,8 +275,17 @@ export async function listManifests(): Promise<StoredManifest[]> {
       const backupId = entry.slice(0, -BACKUP_FILE_EXT.length)
       if (!BACKUP_ID_FILE_RE.test(backupId)) continue
 
-      const manifest = await readManifest(backupId)
-      found.push(manifest ?? recoveredManifest(backupId, 0))
+      let manifest = await readManifest(backupId)
+      if (!manifest) {
+        const stat = await fs.stat(snapshotPath(backupId)).catch(() => null)
+        manifest = recoveredManifest(
+          backupId,
+          stat?.size ?? 0,
+          stat?.mtime.toISOString(),
+        )
+        await persistRecoveredManifest(manifest)
+      }
+      found.push(manifest)
     }
   } catch (error) {
     console.error('[listManifests | readdir]:', error)
@@ -261,10 +295,18 @@ export async function listManifests(): Promise<StoredManifest[]> {
     const seen = new Set(found.map((m) => m.backupId))
     for (const blob of await listBlobSnapshots()) {
       if (seen.has(blob.backupId)) continue
-      const manifest = (await getManifestFromBlob(
+      let manifest = (await getManifestFromBlob(
         blob.backupId,
       )) as StoredManifest | null
-      found.push(manifest ?? recoveredManifest(blob.backupId, blob.sizeBytes))
+      if (!manifest) {
+        manifest = recoveredManifest(
+          blob.backupId,
+          blob.sizeBytes,
+          blob.uploadedAt,
+        )
+        await persistRecoveredManifest(manifest)
+      }
+      found.push(manifest)
     }
   }
 
@@ -286,7 +328,15 @@ export async function listManifests(): Promise<StoredManifest[]> {
             manifest = JSON.parse(file.description) as StoredManifest
           } catch {}
         }
-        found.push(manifest ?? recoveredManifest(backupId, file.sizeBytes))
+        if (!manifest) {
+          manifest = recoveredManifest(
+            backupId,
+            file.sizeBytes,
+            file.modifiedAt,
+          )
+          await persistRecoveredManifest(manifest)
+        }
+        found.push(manifest)
       }
     } catch (error) {
       console.error('[listManifests | gdrive]:', error)

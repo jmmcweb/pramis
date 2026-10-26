@@ -1,7 +1,13 @@
 'use client'
 
-
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -45,14 +51,7 @@ import {
   type StorageRow,
   type TableRow,
 } from './BackupParts'
-import {
-  card,
-  cx,
-  heading,
-  iconTile,
-  muted,
-  secondaryButton,
-} from './backupUi'
+import { card, cx, heading, iconTile, muted, secondaryButton } from './backupUi'
 
 export default function BackupClient({
   initialOverview,
@@ -66,6 +65,7 @@ export default function BackupClient({
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<BackupRecord | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
     setOverview(await getBackupOverview())
@@ -174,6 +174,42 @@ export default function BackupClient({
       router.refresh()
     })
 
+  const handleRestoreUpload = (file: File) => {
+    if (
+      !window.confirm(
+        `Restore from "${file.name}"? This replaces the current database. A safety backup will be created first.`,
+      )
+    ) {
+      return
+    }
+
+    startTransition(async () => {
+      setBusy('restore-upload')
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const response = await fetch('/api/admin/backup/restore-upload', {
+          method: 'POST',
+          body: formData,
+        })
+        const result = await response.json()
+        if (!response.ok || !result.success) {
+          toast.error(
+            result.message ?? 'Failed to restore the uploaded backup.',
+          )
+          return
+        }
+        toast.success(result.message)
+        await refresh()
+        router.refresh()
+      } catch {
+        toast.error('The uploaded backup could not be processed.')
+      } finally {
+        setBusy(null)
+      }
+    })
+  }
+
   const handleSyncDrive = () =>
     startTransition(async () => {
       setBusy('drive-all')
@@ -260,7 +296,8 @@ export default function BackupClient({
         detail: status.available
           ? `${status.fileCount} snapshot(s) using ${formatBytes(status.totalBytes)}` +
             (status.enabled ? ' · mirroring on' : ' · mirroring off')
-          : status.message || 'Configure Google Drive credentials or set GOOGLE_DRIVE_DIR',
+          : status.message ||
+            'Configure Google Drive credentials or set GOOGLE_DRIVE_DIR',
         tone: status.available ? (status.enabled ? 'good' : 'warn') : 'warn',
         action: {
           label: 'Sync all',
@@ -339,6 +376,33 @@ export default function BackupClient({
               <Plus size={16} />
             )}
             Back up now
+          </button>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".json,.json.gz,application/json,application/gzip"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0]
+              event.currentTarget.value = ''
+              if (file) handleRestoreUpload(file)
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={busy !== null}
+            className={cx(
+              secondaryButton(darkMode),
+              'justify-center disabled:opacity-50',
+            )}
+          >
+            {busy === 'restore-upload' ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <CloudUpload size={15} />
+            )}
+            Restore from file
           </button>
         </div>
       </header>
@@ -452,7 +516,6 @@ export default function BackupClient({
         />
       </section>
 
-
       <section className={card(darkMode)}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -463,9 +526,9 @@ export default function BackupClient({
               <h2 className={heading(darkMode)}>Automatic backups</h2>
               <p className={cx(muted(darkMode), 'mt-1')}>
                 A snapshot is taken automatically{' '}
-                {formatBackupInterval(overview.autoBackupIntervalHours)} while the
-                app is in use. The oldest automatic backups are pruned beyond{' '}
-                {overview.autoBackupRetention} kept (about{' '}
+                {formatBackupInterval(overview.autoBackupIntervalHours)} while
+                the app is in use. The oldest automatic backups are pruned
+                beyond {overview.autoBackupRetention} kept (about{' '}
                 {Math.round(
                   (overview.autoBackupRetention *
                     overview.autoBackupIntervalHours) /
@@ -485,7 +548,9 @@ export default function BackupClient({
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <span className={cx(darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                  <span
+                    className={cx(darkMode ? 'text-gray-400' : 'text-gray-500')}
+                  >
                     Last automatic backup:
                   </span>
                   {overview.lastAutomaticBackupAt && lastAuto ? (
@@ -501,17 +566,26 @@ export default function BackupClient({
                       </span>
                     </span>
                   ) : (
-                    <span className="font-medium text-gray-400">None recorded yet</span>
+                    <span className="font-medium text-gray-400">
+                      None recorded yet
+                    </span>
                   )}
                 </div>
 
                 {overview.lastAutomaticBackupAt && (
                   <div className="flex items-center gap-2 border-l pl-4 border-gray-300 dark:border-white/10">
-                    <span className={cx(darkMode ? 'text-gray-400' : 'text-gray-500')}>
+                    <span
+                      className={cx(
+                        darkMode ? 'text-gray-400' : 'text-gray-500',
+                      )}
+                    >
                       Next check due:
                     </span>
                     <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {nextBackupDue(overview.lastAutomaticBackupAt, overview.autoBackupIntervalHours)}
+                      {nextBackupDue(
+                        overview.lastAutomaticBackupAt,
+                        overview.autoBackupIntervalHours,
+                      )}
                     </span>
                   </div>
                 )}

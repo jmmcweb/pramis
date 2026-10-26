@@ -126,7 +126,9 @@ function normalizeValue(value: unknown): unknown {
 
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {}
-    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, inner] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       out[key] = normalizeValue(inner)
     }
     return out
@@ -137,10 +139,10 @@ function normalizeValue(value: unknown): unknown {
 
 function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(row)) out[key] = normalizeValue(value)
+  for (const [key, value] of Object.entries(row))
+    out[key] = normalizeValue(value)
   return out
 }
-
 
 type ColumnType = 'json' | 'numeric' | 'plain'
 
@@ -197,7 +199,12 @@ async function writeBackupFiles(
     BackupRecord,
     'backupId' | 'createdAt' | 'restoredAt' | 'sizeBytes' | 'checksum'
   >,
-): Promise<{ sizeBytes: number; checksum: string; storedInBlob: boolean; gzipped: Buffer }> {
+): Promise<{
+  sizeBytes: number
+  checksum: string
+  storedInBlob: boolean
+  gzipped: Buffer
+}> {
   const gzipped = gzipSync(Buffer.from(JSON.stringify(snapshot), 'utf8'), {
     level: 9,
   })
@@ -294,9 +301,9 @@ export async function createBackup(
     let rowCount = 0
 
     for (const { table } of BACKUP_TABLES) {
-      const rows = await prisma.$queryRawUnsafe<
-        Array<Record<string, unknown>>
-      >(`SELECT * FROM "${table}"`)
+      const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        `SELECT * FROM "${table}"`,
+      )
       const normalized = rows.map(normalizeRow)
       tables[table] = normalized
       tableCounts[table] = normalized.length
@@ -323,11 +330,8 @@ export async function createBackup(
       createdByRole: input.actor?.role ?? null,
     }
 
-    const { sizeBytes, checksum, storedInBlob, gzipped } = await writeBackupFiles(
-      backupId,
-      snapshot,
-      meta,
-    )
+    const { sizeBytes, checksum, storedInBlob, gzipped } =
+      await writeBackupFiles(backupId, snapshot, meta)
 
     const created = await getBackupRecordFromManifest(backupId, {
       ...meta,
@@ -393,7 +397,6 @@ export async function createBackup(
     }
   }
 }
-
 
 const ISO_DATE_RE =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -474,7 +477,11 @@ export async function restoreBackup(
 
         const columns = columnMap.get(table) ?? {}
 
-        for (let offset = 0; offset < rows.length; offset += RESTORE_CHUNK_SIZE) {
+        for (
+          let offset = 0;
+          offset < rows.length;
+          offset += RESTORE_CHUNK_SIZE
+        ) {
           const chunk = rows.slice(offset, offset + RESTORE_CHUNK_SIZE)
           if (chunk.length === 0) continue
 
@@ -507,9 +514,7 @@ export async function restoreBackup(
                 return `$${index}::numeric`
               }
               if (type === 'json') {
-                values.push(
-                  typeof raw === 'string' ? raw : JSON.stringify(raw),
-                )
+                values.push(typeof raw === 'string' ? raw : JSON.stringify(raw))
                 return `$${index}::jsonb`
               }
               values.push(raw)
@@ -553,12 +558,134 @@ export async function restoreBackup(
   }
 }
 
+export async function restoreBackupFromUpload(
+  bytes: Buffer,
+  actor?: BackupActor,
+): Promise<RestoreBackupResult & { importedBackupId?: string }> {
+  try {
+    const jsonBytes =
+      bytes[0] === 0x1f && bytes[1] === 0x8b ? gunzipSync(bytes) : bytes
+    const parsed = JSON.parse(
+      jsonBytes.toString('utf8'),
+    ) as Partial<BackupSnapshot>
+
+    if (
+      parsed.version !== 1 ||
+      typeof parsed.createdAt !== 'string' ||
+      !Number.isFinite(Date.parse(parsed.createdAt)) ||
+      !parsed.tables ||
+      typeof parsed.tables !== 'object' ||
+      Array.isArray(parsed.tables)
+    ) {
+      return {
+        success: false,
+        message: 'The selected file is not a supported MediTrack backup.',
+      }
+    }
+
+    const columnMap = await loadTableColumns()
+    const tables: BackupSnapshot['tables'] = {}
+    const tableCounts: TableCounts = {}
+    let rowCount = 0
+
+    for (const { table } of BACKUP_TABLES) {
+      const rows = parsed.tables[table]
+      if (!Array.isArray(rows)) {
+        return {
+          success: false,
+          message: `The backup is missing the expected ${table} table data.`,
+        }
+      }
+
+      const allowedColumns = columnMap.get(table) ?? {}
+      for (const row of rows) {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+          return {
+            success: false,
+            message: `The backup contains invalid rows for ${table}.`,
+          }
+        }
+        if (
+          Object.keys(row).some(
+            (column) => !Object.hasOwn(allowedColumns, column),
+          )
+        ) {
+          return {
+            success: false,
+            message: `The backup contains unknown columns for ${table}.`,
+          }
+        }
+      }
+
+      tables[table] = rows as Record<string, unknown>[]
+      tableCounts[table] = rows.length
+      rowCount += rows.length
+    }
+
+    if (
+      Object.keys(parsed.tables).some(
+        (table) => !BACKUP_TABLES.some((spec) => spec.table === table),
+      )
+    ) {
+      return {
+        success: false,
+        message: 'The backup contains unsupported table data.',
+      }
+    }
+
+    const snapshot: BackupSnapshot = {
+      version: 1,
+      createdAt: parsed.createdAt,
+      tableCounts,
+      tables,
+    }
+    const backupId = await nextBackupId()
+    const now = new Date().toISOString()
+    const label = `Imported ${buildBackupLabel()}`
+    const gzipped = gzipSync(Buffer.from(JSON.stringify(snapshot), 'utf8'), {
+      level: 9,
+    })
+
+    await importSnapshot(backupId, gzipped, {
+      backupId,
+      label,
+      note: 'Imported from an uploaded JSON backup.',
+      trigger: 'MANUAL',
+      sizeBytes: gzipped.byteLength,
+      rowCount,
+      tableCounts,
+      checksum: '',
+      createdById: actor?.id ?? null,
+      createdByName: actor?.name ?? null,
+      createdByRole: actor?.role ?? null,
+      createdAt: now,
+      restoredAt: null,
+    })
+
+    const result = await restoreBackup(backupId, actor)
+    return {
+      ...result,
+      message: result.success
+        ? `Imported backup ${backupId}. ${result.message}`
+        : result.message,
+      importedBackupId: backupId,
+    }
+  } catch (error) {
+    console.error('[restoreBackupFromUpload | Error]:', error)
+    return {
+      success: false,
+      message: 'The uploaded backup could not be read or restored.',
+    }
+  }
+}
+
 export async function deleteBackup(
   backupId: string,
 ): Promise<{ success: boolean; message: string }> {
   if (!backupId) return { success: false, message: 'Backup ID is required.' }
 
-  const existed = (await readManifest(backupId)) ?? (await snapshotExists(backupId))
+  const existed =
+    (await readManifest(backupId)) ?? (await snapshotExists(backupId))
   if (!existed) {
     return { success: false, message: `Backup ${backupId} was not found.` }
   }
@@ -599,9 +726,7 @@ export async function readBackupSnapshot(
   }
 }
 
-export async function verifyBackup(
-  backupId: string,
-): Promise<{
+export async function verifyBackup(backupId: string): Promise<{
   success: boolean
   message: string
   counts?: TableCounts
@@ -754,9 +879,7 @@ export async function pruneAutomaticBackups(): Promise<string[]> {
 
     if (automatic.length <= AUTO_BACKUP_RETENTION) return []
 
-    const doomed = automatic
-      .slice(AUTO_BACKUP_RETENTION)
-      .map((m) => m.backupId)
+    const doomed = automatic.slice(AUTO_BACKUP_RETENTION).map((m) => m.backupId)
     if (doomed.length === 0) return []
 
     // Reclaim the stored bytes, not just the manifests: local files, the Blob
@@ -802,9 +925,7 @@ export async function getBackupDiskUsage(): Promise<{
     const entries = await fs.readdir(BACKUP_DIR)
     for (const entry of entries) {
       if (!entry.endsWith(BACKUP_FILE_EXT)) continue
-      const stat = await fs
-        .stat(path.join(BACKUP_DIR, entry))
-        .catch(() => null)
+      const stat = await fs.stat(path.join(BACKUP_DIR, entry)).catch(() => null)
       if (!stat) continue
       totalBytes += stat.size
       fileCount += 1
