@@ -78,9 +78,9 @@ export default function BackupClient({
     [overview.currentCounts],
   )
 
-  const handleCreate = () =>
+  const handleCreate = () => {
+    setBusy('create')
     startTransition(async () => {
-      setBusy('create')
       try {
         const res = await createDatabaseBackup(note.trim() || undefined)
         if (!res.success) {
@@ -98,10 +98,11 @@ export default function BackupClient({
         setBusy(null)
       }
     })
+  }
 
-  const handleRunSchedule = () =>
+  const handleRunSchedule = () => {
+    setBusy('schedule')
     startTransition(async () => {
-      setBusy('schedule')
       try {
         const res = await runScheduledBackup()
         if (!res.success) {
@@ -123,6 +124,7 @@ export default function BackupClient({
         setBusy(null)
       }
     })
+  }
 
   const handleDelete = (backup: BackupRecord) =>
     startTransition(async () => {
@@ -145,9 +147,9 @@ export default function BackupClient({
       router.refresh()
     })
 
-  const handleRestore = (backup: BackupRecord, confirm: string) =>
+  const handleRestore = (backup: BackupRecord, confirm: string) => {
+    setBusy('restore')
     startTransition(async () => {
-      setBusy('restore')
       try {
         const res = await restoreDatabaseBackup(backup.backupId, confirm)
         if (!res.success) {
@@ -165,6 +167,7 @@ export default function BackupClient({
         setBusy(null)
       }
     })
+  }
 
   const handleRestoreUpload = (file: File) => {
     if (
@@ -175,8 +178,8 @@ export default function BackupClient({
       return
     }
 
+    setBusy('restore-upload')
     startTransition(async () => {
-      setBusy('restore-upload')
       try {
         const formData = new FormData()
         formData.append('file', file)

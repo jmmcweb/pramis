@@ -394,6 +394,7 @@ function restoreFailureReason(error: unknown): string {
     '40001': 'The database reported a transaction conflict.',
     '42P01': 'A required database table is missing.',
     '42703': 'The backup does not match the current database schema.',
+    P2028: 'The restore transaction timed out. Try again; large restores may need more time.',
   }
 
   return code
@@ -529,6 +530,9 @@ export async function restoreBackup(
       }
 
       return inserted
+    }, {
+      maxWait: 30_000,
+      timeout: 240_000,
     })
 
     await patchManifest(backupId, { restoredAt: new Date().toISOString() })
