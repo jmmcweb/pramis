@@ -6,7 +6,6 @@ import {
   BACKUP_FILE_EXT,
   BACKUP_ID_FILE_RE,
   BACKUP_MANIFEST_EXT,
-  GOOGLE_DRIVE_SUBDIR,
   type BackupTrigger,
   type TableCounts,
 } from '@/lib/constants/backup'
@@ -18,12 +17,6 @@ import {
   putManifestInBlob,
   putSnapshotInBlob,
 } from '@/lib/vercelBlob'
-import {
-  downloadSnapshot,
-  isGdriveApiConfigured,
-  listSnapshots,
-  resolveFolderId,
-} from '@/lib/gdriveApi'
 
 /** The sidecar manifest. Also the catalogue entry for one snapshot. */
 export type StoredManifest = {
@@ -106,8 +99,7 @@ export async function storeSnapshot(
   }
 
   if (!storedLocally && !storedInBlob) {
-    // No durable store accepted the snapshot. Return the checksum anyway so
-    // the caller can still mirror the bytes to Google Drive.
+    // Let the caller report an error on serverless deployments without durable storage.
     return { checksum, storedInBlob: false }
   }
 
@@ -177,26 +169,6 @@ export async function readSnapshotBytes(backupId: string): Promise<Buffer> {
 
   const blob = await getSnapshotFromBlob(backupId)
   if (blob) return blob
-
-  if (isGdriveApiConfigured()) {
-    try {
-      const folderId = await resolveFolderId(GOOGLE_DRIVE_SUBDIR)
-      const files = await listSnapshots(folderId, BACKUP_FILE_EXT)
-      const match = files.find(
-        (f) => f.name === `${backupId}${BACKUP_FILE_EXT}`,
-      )
-      if (match) {
-        const bytes = await downloadSnapshot(match.id)
-        try {
-          await ensureStoreDir()
-          await fs.writeFile(snapshotPath(backupId), bytes)
-        } catch {}
-        return bytes
-      }
-    } catch (error) {
-      console.error('[readSnapshotBytes | gdrive]:', error)
-    }
-  }
 
   throw new Error(`Snapshot file for ${backupId} was not found.`)
 }
@@ -310,39 +282,6 @@ export async function listManifests(): Promise<StoredManifest[]> {
     }
   }
 
-  if (isGdriveApiConfigured()) {
-    try {
-      const folderId = await resolveFolderId(GOOGLE_DRIVE_SUBDIR)
-      const driveFiles = await listSnapshots(folderId, BACKUP_FILE_EXT)
-      const seen = new Set(found.map((m) => m.backupId))
-      for (const file of driveFiles) {
-        if (!file.name.endsWith(BACKUP_FILE_EXT)) continue
-        const backupId = file.name.slice(0, -BACKUP_FILE_EXT.length)
-        if (!BACKUP_ID_FILE_RE.test(backupId)) continue
-        if (seen.has(backupId)) continue
-        seen.add(backupId)
-
-        let manifest: StoredManifest | null = null
-        if (file.description) {
-          try {
-            manifest = JSON.parse(file.description) as StoredManifest
-          } catch {}
-        }
-        if (!manifest) {
-          manifest = recoveredManifest(
-            backupId,
-            file.sizeBytes,
-            file.modifiedAt,
-          )
-          await persistRecoveredManifest(manifest)
-        }
-        found.push(manifest)
-      }
-    } catch (error) {
-      console.error('[listManifests | gdrive]:', error)
-    }
-  }
-
   return found.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
 }
 
@@ -374,7 +313,7 @@ export async function importSnapshot(
     ? { ...manifest, backupId, checksum }
     : {
         ...recoveredManifest(backupId, bytes.byteLength),
-        note: 'Fetched from Google Drive.',
+        note: 'Imported from backup file.',
         restoredAt: null,
       }
 

@@ -10,15 +10,11 @@ import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
-  CloudDownload,
-  CloudUpload,
   Download,
   HardDrive,
   Inbox,
   Loader2,
-  RefreshCw,
   RotateCcw,
-  Server,
   Trash2,
   X,
 } from 'lucide-react'
@@ -27,13 +23,6 @@ import type { BackupRecord } from '@/lib/backup'
 import {
   card,
   cx,
-  dot,
-  heading,
-  iconTile,
-  mono,
-  muted,
-  secondaryButton,
-  type StatusTone,
 } from './backupUi'
 
 export type TableRow = { table: string; current: number }
@@ -569,133 +558,11 @@ export function RestoreDialog({
             ) : (
               <RotateCcw size={15} />
             )}
-            Restore database
+            {busy ? 'Restoring…' : 'Restore database'}
           </button>
         </div>
       </div>
     </div>
-  )
-}
-
-export type StorageRow = {
-  icon: React.ReactNode
-  label: string
-  location: string
-  detail: string
-  tone: StatusTone
-  action?: { label: string; onClick: () => void; busy: boolean }
-}
-
-export function StoragePanel({
-  darkMode,
-  rows,
-  driveOnly,
-  onFetchAll,
-}: {
-  darkMode: boolean
-  rows: StorageRow[]
-  driveOnly: number
-  onFetchAll: () => void
-}) {
-  return (
-    <section className={card(darkMode)}>
-      <div className="flex items-start gap-3 mb-4">
-        <span className={iconTile(darkMode, 'good')}>
-          <HardDrive size={17} />
-        </span>
-        <div>
-          <h2 className={heading(darkMode)}>Where backups are stored</h2>
-          <p className={cx(muted(darkMode), 'mt-1')}>
-            The database only keeps an index, so snapshots survive even if it is
-            lost. New backups are mirrored to every available store.
-          </p>
-        </div>
-      </div>
-
-      <ul>
-        {rows.map((row) => (
-          <li
-            key={row.label}
-            className={cx(
-              'flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0',
-              darkMode ? 'border-white/5' : 'border-gray-100',
-            )}
-          >
-            <span className={iconTile(darkMode, row.tone)}>{row.icon}</span>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className={dot(row.tone)} />
-                <span
-                  className={cx(
-                    'text-sm font-semibold',
-                    darkMode ? 'text-slate-100' : 'text-[#2A2E43]',
-                  )}
-                >
-                  {row.label}
-                </span>
-              </div>
-              <p className={cx(mono(darkMode), 'mt-0.5 truncate')}>
-                {row.location}
-              </p>
-              <p className={cx(muted(darkMode), 'mt-0.5')}>{row.detail}</p>
-            </div>
-
-            {row.action && (
-              <button
-                type="button"
-                onClick={row.action.onClick}
-                disabled={row.action.busy}
-                className={secondaryButton(darkMode)}
-              >
-                {row.action.busy ? (
-                  <Loader2 size={15} className="animate-spin" />
-                ) : row.action.label === 'Refresh' ? (
-                  <RefreshCw size={15} />
-                ) : (
-                  <CloudUpload size={15} />
-                )}
-                {row.action.label}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {driveOnly > 0 && (
-        <div
-          className={cx(
-            'mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3',
-            darkMode
-              ? 'border-amber-500/25 bg-amber-500/10'
-              : 'border-amber-200 bg-amber-50',
-          )}
-        >
-          <p
-            className={cx(
-              'text-xs',
-              darkMode ? 'text-amber-200' : 'text-amber-800',
-            )}
-          >
-            {driveOnly} snapshot(s) exist in Google Drive but are not registered
-            here. Fetch them to make them restorable.
-          </p>
-          <button
-            type="button"
-            onClick={onFetchAll}
-            className={cx(
-              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition',
-              darkMode
-                ? 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30'
-                : 'bg-amber-600 text-white hover:bg-amber-700',
-            )}
-          >
-            <CloudDownload size={15} />
-            Fetch all
-          </button>
-        </div>
-      )}
-    </section>
   )
 }
 
@@ -769,5 +636,3 @@ export function TableBreakdown({
     </section>
   )
 }
-
-

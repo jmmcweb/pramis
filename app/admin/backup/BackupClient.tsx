@@ -14,25 +14,19 @@ import {
   Clock,
   CloudUpload,
   Database,
-  HardDrive,
   HardDriveDownload,
   History,
   Loader2,
   Plus,
   RefreshCw,
-  Server,
   ShieldCheck,
 } from 'lucide-react'
 import { useDarkMode } from '@/app/admin/DarkModeContext'
 import {
   createDatabaseBackup,
   deleteDatabaseBackup,
-  fetchBackupFromCloudAction,
   getBackupOverview,
-  pushAllBackupsToBlobAction,
-  pushAllBackupsToDriveAction,
   restoreDatabaseBackup,
-  refreshBackupsFromStoreAction,
   runScheduledBackup,
   type BackupOverview,
 } from '@/lib/actions/backup'
@@ -41,14 +35,12 @@ import type { BackupRecord } from '@/lib/backup'
 import {
   BackupTable,
   RestoreDialog,
-  StoragePanel,
   SummaryCard,
   TableBreakdown,
   formatDateTime,
   formatTimeAgo,
   nextBackupDue,
   relativeTime,
-  type StorageRow,
   type TableRow,
 } from './BackupParts'
 import { card, cx, heading, iconTile, muted, secondaryButton } from './backupUi'
@@ -89,53 +81,47 @@ export default function BackupClient({
   const handleCreate = () =>
     startTransition(async () => {
       setBusy('create')
-      const res = await createDatabaseBackup(note.trim() || undefined)
-      setBusy(null)
-      if (!res.success) {
-        toast.error(res.message)
-        return
+      try {
+        const res = await createDatabaseBackup(note.trim() || undefined)
+        if (!res.success) {
+          toast.error(res.message)
+          return
+        }
+        setNote('')
+        toast.success(res.message)
+        await refresh()
+        router.refresh()
+      } catch (error) {
+        console.error('[BackupClient | create backup]:', error)
+        toast.error('The database backup could not be created.')
+      } finally {
+        setBusy(null)
       }
-      setNote('')
-      toast.success(res.message)
-      if (res.cloud?.success) toast.success(res.cloud.message)
-      else if (res.cloud) {
-        toast.warning(`Drive copy failed: ${res.cloud.message}`)
-      }
-      await refresh()
-      router.refresh()
     })
 
   const handleRunSchedule = () =>
     startTransition(async () => {
       setBusy('schedule')
-      const res = await runScheduledBackup()
-      setBusy(null)
-      if (!res.success) {
-        toast.error(res.message)
-        return
+      try {
+        const res = await runScheduledBackup()
+        if (!res.success) {
+          toast.error(res.message)
+          return
+        }
+        toast.success(res.message)
+        if (res.pruned?.length) {
+          toast.info(
+            `Pruned ${res.pruned.length} old automatic backup(s) beyond the retention limit.`,
+          )
+        }
+        await refresh()
+        router.refresh()
+      } catch (error) {
+        console.error('[BackupClient | scheduled backup]:', error)
+        toast.error('The scheduled backup could not be completed.')
+      } finally {
+        setBusy(null)
       }
-      toast.success(res.message)
-      if (res.pruned?.length) {
-        toast.info(
-          `Pruned ${res.pruned.length} old automatic backup(s) beyond the retention limit.`,
-        )
-      }
-      await refresh()
-      router.refresh()
-    })
-
-  const handleRefreshStore = () =>
-    startTransition(async () => {
-      setBusy('refresh')
-      const res = await refreshBackupsFromStoreAction()
-      setBusy(null)
-      if (!res.success) {
-        toast.error(res.message)
-        return
-      }
-      toast.success(res.message)
-      await refresh()
-      router.refresh()
     })
 
   const handleDelete = (backup: BackupRecord) =>
@@ -162,16 +148,22 @@ export default function BackupClient({
   const handleRestore = (backup: BackupRecord, confirm: string) =>
     startTransition(async () => {
       setBusy('restore')
-      const res = await restoreDatabaseBackup(backup.backupId, confirm)
-      setBusy(null)
-      if (!res.success) {
-        toast.error(res.message)
-        return
+      try {
+        const res = await restoreDatabaseBackup(backup.backupId, confirm)
+        if (!res.success) {
+          toast.error(res.message)
+          return
+        }
+        toast.success(res.message)
+        setRestoreTarget(null)
+        await refresh()
+        router.refresh()
+      } catch (error) {
+        console.error('[BackupClient | restore backup]:', error)
+        toast.error('The selected backup could not be restored.')
+      } finally {
+        setBusy(null)
       }
-      toast.success(res.message)
-      setRestoreTarget(null)
-      await refresh()
-      router.refresh()
     })
 
   const handleRestoreUpload = (file: File) => {
@@ -210,126 +202,6 @@ export default function BackupClient({
     })
   }
 
-  const handleSyncDrive = () =>
-    startTransition(async () => {
-      setBusy('drive-all')
-      const res = await pushAllBackupsToDriveAction()
-      setBusy(null)
-      if (!res.success) {
-        toast.error(res.message)
-        return
-      }
-      toast.success(res.message)
-      await refresh()
-      router.refresh()
-    })
-
-  const handleSyncBlob = () =>
-    startTransition(async () => {
-      setBusy('blob-all')
-      const res = await pushAllBackupsToBlobAction()
-      setBusy(null)
-      if (!res.success) {
-        toast.error(res.message)
-        return
-      }
-      toast.success(res.message)
-      await refresh()
-      router.refresh()
-    })
-
-  const handleFetchAllFromDrive = () =>
-    startTransition(async () => {
-      const pending = overview.cloud.files.filter(
-        (f) => !overview.backups.some((b) => b.backupId === f.backupId),
-      )
-      if (pending.length === 0) {
-        toast.info('Everything in Google Drive is already fetched.')
-        return
-      }
-
-      setBusy('fetch-all')
-      let ok = 0
-      for (const file of pending) {
-        const res = await fetchBackupFromCloudAction(file.backupId)
-        if (res.success) ok += 1
-        else toast.error(`${file.backupId}: ${res.message}`)
-      }
-      setBusy(null)
-
-      if (ok > 0) toast.success(`Fetched ${ok} snapshot(s) from Google Drive.`)
-      await refresh()
-      router.refresh()
-    })
-
-  const driveOnlyCount = useMemo(
-    () =>
-      overview.cloud.files.filter(
-        (f) => !overview.backups.some((b) => b.backupId === f.backupId),
-      ).length,
-    [overview.cloud.files, overview.backups],
-  )
-
-  const storageRows = useMemo<StorageRow[]>(() => {
-    const { status } = overview.cloud
-    const { blob } = overview
-
-    return [
-      {
-        icon: <HardDrive size={17} />,
-        label: 'Server storage',
-        location: overview.backupDirectory,
-        detail: overview.storageAvailable
-          ? `${overview.filesOnDisk} snapshot(s) using ${formatBytes(overview.diskBytes)}`
-          : 'Folder is not writable',
-        tone: overview.storageAvailable ? 'good' : 'bad',
-        action: {
-          label: 'Refresh',
-          onClick: handleRefreshStore,
-          busy: busy === 'refresh',
-        },
-      },
-      {
-        icon: <CloudUpload size={17} />,
-        label: 'Google Drive',
-        location: status.directory ?? 'Not detected',
-        detail: status.available
-          ? `${status.fileCount} snapshot(s) using ${formatBytes(status.totalBytes)}` +
-            (status.enabled ? ' · mirroring on' : ' · mirroring off')
-          : status.message ||
-            'Configure Google Drive credentials or set GOOGLE_DRIVE_DIR',
-        tone: status.available ? (status.enabled ? 'good' : 'warn') : 'warn',
-        action: {
-          label: 'Sync all',
-          onClick: handleSyncDrive,
-          busy: busy === 'drive-all',
-        },
-      },
-      {
-        icon: <Server size={17} />,
-        label: 'Vercel Blob',
-        location: blob.configured ? `${blob.prefix}/` : 'Not configured',
-        detail: blob.configured
-          ? `${blob.fileCount} snapshot(s) using ${formatBytes(blob.totalBytes)}`
-          : 'Set BLOB_READ_WRITE_TOKEN for serverless',
-        tone: blob.configured ? 'good' : 'warn',
-        action: {
-          label: 'Push all',
-          onClick: handleSyncBlob,
-          busy: busy === 'blob-all',
-        },
-      },
-    ]
-  }, [
-    overview.cloud,
-    overview.blob,
-    overview.backupDirectory,
-    overview.filesOnDisk,
-    overview.diskBytes,
-    overview.storageAvailable,
-    busy,
-  ])
-
   const lastAuto = overview.lastAutomaticBackupAt
     ? formatDateTime(overview.lastAutomaticBackupAt)
     : null
@@ -337,9 +209,42 @@ export default function BackupClient({
   const lastRestore = overview.lastRestoredAt
     ? formatDateTime(overview.lastRestoredAt)
     : null
+  const operationMessage =
+    busy === 'create'
+      ? 'Creating database backup'
+      : busy === 'schedule'
+        ? 'Running scheduled backup'
+        : busy === 'restore'
+          ? 'Restoring database'
+          : busy === 'restore-upload'
+            ? 'Restoring from backup file'
+            : null
 
   return (
     <div className="pb-10">
+      {operationMessage && (
+        <div
+          className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#171333] p-7 text-center text-white shadow-2xl">
+            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center">
+              <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/20" />
+              <span className="absolute inset-1 rounded-full border-2 border-indigo-300/20 border-t-indigo-300 animate-spin" />
+              <Loader2 size={27} className="animate-spin text-indigo-200" />
+            </div>
+            <p className="text-base font-semibold">{operationMessage}…</p>
+            <p className="mt-2 text-sm text-slate-300">
+              Please keep this page open while we safely process your data.
+            </p>
+            <div className="mt-5 h-1 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-1/2 animate-pulse rounded-full bg-indigo-300" />
+            </div>
+          </div>
+        </div>
+      )}
       <RestoreDialog
         backup={restoreTarget}
         darkMode={darkMode}
@@ -375,7 +280,7 @@ export default function BackupClient({
             ) : (
               <Plus size={16} />
             )}
-            Back up now
+            {busy === 'create' ? 'Creating backup…' : 'Back up now'}
           </button>
           <input
             ref={uploadInputRef}
@@ -402,7 +307,7 @@ export default function BackupClient({
             ) : (
               <CloudUpload size={15} />
             )}
-            Restore from file
+            {busy === 'restore-upload' ? 'Restoring…' : 'Restore from file'}
           </button>
         </div>
       </header>

@@ -9,27 +9,13 @@ import {
   BACKUP_DIR,
   BACKUP_FILE_EXT,
   BACKUP_ID_FILE_RE,
-  BACKUP_MIRROR_TO_DRIVE,
   BACKUP_TABLES,
   BACKUP_TABLES_BY_RESTORE_ORDER,
   RESTORE_CHUNK_SIZE,
   backupFilePath,
   buildBackupLabel,
-  cloudManifestPath,
-  cloudSnapshotPath,
   type BackupTrigger,
-  type CloudBackupFile,
-  type CloudResult,
-  type CloudStatus,
 } from '@/lib/constants/backup'
-import {
-  getCloudStatus,
-  listDriveFiles,
-  pullFromDrive,
-  pushSnapshotToDrive,
-  registerFetchHook,
-  removeFromDrive,
-} from '@/lib/cloudBackup'
 import {
   blobHasSnapshot,
   deleteSnapshotFromBlob,
@@ -93,8 +79,6 @@ export type CreateBackupResult = {
   success: boolean
   message: string
   backup?: BackupRecord
-  /** Set when the snapshot was also copied to the Google Drive mirror. */
-  cloud?: CloudResult
 }
 
 export type RestoreBackupResult = {
@@ -203,7 +187,6 @@ async function writeBackupFiles(
   sizeBytes: number
   checksum: string
   storedInBlob: boolean
-  gzipped: Buffer
 }> {
   const gzipped = gzipSync(Buffer.from(JSON.stringify(snapshot), 'utf8'), {
     level: 9,
@@ -218,7 +201,7 @@ async function writeBackupFiles(
     createdAt: new Date().toISOString(),
   })
 
-  return { sizeBytes: gzipped.byteLength, checksum, storedInBlob, gzipped }
+  return { sizeBytes: gzipped.byteLength, checksum, storedInBlob }
 }
 
 async function readBackupFile(backupId: string): Promise<BackupSnapshot> {
@@ -330,7 +313,7 @@ export async function createBackup(
       createdByRole: input.actor?.role ?? null,
     }
 
-    const { sizeBytes, checksum, storedInBlob, gzipped } =
+    const { sizeBytes, checksum, storedInBlob } =
       await writeBackupFiles(backupId, snapshot, meta)
 
     const created = await getBackupRecordFromManifest(backupId, {
@@ -341,43 +324,17 @@ export async function createBackup(
       createdAt: new Date().toISOString(),
     })
 
-    const manifestPayload = {
-      backupId,
-      label: created?.label ?? meta.label,
-      note: meta.note ?? null,
-      trigger: meta.trigger,
-      sizeBytes,
-      rowCount,
-      tableCounts,
-      checksum,
-      createdAt: created?.createdAt ?? new Date().toISOString(),
-      createdByName: meta.createdByName ?? null,
-      createdByRole: meta.createdByRole ?? null,
-    }
-
-    const cloud = BACKUP_MIRROR_TO_DRIVE
-      ? await pushSnapshotToDrive(
-          BACKUP_DIR,
-          backupId,
-          gzipped,
-          manifestPayload,
-        )
-      : undefined
-
-    // On serverless platforms the local disk is ephemeral, so a snapshot that
-    // reached neither Vercel Blob nor Google Drive would be gone as soon as the
-    // function ends. Fail loudly instead of reporting a backup that cannot be
-    // restored later.
+    // On serverless platforms the local disk is ephemeral, so snapshots must
+    // reach Vercel Blob before the function ends.
     const onServerless = Boolean(
       process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME,
     )
-    const persisted = storedInBlob || Boolean(cloud?.success)
+    const persisted = storedInBlob
     if (onServerless && !persisted) {
       return {
         success: false,
         message:
-          'The snapshot could not be persisted to a durable store on this deployment, so it would be lost when the function ends. Set BLOB_READ_WRITE_TOKEN (Vercel Blob) and/or Google Drive API credentials (GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON, or GOOGLE_DRIVE_CLIENT_ID/GOOGLE_DRIVE_CLIENT_SECRET/GOOGLE_DRIVE_REFRESH_TOKEN) in the environment variables and try again.',
-        cloud,
+          'The snapshot could not be persisted to Vercel Blob on this deployment, so it would be lost when the function ends. Set BLOB_READ_WRITE_TOKEN in the environment variables and try again.',
       }
     }
 
@@ -385,7 +342,6 @@ export async function createBackup(
       success: true,
       message: `Backup created with ${rowCount.toLocaleString()} rows.`,
       backup: created,
-      cloud,
     }
   } catch (error) {
     console.error('[createBackup | Error]:', error)
@@ -403,6 +359,46 @@ const ISO_DATE_RE =
 
 function isIsoDate(value: string): boolean {
   return ISO_DATE_RE.test(value)
+}
+
+function restoreFailureReason(error: unknown): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    /advisory|already in progress/i.test(error.message)
+  ) {
+    return error.message
+  }
+
+  let code: string | undefined
+  if (error && typeof error === 'object') {
+    if ('meta' in error && error.meta && typeof error.meta === 'object') {
+      const meta = error.meta as Record<string, unknown>
+      if (typeof meta.code === 'string') code = meta.code
+    }
+    if (!code && 'code' in error && typeof error.code === 'string') {
+      code = error.code
+    }
+    if (!code && 'message' in error && typeof error.message === 'string') {
+      code = error.message.match(/\bCode:\s*([A-Z0-9]{5})\b/)?.[1]
+    }
+  }
+
+  const reasons: Record<string, string> = {
+    '22P02': 'The backup contains a value that does not match a database field type.',
+    '23502': 'The backup is missing a value required by the current database schema.',
+    '23503': 'The backup contains records with missing related records.',
+    '23505': 'The backup contains duplicate records.',
+    '40001': 'The database reported a transaction conflict.',
+    '42P01': 'A required database table is missing.',
+    '42703': 'The backup does not match the current database schema.',
+  }
+
+  return code
+    ? `${reasons[code] ?? `The database rejected the restore (error ${code}).`}`
+    : 'The database rejected the restore. No changes were saved; contact support with the restore time.'
 }
 
 export async function restoreBackup(
@@ -543,16 +539,15 @@ export async function restoreBackup(
       restoredRows,
       safetyBackupId: safety.backup.backupId,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[restoreBackup | Error]:', error)
-    const aborted = /advisory|already in progress/i.test(
-      String(error?.message ?? ''),
-    )
+    const reason = restoreFailureReason(error)
+    const aborted = /advisory|already in progress/i.test(reason)
     return {
       success: false,
       message: aborted
-        ? error.message
-        : 'Restore failed and was rolled back. The database is unchanged.',
+        ? reason
+        : `Restore failed and was rolled back. The database is unchanged. ${reason}`,
       safetyBackupId: safety.backup.backupId,
     }
   }
@@ -693,10 +688,7 @@ export async function deleteBackup(
   try {
     await deleteStored(backupId)
 
-    await Promise.all([
-      deleteSnapshotFromBlob(backupId).catch(() => undefined),
-      removeFromDrive(backupId).catch(() => undefined),
-    ])
+    await deleteSnapshotFromBlob(backupId).catch(() => undefined)
 
     return { success: true, message: 'Backup deleted.' }
   } catch (error) {
@@ -742,7 +734,7 @@ export async function verifyBackup(backupId: string): Promise<{
     return {
       success: false,
       message:
-        'The snapshot file is missing from storage. Re-create the backup, or fetch it back from Google Drive.',
+        'The snapshot file is missing from storage. Re-create the backup or import it from a backup file.',
       fileExists: false,
       checksumOk: false,
     }
@@ -882,13 +874,11 @@ export async function pruneAutomaticBackups(): Promise<string[]> {
     const doomed = automatic.slice(AUTO_BACKUP_RETENTION).map((m) => m.backupId)
     if (doomed.length === 0) return []
 
-    // Reclaim the stored bytes, not just the manifests: local files, the Blob
-    // objects and the Google Drive copies.
+    // Reclaim the stored bytes, not just the manifests: local files and Blob objects.
     for (const id of doomed) {
       await Promise.all([
         deleteStored(id).catch(() => {}),
         deleteSnapshotFromBlob(id).catch(() => undefined),
-        removeFromDrive(id).catch(() => undefined),
       ])
     }
 
@@ -984,42 +974,6 @@ export async function getBlobStatus(): Promise<{
   }
 }
 
-export async function pushBackupToDrive(
-  backupId: string,
-): Promise<CloudResult> {
-  if (!backupId) return { success: false, message: 'Backup ID is required.' }
-
-  const bytes = await readSnapshotBytes(backupId).catch(() => null)
-  if (!bytes) {
-    return {
-      success: false,
-      message: `Snapshot ${backupId} is missing from the backup storage.`,
-      backupId,
-    }
-  }
-
-  const manifest = await readManifest(backupId)
-
-  return pushSnapshotToDrive(BACKUP_DIR, backupId, bytes, manifest)
-}
-
-export async function pushAllBackupsToDrive(): Promise<{
-  pushed: string[]
-  failed: Array<{ backupId: string; message: string }>
-}> {
-  const backups = await listBackups(500)
-  const pushed: string[] = []
-  const failed: Array<{ backupId: string; message: string }> = []
-
-  for (const backup of backups) {
-    const result = await pushBackupToDrive(backup.backupId)
-    if (result.success) pushed.push(backup.backupId)
-    else failed.push({ backupId: backup.backupId, message: result.message })
-  }
-
-  return { pushed, failed }
-}
-
 export async function pushAllBackupsToBlob(): Promise<{
   pushed: string[]
   failed: Array<{ backupId: string; message: string }>
@@ -1069,106 +1023,4 @@ export async function pushAllBackupsToBlob(): Promise<{
   }
 
   return { pushed, failed }
-}
-
-async function fetchBackupFromDriveDir(
-  backupId: string,
-  driveDir: string,
-): Promise<CloudResult> {
-  if (!backupId) return { success: false, message: 'Backup ID is required.' }
-  if (!driveDir) {
-    return { success: false, message: 'No Google Drive folder is configured.' }
-  }
-
-  const source = cloudSnapshotPath(driveDir, backupId)
-  const bytes = await fs.readFile(source).catch(() => null)
-  if (!bytes) {
-    return {
-      success: false,
-      message: `Backup ${backupId} was not found in Google Drive.`,
-      backupId,
-    }
-  }
-
-  const checksum = createHash('sha256').update(bytes).digest('hex')
-  let manifest: StoredManifest | null = null
-  try {
-    manifest = JSON.parse(
-      await fs.readFile(cloudManifestPath(driveDir, backupId), 'utf8'),
-    ) as StoredManifest
-  } catch {
-    manifest = null
-  }
-
-  if (manifest?.checksum && manifest.checksum !== checksum) {
-    return {
-      success: false,
-      message: `Backup ${backupId} in Google Drive is incomplete — its checksum does not match. Wait for Drive to finish syncing and try again.`,
-      backupId,
-    }
-  }
-
-  const alreadyStored = await checksumMatches(backupId, checksum)
-  if (alreadyStored) {
-    return {
-      success: true,
-      message: `Backup ${backupId} is already fetched from Google Drive.`,
-      backupId,
-    }
-  }
-
-  try {
-    const imported = await importSnapshot(
-      backupId,
-      bytes,
-      manifest as StoredManifest | null,
-    )
-
-    if (!imported) {
-      return {
-        success: false,
-        message: `Backup ${backupId} was copied but could not be stored.`,
-        backupId,
-      }
-    }
-
-    return {
-      success: true,
-      message: `Fetched ${backupId} from Google Drive. It is now available to restore.`,
-      backupId,
-    }
-  } catch (error) {
-    console.error('[fetchBackupFromCloud | Error]:', error)
-    return {
-      success: false,
-      message: `Failed to fetch ${backupId} from Google Drive.`,
-      backupId,
-    }
-  }
-}
-
-registerFetchHook(fetchBackupFromDriveDir)
-
-export async function fetchBackupFromCloud(
-  backupId: string,
-): Promise<CloudResult> {
-  return pullFromDrive(backupId)
-}
-
-export async function deleteBackupFromCloud(
-  backupId: string,
-): Promise<CloudResult> {
-  if (!backupId) return { success: false, message: 'Backup ID is required.' }
-  return removeFromDrive(backupId)
-}
-
-export async function getCloudBackupOverview(): Promise<{
-  status: CloudStatus
-  files: CloudBackupFile[]
-}> {
-  const [status, files] = await Promise.all([
-    getCloudStatus(),
-    listDriveFiles(),
-  ])
-  return { status, files }
 }

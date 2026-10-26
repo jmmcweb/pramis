@@ -5,10 +5,15 @@ import {
   BACKUP_FILE_EXT,
   BACKUP_ID_FILE_RE,
   BACKUP_MANIFEST_EXT,
-  type CloudResult,
 } from '@/lib/constants/backup'
 
 export const BLOB_BACKUP_PREFIX = 'meditrack-backups'
+
+type BlobResult = {
+  success: boolean
+  message: string
+  backupId?: string
+}
 
 export function isBlobConfigured(): boolean {
   if (process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID) return true
@@ -41,7 +46,7 @@ export async function putSnapshotInBlob(
   backupId: string,
   snapshot: Buffer,
   manifest: unknown,
-): Promise<CloudResult> {
+): Promise<BlobResult> {
   if (!isBlobConfigured()) {
     return {
       success: false,
@@ -93,7 +98,7 @@ export async function putSnapshotInBlob(
 export async function putManifestInBlob(
   backupId: string,
   manifest: unknown,
-): Promise<CloudResult> {
+): Promise<BlobResult> {
   if (!isBlobConfigured()) {
     return {
       success: false,
@@ -195,7 +200,7 @@ export async function listBlobSnapshots(limit = 200): Promise<
 
 export async function deleteSnapshotFromBlob(
   backupId: string,
-): Promise<CloudResult> {
+): Promise<BlobResult> {
   if (!isBlobConfigured()) {
     return {
       success: false,

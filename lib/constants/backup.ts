@@ -73,15 +73,6 @@ export function formatBackupInterval(hours: number): string {
 
 export const RESTORE_CHUNK_SIZE = 100
 
-export const GOOGLE_DRIVE_DIR = process.env.GOOGLE_DRIVE_DIR?.trim() || null
-
-export const GOOGLE_DRIVE_SUBDIR =
-  process.env.GOOGLE_DRIVE_SUBDIR?.trim() || 'PRAMIS Backups'
-
-export function cloudBackupDir(root?: string | null): string {
-  return path.join(root ?? GOOGLE_DRIVE_DIR ?? '', GOOGLE_DRIVE_SUBDIR)
-}
-
 function resolveBackupDir(): string {
   if (process.env.BACKUP_DIR) return path.resolve(process.env.BACKUP_DIR)
 
@@ -89,19 +80,12 @@ function resolveBackupDir(): string {
     process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME,
   )
 
-  if (GOOGLE_DRIVE_DIR && !serverless) {
-    return cloudBackupDir(GOOGLE_DRIVE_DIR)
-  }
-
   return serverless
     ? path.join(os.tmpdir(), 'meditrack-backups')
     : path.join(process.cwd(), 'backups')
 }
 
 export const BACKUP_DIR = resolveBackupDir()
-
-export const BACKUP_DIR_IS_GOOGLE_DRIVE =
-  Boolean(GOOGLE_DRIVE_DIR) && path.resolve(BACKUP_DIR) === path.resolve(cloudBackupDir(GOOGLE_DRIVE_DIR))
 
 export const BACKUP_FILE_EXT = '.json.gz'
 
@@ -120,71 +104,7 @@ export function backupDownloadName(backupId: string): string {
 }
 
 
-function readBooleanEnv(name: string, fallback: boolean): boolean {
-  const raw = process.env[name]
-  if (raw === undefined || raw === '') return fallback
-  return !['0', 'false', 'off', 'no'].includes(raw.trim().toLowerCase())
-}
-
-export const BACKUP_MIRROR_TO_DRIVE = readBooleanEnv(
-  'BACKUP_MIRROR_TO_DRIVE',
-  true,
-)
-
-export function cloudSnapshotPath(dir: string, backupId: string): string {
-  return path.join(dir, `${backupId}${BACKUP_FILE_EXT}`)
-}
-
-export function cloudManifestPath(dir: string, backupId: string): string {
-  return path.join(dir, `${backupId}${BACKUP_MANIFEST_EXT}`)
-}
-
 export const BACKUP_ID_FILE_RE = /^BKP-\d+$/
-
-export type CloudMirrorSource = 'api' | 'env' | 'detected' | 'none'
-
-export type CloudStatus = {
-  enabled: boolean
-  root: string | null
-  directory: string | null
-  source: CloudMirrorSource
-  available: boolean
-  fileCount: number
-  totalBytes: number
-  message: string
-}
-
-export type CloudManifest = {
-  backupId: string
-  label: string
-  note: string | null
-  trigger: string
-  sizeBytes: number
-  rowCount: number
-  tableCounts: Record<string, number>
-  checksum: string
-  createdAt: string
-  createdByName?: string | null
-  createdByRole?: string | null
-  file?: string
-}
-
-export type CloudBackupFile = {
-  backupId: string
-  label: string
-  sizeBytes: number
-  modifiedAt: string
-  createdAt: string
-  rowCount: number
-  hasManifest: boolean
-}
-
-export type CloudResult = {
-  success: boolean
-  message: string
-  backupId?: string
-}
-
 
 export const BACKUP_SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const
 

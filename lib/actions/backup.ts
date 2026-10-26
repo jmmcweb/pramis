@@ -6,16 +6,13 @@ import { recordAudit } from '@/lib/actions/audit'
 import {
   createBackup,
   deleteBackup,
-  fetchBackupFromCloud,
   getBackupDiskUsage,
   getBlobStatus,
-  getCloudBackupOverview,
   getCurrentTableCounts,
   getLastAutomaticBackupAt,
   getLastRestoredAt,
   listBackups,
   pushAllBackupsToBlob,
-  pushAllBackupsToDrive,
   restoreBackup,
   runAutomaticBackupIfDue,
   verifyBackup,
@@ -27,8 +24,6 @@ import {
   AUTO_BACKUP_INTERVAL_HOURS,
   AUTO_BACKUP_RETENTION,
   BACKUP_DIR,
-  type CloudBackupFile,
-  type CloudStatus,
 } from '@/lib/constants/backup'
 import type { AuditActor } from '@/lib/audit'
 import { isBlobConfigured } from '@/lib/vercelBlob'
@@ -36,11 +31,6 @@ import { isBlobConfigured } from '@/lib/vercelBlob'
 const unauthorized = {
   success: false as const,
   message: 'You are not authorized to manage database backups.',
-}
-
-export type BackupCloudInfo = {
-  status: CloudStatus
-  files: CloudBackupFile[]
 }
 
 export type BackupBlobInfo = {
@@ -66,22 +56,7 @@ export type BackupOverview = {
   filesOnDisk: number
   diskBytes: number
   storageAvailable: boolean
-  cloud: BackupCloudInfo
   blob: BackupBlobInfo
-}
-
-const emptyCloud: BackupCloudInfo = {
-  status: {
-    enabled: false,
-    root: null,
-    directory: null,
-    source: 'none',
-    available: false,
-    fileCount: 0,
-    totalBytes: 0,
-    message: 'No Google Drive folder is configured.',
-  },
-  files: [],
 }
 
 const emptyBlob: BackupBlobInfo = {
@@ -138,20 +113,18 @@ export async function getBackupOverview(): Promise<BackupOverview> {
       filesOnDisk: 0,
       diskBytes: 0,
       storageAvailable: false,
-      cloud: emptyCloud,
       blob: emptyBlob,
     }
   }
 
   try {
-    const [backups, currentCounts, lastAutomatic, lastRestored, disk, cloud, blob] =
+    const [backups, currentCounts, lastAutomatic, lastRestored, disk, blob] =
       await Promise.all([
         listBackups(),
         getCurrentTableCounts(),
         getLastAutomaticBackupAt(),
         getLastRestoredAt(),
         getBackupDiskUsage(),
-        getCloudBackupOverview(),
         getBlobStatus(),
       ])
 
@@ -172,7 +145,6 @@ export async function getBackupOverview(): Promise<BackupOverview> {
       filesOnDisk: disk.fileCount,
       diskBytes: disk.totalBytes,
       storageAvailable: disk.available,
-      cloud,
       blob,
     }
   } catch (error) {
@@ -192,7 +164,6 @@ export async function getBackupOverview(): Promise<BackupOverview> {
       filesOnDisk: 0,
       diskBytes: 0,
       storageAvailable: false,
-      cloud: emptyCloud,
       blob: emptyBlob,
     }
   }
@@ -354,59 +325,6 @@ export async function refreshBackupsFromStoreAction() {
     return { success: false, message: 'Failed to read the backup store.' }
   }
 }
-export async function pushAllBackupsToDriveAction() {
-  const session = await requireAdmin()
-  if (!session) return unauthorized
-
-  const result = await pushAllBackupsToDrive()
-
-  await recordAudit({
-    action: 'CREATE',
-    entity: 'BACKUP',
-    description: `Copied ${result.pushed.length} database backup(s) to Google Drive${result.failed.length ? `; ${result.failed.length} failed` : ''}.`,
-    status: result.failed.length === 0 ? 'SUCCESS' : 'FAILURE',
-    metadata: { pushed: result.pushed, failed: result.failed },
-  })
-
-  return {
-    success: result.failed.length === 0,
-    message:
-      result.pushed.length === 0 && result.failed.length === 0
-        ? 'There are no stored backups to copy to Google Drive.'
-        : `Copied ${result.pushed.length} backup(s) to Google Drive${
-            result.failed.length ? `; ${result.failed.length} failed` : ''
-          }.`,
-    pushed: result.pushed,
-    failed: result.failed,
-  }
-}
-
-export async function fetchBackupFromCloudAction(backupId: string) {
-  const session = await requireAdmin()
-  if (!session) return unauthorized
-
-  if (!backupId) {
-    return { success: false, message: 'Backup ID is required.' }
-  }
-
-  const result = await fetchBackupFromCloud(backupId)
-
-  if (result.success) revalidateAfterDataChange()
-
-  await recordAudit({
-    action: 'UPDATE',
-    entity: 'BACKUP',
-    entityId: backupId,
-    description: result.success
-      ? `Fetched database backup ${backupId} from Google Drive.`
-      : `Failed to fetch database backup ${backupId} from Google Drive: ${result.message}`,
-    status: result.success ? 'SUCCESS' : 'FAILURE',
-    metadata: { backupId },
-  })
-
-  return result
-}
-
 export async function pushAllBackupsToBlobAction() {
   const session = await requireAdmin()
   if (!session) return unauthorized
